@@ -3,7 +3,7 @@ import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { createConduction } from './conduction.mjs';
 import { createAnatomy } from './anatomy.mjs';
 import anatomyData from './data/bodyparts3d-heart.bin';
-import { fitDistance, TapGesture } from './viewer-state.mjs';
+import { fitDistance, modelSphere, TapGesture } from './viewer-state.mjs';
 
 const canvas = document.querySelector('canvas');
 const $ = id => document.getElementById(id);
@@ -37,8 +37,7 @@ try {
   const meta = createAnatomy(exterior, parts, anatomyData, .033);
   exterior.add(conduction);
   const labelAnchors = createConduction(conduction, parts, meta.conduction);
-  heart.updateMatrixWorld(true);
-  const bounds = new THREE.Box3().setFromObject(heart).getBoundingSphere(new THREE.Sphere());
+  const bounds = modelSphere(heart);
   controls.target.copy(bounds.center);
   let mode = 'exterior', selected = 'lv', frame = 0, previousTime = 0, failed = false;
   let fittedDistance = 12, userZoom = 1;
