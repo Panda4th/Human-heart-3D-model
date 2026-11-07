@@ -164,7 +164,7 @@ try {
     $('en').textContent = data.en;
     $('description').textContent = data.desc;
     // The description box scrolls on its own on a phone; a new part must start at its top.
-    $('name').parentElement.scrollTop = 0;
+    document.querySelector('.detail').scrollTop = 0;
     $('step-count').textContent = mode === 'conduction' ? `${stageOrder.indexOf(id) + 1} / ${stageOrder.length}` : '';
     $('previous').disabled = stageOrder.indexOf(id) <= 0;
     $('next').disabled = stageOrder.indexOf(id) >= stageOrder.length - 1;

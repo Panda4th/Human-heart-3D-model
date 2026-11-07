@@ -215,9 +215,9 @@ test('the wall meshes have no boundary edges (every edge is used an even number 
 });
 test('wall duplicate triangles and edges shared by four or more triangles do not grow (Issue #9, item on wall mesh quality)', () => {
   // Measured on 2026-11-07: of 457 duplicated triangles in the four chamber walls, 456 are a pair with opposite winding
-  // (a zero-thickness double sheet). The source mesh already has them (1335 before simplification); simplification
-  // removed some but raised the edges used by 4 or more triangles from 354 to 711. Why they are there, and whether they
-  // show on screen, is not settled. These bounds only stop the numbers from growing unnoticed.
+  // (a zero-thickness double sheet). They come from simplification: none of the 457 is among the 1335 duplicates of the
+  // source mesh, all of which simplification removed. Edges used by 4 or more triangles rose from 354 to 711.
+  // Whether they show on screen is not settled. These bounds only stop the numbers from growing unnoticed.
   const triangles = new Map(), edges = new Map();
   for (const p of anatomy.parts.filter(q => wallIds.includes(q.id))) {
     const key = i => [0, 1, 2].map(k => Math.round(p.positions[i * 3 + k] * 100)).join(',');
@@ -313,10 +313,17 @@ test('above the aortic arch there are exactly three separate branch stubs (one o
 
 test('the input hash check is skipped only when ALLOW_UNVERIFIED_INPUT is exactly 1', () => {
   const dir = mkdtempSync(join(tmpdir(), 'heart-input-')), a = join(dir, 'a.zip'), b = join(dir, 'b.zip');
-  writeFileSync(a, 'not the recorded file'); writeFileSync(b, 'not the recorded file either');
-  const run = value => spawnSync(process.execPath, ['scripts/prepare-bodyparts3d.mjs', a, b], { encoding: 'utf8', env: { ...process.env, ...(value === undefined ? {ALLOW_UNVERIFIED_INPUT: ''} : {ALLOW_UNVERIFIED_INPUT: value}) } });
-  for (const value of [undefined, '0', 'false', 'yes']) assert.match(run(value).stderr, /does not match the recorded/, `value ${value}`);
-  assert.doesNotMatch(run('1').stderr, /does not match the recorded/);
+  // Empty files: with the check skipped, reading the zip fails at once, so the script never reaches its output step.
+  writeFileSync(a, ''); writeFileSync(b, '');
+  const run = value => {
+    const env = { ...process.env };
+    if (value === undefined) delete env.ALLOW_UNVERIFIED_INPUT; else env.ALLOW_UNVERIFIED_INPUT = value;
+    return spawnSync(process.execPath, ['scripts/prepare-bodyparts3d.mjs', a, b], { encoding: 'utf8', env });
+  };
+  for (const value of [undefined, '', '0', 'false', 'yes']) assert.match(run(value).stderr, /does not match the recorded/, `value ${value}`);
+  const skipped = run('1');
+  assert.doesNotMatch(skipped.stderr, /does not match the recorded/);
+  assert.notEqual(skipped.status, 0, 'empty input must still fail after the check is skipped');
 });
 
 test('the cross-section slider reaches both ends of the four chambers', () => {

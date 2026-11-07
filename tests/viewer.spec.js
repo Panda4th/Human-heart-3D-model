@@ -2,8 +2,6 @@ const {test,expect}=require('@playwright/test');
 const {pathToFileURL}=require('node:url');
 const path=require('node:path');
 const url = pathToFileURL(path.resolve('index.html')).href;
-// Rendering happens in the next animation frame after a state change, so a screenshot taken right away can
-// still show the previous frame. Wait for the frame to be drawn before comparing pictures.
 // Number of pixels that belong to the model: the background is blue-grey and dark, the heart is clearly redder or brighter.
 const modelPixels = (page, png) => page.evaluate(async b64 => {
   const image = new Image(); image.src = 'data:image/png;base64,' + b64; await image.decode();
@@ -14,6 +12,8 @@ const modelPixels = (page, png) => page.evaluate(async b64 => {
   for (let i = 0; i < data.length; i += 4) if (Math.max(data[i], data[i + 1], data[i + 2]) > 90 || data[i] - data[i + 2] > 25) count++;
   return count;
 }, png.toString('base64'));
+// Rendering happens in the next animation frame after a state change, so a screenshot taken right away can
+// still show the previous frame. Wait for the frame to be drawn before comparing pictures.
 const settle = page => page.evaluate(() => new Promise(done => requestAnimationFrame(() => requestAnimationFrame(() => requestAnimationFrame(done)))));
 // Viewport position of a label's anchor, read at the moment of the click so that scrolling cannot make it stale.
 const anchorOf = (page, text) => page.locator('canvas').evaluate((canvas, text) => {
@@ -255,7 +255,7 @@ test('context loss stops controls and explains recovery',async({page})=>{
 });
 
 // A phone held sideways: the scrolling box must keep enough height to reach the controls (Codex review on PR #12).
-for (const [width,height] of [[667,375],[568,320]]) test(`controls stay reachable on a short phone screen ${width}x${height}`, async ({browser}) => {
+for (const [width,height] of [[667,375],[760,412],[568,320]]) test(`controls stay reachable on a short phone screen ${width}x${height}`, async ({browser}) => {
   const context = await browser.newContext({viewport:{width,height},hasTouch:true,isMobile:true});
   const page = await context.newPage();
   await page.goto(url);
@@ -284,6 +284,13 @@ test('selecting another part scrolls the description box back to its top on a ph
   expect(await page.locator('.detail').evaluate(e => e.scrollTop)).toBe(0);
   expect(await scrolled()).toBeGreaterThan(0);
   await page.locator('#mode-conduction').click();
+  expect(await page.locator('.detail').evaluate(e => e.scrollTop)).toBe(0);
+  // A tap on the model: in the exterior view the middle of the model is a heart part.
+  await page.locator('#mode-exterior').click();
+  expect(await scrolled()).toBeGreaterThan(0);
+  const box = await page.locator('canvas').boundingBox();
+  await page.mouse.click(box.x + box.width * .5, box.y + box.height * .6);
+  await expect(page.locator('#name')).not.toHaveText('心臓を観察する');
   expect(await page.locator('.detail').evaluate(e => e.scrollTop)).toBe(0);
   await context.close();
 });
