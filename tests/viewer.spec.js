@@ -15,6 +15,19 @@ const modelPixels = (page, png) => page.evaluate(async b64 => {
 // Rendering happens in the next animation frame after a state change, so a screenshot taken right away can
 // still show the previous frame. Wait for the frame to be drawn before comparing pictures.
 const settle = page => page.evaluate(() => new Promise(done => requestAnimationFrame(() => requestAnimationFrame(() => requestAnimationFrame(done)))));
+// Under load the screenshot can still show the previous frame for a while after the frame was drawn (seen in CI on
+// main 91d3d5d, and locally with all CPUs busy: 5 of 10 runs). Take pictures until two in a row are the same. A picture
+// that keeps changing, as while the model rotates, never settles and fails the test.
+const stableShot = async (locator, tries = 40) => {
+  let previous = await locator.screenshot();
+  for (let i = 0; i < tries; i++) {
+    await locator.page().waitForTimeout(50);
+    const next = await locator.screenshot();
+    if (next.equals(previous)) return next;
+    previous = next;
+  }
+  throw new Error('the canvas picture did not settle');
+};
 // Viewport position of a label's anchor, read at the moment of the click so that scrolling cannot make it stale.
 const anchorOf = (page, text) => page.locator('canvas').evaluate((canvas, text) => {
   const label = [...document.querySelectorAll('.model-label')].find(e => e.textContent.includes(text)), box = canvas.getBoundingClientRect();
@@ -48,18 +61,18 @@ for (const width of [1440,390,320]) test(`offline model and interactions at widt
   const c=page.locator('canvas');
   await c.scrollIntoViewIfNeeded();
   await c.focus();
-  const original = await c.screenshot();
+  const original = await stableShot(c);
   await page.keyboard.press('ArrowLeft');
   await settle(page);
-  const rotated = await c.screenshot();
+  const rotated = await stableShot(c);
   expect(rotated.equals(original)).toBe(false);
   await page.keyboard.press('+');
   await settle(page);
-  expect((await c.screenshot()).equals(rotated)).toBe(false);
+  expect((await stableShot(c)).equals(rotated)).toBe(false);
   await page.locator('#reset').click();
   await settle(page);
   await c.focus();
-  expect((await c.screenshot()).equals(original)).toBe(true);
+  expect((await stableShot(c)).equals(original)).toBe(true);
   // A drag that returns to its origin must not select the mesh under the release.
   const box = await c.boundingBox(); const x=box.x+box.width*.5,y=box.y+box.height*.5;
   await page.mouse.move(x,y); await page.mouse.down();
@@ -67,28 +80,28 @@ for (const width of [1440,390,320]) test(`offline model and interactions at widt
   await expect(page.locator('#name')).toHaveText('大動脈');
   if (mobile) {
     const client=await context.newCDPSession(page);
-    const beforePinch = await modelPixels(page, await c.screenshot());
+    const beforePinch = await modelPixels(page, await stableShot(c));
     await client.send('Input.dispatchTouchEvent',{type:'touchStart',touchPoints:[{x:x-30,y,id:1},{x:x+30,y,id:2}]});
     for (const d of [40,50,60]) await client.send('Input.dispatchTouchEvent',{type:'touchMove',touchPoints:[{x:x-d,y,id:1},{x:x+d,y,id:2}]});
     await client.send('Input.dispatchTouchEvent',{type:'touchEnd',touchPoints:[]});
     await expect(page.locator('#name')).toHaveText('大動脈');
     // Spreading two fingers must zoom in (the model covers more pixels); a pan or a rotation would not do that.
     await settle(page);
-    expect(await modelPixels(page, await c.screenshot())).toBeGreaterThan(beforePinch * 1.1);
+    expect(await modelPixels(page, await stableShot(c))).toBeGreaterThan(beforePinch * 1.1);
   }
   await page.locator('#reset').click();
   await settle(page);
   // Auto-rotation must turn the model, say that the view is no longer a named one, and stop moving when switched off.
-  const stillView = await c.screenshot();
+  const stillView = await stableShot(c);
   await page.locator('#rotate').click();
   await expect(page.locator('#orientation')).toContainText('自由視点');
   await expect.poll(async () => (await c.screenshot()).equals(stillView), {timeout:5000}).toBe(false);
   await page.locator('#rotate').click();
   await expect(page.locator('#rotate')).toHaveAttribute('aria-pressed','false');
   await settle(page);
-  const stoppedView = await c.screenshot();
+  const stoppedView = await stableShot(c);
   await page.waitForTimeout(400); await settle(page);
-  expect((await c.screenshot()).equals(stoppedView)).toBe(true);
+  expect((await stableShot(c)).equals(stoppedView)).toBe(true);
   await page.locator('#reset').click();
   await page.locator('#rotate').click();
   await expect(page.locator('#rotate')).toHaveAttribute('aria-pressed','true');
@@ -126,10 +139,10 @@ for (const width of [1440,390,320]) test(`offline model and interactions at widt
   await page.getByRole('button',{name:'大動脈弁',exact:true}).click();
   await expect(page.locator('#name')).toHaveText('大動脈弁');
   await c.scrollIntoViewIfNeeded();
-  const cutBefore = await c.screenshot();
+  const cutBefore = await stableShot(c);
   await page.locator('#cut-depth').fill('0');
   await settle(page);
-  expect((await c.screenshot()).equals(cutBefore)).toBe(false);
+  expect((await stableShot(c)).equals(cutBefore)).toBe(false);
   const interiorBox = await c.boundingBox();
   await page.mouse.click(interiorBox.x + interiorBox.width*.5, interiorBox.y + interiorBox.height*.6);
   await expect(page.locator('#name')).toHaveText(/^(左心室|右心室|右心房|左心房|僧帽弁|三尖弁|大動脈弁|肺動脈弁|乳頭筋)$/);
@@ -148,7 +161,7 @@ for (const width of [1440,390,320]) test(`offline model and interactions at widt
       if ([[0, 0], [2, 0], [-2, 0], [0, 2], [0, -2]].every(([dx, dy]) => isFace(x + dx, y + dy))) points.push([x + .5, y + .5]);
     }
     return points.filter((_, i) => i % Math.ceil(points.length / 14) === 0);
-  }, (await c.screenshot()).toString('base64'));
+  }, (await stableShot(c)).toString('base64'));
   expect(facePoints.length).toBeGreaterThan(8);
   await c.scrollIntoViewIfNeeded();
   const faceBox = await c.boundingBox();
@@ -161,19 +174,19 @@ for (const width of [1440,390,320]) test(`offline model and interactions at widt
   // slider 0.9, so there the overlay must add nothing; unclipped, the nodes would float in front of the cut.
   await page.getByRole('button',{name:'大動脈弁',exact:true}).click();
   await settle(page);
-  const overlayOffAt0 = await c.screenshot();
+  const overlayOffAt0 = await stableShot(c);
   await page.locator('#cut-depth').fill('0.9');
   await settle(page);
-  const overlayOffBehind = await c.screenshot();
+  const overlayOffBehind = await stableShot(c);
   await page.locator('#interior-conduction').click();
   await expect(page.locator('#interior-conduction')).toHaveAttribute('aria-pressed','true');
   await expect(page.locator('.part:visible')).toHaveCount(15);
   await expect(page.locator('#conduction-note')).toBeVisible();
   await settle(page);
-  expect((await c.screenshot()).equals(overlayOffBehind)).toBe(true);
+  expect((await stableShot(c)).equals(overlayOffBehind)).toBe(true);
   await page.locator('#cut-depth').fill('0');
   await settle(page);
-  expect((await c.screenshot()).equals(overlayOffAt0)).toBe(false);
+  expect((await stableShot(c)).equals(overlayOffAt0)).toBe(false);
   await page.getByRole('button',{name:'洞房結節',exact:true}).click();
   await expect(page.locator('#labels .model-label:visible')).toHaveText('洞房結節');
   await page.getByRole('button',{name:'大動脈弁',exact:true}).click();
