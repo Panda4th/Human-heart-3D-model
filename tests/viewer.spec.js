@@ -164,17 +164,21 @@ for (const width of [1440,390,320]) test(`offline model and interactions at widt
   await page.screenshot({path:testInfo.outputPath('interior.png'),fullPage:!mobile});
   expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
   if (mobile) {
-    // On a phone the model and the selected part's description stay on screen while the part list is used at the bottom of the page.
-    await page.evaluate(()=>window.scrollTo(0,document.body.scrollHeight));
+    // On a phone the page does not scroll: the model and the selected part's description are fixed at the top,
+    // and the part list scrolls in its own box below them, so nothing passes underneath the model.
+    await page.locator('main').evaluate(m=>{m.scrollTop=m.scrollHeight;});
     await page.locator('.part:visible').last().click();
     await expect(page.locator('#name')).toHaveText('乳頭筋');
     await expect.poll(()=>page.evaluate(()=>{
       const r=document.querySelector('canvas').getBoundingClientRect(), d=document.querySelector('.detail').getBoundingClientRect();
-      const b=document.querySelector('.part[aria-pressed=true]').getBoundingClientRect();
-      return r.top>=0 && r.bottom<=d.top+1 && d.bottom<=innerHeight && b.top>=d.bottom-1 && b.bottom<=innerHeight;
-    }),{message:'model, description and the selected part button are all on screen at once'}).toBe(true);
+      const m=document.querySelector('main').getBoundingClientRect(), b=document.querySelector('.part[aria-pressed=true]').getBoundingClientRect();
+      const atModel=document.elementFromPoint(r.left+r.width/2,r.top+r.height*.9), atNote=document.elementFromPoint(d.left+d.width/2,d.bottom-4);
+      return r.top>=0 && r.bottom<=d.top+1 && d.bottom<=m.top+1 && m.bottom<=innerHeight+1 && b.top>=m.top && b.bottom<=m.bottom
+        && atModel===document.querySelector('canvas') && document.querySelector('.detail').contains(atNote)
+        && document.scrollingElement.scrollHeight<=innerHeight && document.querySelector('main').scrollTop>0;
+    }),{message:'model and description stay fixed; the part list scrolls in its own box below them'}).toBe(true);
     await page.screenshot({path:testInfo.outputPath('interior-scrolled.png')});
-    await page.evaluate(()=>window.scrollTo(0,0));
+    await page.locator('main').evaluate(m=>{m.scrollTop=0;});
   }
   await page.locator('#mode-exterior').click();
   await expect(page.locator('#interior-note')).toBeHidden();

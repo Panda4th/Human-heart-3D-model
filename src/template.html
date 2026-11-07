@@ -36,18 +36,21 @@ aside h2{font-size:11px;font-weight:500;letter-spacing:.12em;color:#a8b9bd;margi
 .note{font-size:12px;line-height:1.8;color:#a6b9be;margin-top:22px}#conduction-note{color:#e1c998;border-left:2px solid #ae8d56;padding-left:12px}
 a{color:#c3d8e0;text-underline-offset:3px}.reference{border:1px solid #ffffff26;border-radius:10px;padding:14px;margin-top:24px}.reference p{margin:8px 0 0;font-size:12px;line-height:1.8;color:#a6b9be}.reference a{font-size:13px}
 #error{position:absolute;top:30%;left:8%;right:8%;padding:24px;background:#382929;z-index:3;line-height:1.8}
-footer{padding:18px 4%;border-top:1px solid #ffffff15;color:#a6b9be;font-size:11px}summary{cursor:pointer}footer pre{white-space:pre-wrap;line-height:1.6}
+footer{grid-column:1/-1;padding:18px 4%;border-top:1px solid #ffffff15;color:#a6b9be;font-size:11px}summary{cursor:pointer}footer pre{white-space:pre-wrap;line-height:1.6}
 @media(max-width:760px){
-header{min-height:72px;padding:16px 20px}.brand{font-size:16px}.badge{font-size:10px;padding:6px 8px}
-/* Phone: the model and the selected part's description stay pinned while the part list and controls scroll beneath. */
-main{display:flex;flex-direction:column;--pin:clamp(250px,38dvh,440px)}.stage,aside{display:contents}
-.stage-heading{order:0;padding:20px 20px 0}.stage-heading h1{font-size:23px}
-.viewport{order:1;position:sticky;top:0;z-index:5;height:var(--pin);background:radial-gradient(ellipse at 50% 45%,#293d44 0%,#17242b 55%,#11191e 90%)}
-.detail{order:2;position:sticky;top:var(--pin);z-index:4;margin:0;padding:12px 20px;height:clamp(116px,24dvh,230px);overflow:auto;background:#152027;border-top:0;border-bottom:1px solid #ffffff20}
+/* Phone: the page itself does not scroll. The model and the selected part's description are fixed at the top,
+   and everything else scrolls in its own box below them, so nothing slides underneath the model. */
+body{height:100dvh;overflow:hidden}
+header{height:72px;min-height:0;padding:0 20px}.brand{font-size:16px}.badge{font-size:10px;padding:6px 8px}
+main{--head:72px;--pin:clamp(220px,36dvh,420px);--note:clamp(120px,22dvh,230px);position:fixed;left:0;right:0;bottom:0;top:calc(var(--head) + var(--pin) + var(--note));overflow-y:auto;overscroll-behavior:contain;display:flex;flex-direction:column;border-top:1px solid #ffffff26}
+.stage,aside{display:contents}
+.viewport{position:fixed;left:0;right:0;top:var(--head);height:var(--pin);background:radial-gradient(ellipse at 50% 45%,#293d44 0%,#17242b 55%,#11191e 90%)}
+.detail{position:fixed;left:0;right:0;top:calc(var(--head) + var(--pin));height:var(--note);overflow:auto;margin:0;padding:12px 20px;background:#152027;border-top:0}
 .detail h3{font-size:19px}.detail p{font-size:12.5px;line-height:1.7;margin:6px 0 0}
-#steps{order:3;padding:0 20px}#cut{order:4}#interior-overlay{order:5}nav.views{order:6}#orientation{order:7}nav.tools{order:8}
-aside h2{order:9;margin:12px 20px 8px}#parts{order:10;padding:0 20px;display:grid;grid-template-columns:1fr 1fr;gap:0 9px}.part{font-size:12px}
-aside .note,aside .reference{order:11;margin-left:20px;margin-right:20px}
+.stage-heading{order:0;padding:16px 20px 0}.stage-heading h1{font-size:21px;margin-bottom:12px}
+#steps{order:1;padding:0 20px}#cut{order:2;margin-top:12px}#interior-overlay{order:3}nav.views{order:4}#orientation{order:5}nav.tools{order:6}
+aside h2{order:7;margin:12px 20px 8px}#parts{order:8;padding:0 20px;display:grid;grid-template-columns:1fr 1fr;gap:0 9px}.part{font-size:12px}
+aside .note,aside .reference{order:9;margin-left:20px;margin-right:20px}main>footer{order:10;margin-top:18px}
 .tools button{font-size:12px;padding:10px}.note{margin-top:18px}
 }
 @media(prefers-reduced-motion:reduce){*{scroll-behavior:auto}}
@@ -93,8 +96,8 @@ aside .note,aside .reference{order:11;margin-left:20px;margin-right:20px}
   <div class="reference"><a id="msd-reference" href="https://www.msdmanuals.com/ja-jp/home/multimedia/3dmodel/心臓の刺激伝導系" target="_blank" rel="noopener noreferrer">MSDの参考3Dモデルを開く ↗</a><p>BioDigital提供。別タブで開きます（要ネット接続）。本モデルの刺激伝導系は独自に作成した模式図です。</p></div>
   <p class="note">説明の参考：<a href="https://www.nhlbi.nih.gov/health/heart/anatomy" target="_blank" rel="noopener noreferrer">NHLBI：心臓の構造</a> ／ <a href="https://www.nhlbi.nih.gov/health/heart/heart-beats" target="_blank" rel="noopener noreferrer">拍動の仕組み</a> ／ <a href="https://www.medlineplus.gov/ency/anatomyvideos/000021.htm" target="_blank" rel="noopener noreferrer">MedlinePlus：刺激伝導系</a></p>
 </aside>
-</main>
 <footer><details><summary>内蔵ライブラリとデータのライセンス</summary><pre><!-- LICENSE --></pre></details></footer>
+</main>
 <noscript><p>このモデルを操作するにはJavaScriptを有効にしてください。</p></noscript>
 <script>/* APP */</script>
 </body>
