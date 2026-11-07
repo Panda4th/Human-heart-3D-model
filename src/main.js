@@ -44,7 +44,9 @@ try {
   let fittedDistance = 12, userZoom = 1;
   const gesture = new TapGesture();
   const ray = new THREE.Raycaster();
-  ray.params.Line.threshold = .08;
+  // Line.raycast divides the threshold by the line's own scale only, not its parents' scale.
+  // The overlay is drawn in millimetres under a scaled group, so convert to millimetres here.
+  ray.params.Line.threshold = .08 / exterior.scale.x;
   const stageOrder = ['sa', 'atria', 'av', 'his', 'branches', 'purkinje'];
   const labels = new Map();
   for (const [id] of labelAnchors) {

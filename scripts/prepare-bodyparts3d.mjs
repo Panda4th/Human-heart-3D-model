@@ -152,7 +152,7 @@ const parts = {
 // Anchor points for the explanatory conduction overlay. BodyParts3D has no conduction-system
 // meshes, so positions are derived from nearby structures in the usual textbook relation:
 // SA node at the SVC-right atrium junction, AV node between the coronary sinus ostium and the
-// septal tricuspid leaflet, His bundle to the septal crest below the non-coronary aortic cusp,
+// septal tricuspid leaflet hinge, His bundle to the septal crest below the non-coronary aortic cusp,
 // bundle branches on each side of the ventricular septum, Purkinje fibres on the cavity walls.
 const pts = id => { const p = load(id).positions, out = []; for (let i = 0; i < p.length; i += 3) out.push(p.slice(i, i + 3)); return out; };
 const d2 = (a, b) => (a[0] - b[0]) ** 2 + (a[1] - b[1]) ** 2 + (a[2] - b[2]) ** 2;
@@ -172,10 +172,15 @@ const along = (surface, via, samples = 7) => {
   return line;
 };
 const svc = pts('FJ3645'), svcBottom = Math.min(...svc.map(p => p[1]));
-const sa = extreme(svc.filter(p => p[1] < svcBottom + 6), p => p[2] - p[0]); // anterolateral (right, anterior)
+// OpenStax A&P 2e 19.2: SA node in the superior and posterior walls of the RA near the SVC orifice.
+const sa = extreme(svc.filter(p => p[1] < svcBottom + 6), p => -p[2]);
 const sinus = pts('FJ2655'), sinusRight = Math.min(...sinus.map(p => p[0]));
 const sinusOstium = mean(sinus.filter(p => p[0] < sinusRight + 5));
-const av = nearest(cav.ra, lerp(sinusOstium, nearest(pts('FJ2436'), sinusOstium), .5));
+// Septal tricuspid leaflet hinge: the part of the leaflet touching the RA cavity.
+const septalLeaflet = pts('FJ2436');
+const septalHinge = mean(septalLeaflet.filter(p => d2(nearest(cav.ra, p), p) < 4 ** 2));
+// The RA cavity mesh has no vertex there (tricuspid orifice), so keep the midpoint itself.
+const av = lerp(sinusOstium, septalHinge, .5);
 const septumLV = cav.lv.filter(p => d2(nearest(cav.rv, p), p) < 15 ** 2);
 const septumRV = cav.rv.filter(p => d2(nearest(cav.lv, p), p) < 15 ** 2);
 const nonCoronaryCusp = extreme(pts('FJ2431'), p => -p[1]);

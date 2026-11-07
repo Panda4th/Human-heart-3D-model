@@ -49,7 +49,7 @@ export function createConduction(parent, parts, data) {
   // Label positions in the same millimetre frame.
   const middle = p => p[Math.floor(p.length / 2)];
   return new Map([
-    ['sa', nodes.sa], ['av', nodes.av], ['his', middle(paths.his[0])],
+    ['sa', nodes.sa], ['atria', middle(paths.atria[0])], ['av', nodes.av], ['his', middle(paths.his[0])],
     ['branches', middle(paths.branches[0])], ['purkinje', middle(paths.purkinje[0])],
   ]);
 }

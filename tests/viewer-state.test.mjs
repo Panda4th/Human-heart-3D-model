@@ -86,7 +86,8 @@ test('BodyParts3D heart wall has a plausible size and coronary vessels lie on it
   assert.ok(near / samples > .9, `${near}/${samples} coronary samples within 5 mm of the wall`);
 });
 test('conduction overlay sits on the matching heart walls', () => {
-  // Nearest wall vertex for each point; chamber labels on the wall are estimates, so check majorities.
+  // Regression check of the generator, not of anatomy: the wall is split by the nearest cavity and
+  // the paths are snapped to cavities, so this catches swapped or misplaced cavities only.
   const walls = anatomy.parts.filter(p => ['lv', 'rv', 'ra', 'la', 'vc'].includes(p.id));
   const nearestWall = q => {
     let best = [Infinity, ''];
@@ -100,7 +101,7 @@ test('conduction overlay sits on the matching heart walls', () => {
   const sa = nearestWall(nodes.sa);
   assert.ok(['ra', 'vc'].includes(sa.id) && sa.distance < 5, `SA node near ${sa.id} at ${sa.distance} mm`);
   for (const list of Object.values(paths)) for (const line of list) for (const p of line) {
-    assert.ok(nearestWall(p).distance < 15, `point ${p} is ${nearestWall(p).distance} mm from the wall`);
+    assert.ok(nearestWall(p).distance < 12, `point ${p} is ${nearestWall(p).distance} mm from the wall`);
   }
   const share = (line, id) => line.filter(p => nearestWall(p).id === id).length / line.length;
   assert.ok(share(paths.branches[0], 'lv') > .8, 'left bundle branch on the left ventricle');

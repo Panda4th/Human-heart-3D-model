@@ -63,6 +63,11 @@ for (const width of [1440,390,320]) test(`offline model and interactions at widt
   const pickBox = await c.boundingBox();
   await page.mouse.click(pickBox.x + pickBox.width*anchor.x, pickBox.y + pickBox.height*anchor.y);
   await expect(page.locator('#name')).toHaveText('洞房結節');
+  // The dashed atrial line is 1 px wide; a click slightly beside it must still select it.
+  const lineAnchor = await page.locator('.model-label').filter({hasText:'心房への広がり'}).evaluate(el => ({x:parseFloat(el.style.left)/100,y:parseFloat(el.style.top)/100}));
+  await page.mouse.click(pickBox.x + pickBox.width*lineAnchor.x + 1.5, pickBox.y + pickBox.height*lineAnchor.y);
+  await expect(page.locator('#name')).toHaveText('心房への広がり');
+  await page.getByRole('button',{name:'洞房結節',exact:true}).click();
   for(const name of ['心房への広がり','房室結節','ヒス束','右脚・左脚','プルキンエ線維']) {
     await page.locator('#next').click(); await expect(page.locator('#name')).toHaveText(name);
   }
