@@ -70,6 +70,31 @@ v0.2は外観の概形と刺激伝導系の模式表示を備える試作。
 モデルデータは未取得で、現在のHTMLにも含まれていない。
 形状改善は上記条件を満たす参考資料と、利用条件を確認できる無料素材、独自実装で進める。
 
+### 無料素材と参考資料の候補（2026-11-07調査）
+
+形状改善のため、取り込み候補の無料モデルと照合用の資料を調べた。
+いずれも現時点ではリポジトリとHTMLに取り込んでいない。
+
+| 候補 | 内容 | 閲覧・取得 | ライセンス | 評価 |
+|---|---|---|---|---|
+| [BodyParts3D](https://dbarchive.biosciencedbc.jp/en/bodyparts3d/desc.html)（ライフサイエンス統合データベースセンター） | 成人男性の全身モデル。心臓は心房、心室、弁、心腔、冠動脈、主要血管がFMA IDごとのOBJに分かれる | 登録不要。部位別zip（62MB）を取得し、心臓は83ファイル、計6.8MB、約6万頂点・10万面と確認 | [利用許諾ページ](https://dbarchive.biosciencedbc.jp/jp/bodyparts3d/lic.html)はCC BY 4.0（2025-02-27更新）。OBJ内の注記は旧版のCC BY-SA 2.1 日本 | 第一候補。内部観察の段階でも使える部位分けを持つ。HTMLに入れるには軽量化が必要 |
+| [NIH 3D 3DPX-002636](https://3d.nih.gov/entries/3DPX-002636)「17 yo Female, Normal Heart」 | 患者画像から作成した正常心臓。拡張期の撮像で、弁は細部を再現しないと記載 | ページは登録不要。ファイルは8〜130MB。データ置き場からの取得はこの環境で未確認 | Public Domain | 実形状との比較用 |
+| [NIH 3D 3DPX-022787](https://3d.nih.gov/entries/3DPX-022787)「Human Heart 3d Model」 | 教育用の心臓モデル。説明にBiology Notes Online提供とある | 同上 | Public Domain（CC0へのリンク） | 元データの来歴が不明なため保留 |
+| [Z-Anatomy](https://github.com/Z-Anatomy/Models-of-human-anatomy) | BodyParts3D派生のBlender解剖アトラス | GitHubから取得可 | CC BY-SA 4.0 | 元のBodyParts3Dの方が条件が軽いため採用しない |
+| [OpenStax Anatomy and Physiology 2e 19.1](https://openstax.org/books/anatomy-and-physiology-2e/pages/19-1-heart-anatomy) | 心臓の位置、大きさ、表面の溝、心耳、心腔と弁の説明 | 登録不要 | CC BY-NC-SA | 形状照合用。文章と図は取り込まない |
+
+BodyParts3Dのライセンスは、公式の利用許諾ページの記載（CC BY 4.0）と、2013年のデータ内注記（CC BY-SA 2.1 日本）が食い違う。
+取り込む場合は公式ページの記載と確認日をREADMEと権利表記に残し、データ内注記との差も明記する。
+法的な解釈は未確認で、必要なら提供元へ問い合わせる。
+
+OpenStaxから照合に使う主な点：
+
+- 大きさは長さ約12cm、幅約8cm、厚さ約6cm。
+- 大血管がつながる上面が心底、下端が心尖。心尖は胸骨のやや左に向く。
+- 右側は前方へ、左側は後方へ寄る。
+- 心房と心室の間に冠状溝、心室の間に前・後室間溝があり、冠動脈が走る。
+- 左心室の壁は右心室より厚い。
+
 ## AI向け開発手順
 
 `npm ci` → `npm run build` → `npm run test:unit` → `npm test`。
