@@ -163,6 +163,8 @@ try {
     $('name').textContent = data.name;
     $('en').textContent = data.en;
     $('description').textContent = data.desc;
+    // The description box scrolls on its own on a phone; a new part must start at its top.
+    document.querySelector('.detail').scrollTop = 0;
     $('step-count').textContent = mode === 'conduction' ? `${stageOrder.indexOf(id) + 1} / ${stageOrder.length}` : '';
     $('previous').disabled = stageOrder.indexOf(id) <= 0;
     $('next').disabled = stageOrder.indexOf(id) >= stageOrder.length - 1;
@@ -238,6 +240,8 @@ try {
   $('reset').onclick = () => setView('front');
   $('rotate').onclick = () => {
     controls.autoRotate = !controls.autoRotate;
+    // The camera now moves away from any named view, so the label must not keep naming one.
+    if (controls.autoRotate) $('orientation').textContent = '自由視点 ／ 左右の名称は身体を基準';
     $('rotate').setAttribute('aria-pressed', String(controls.autoRotate));
     previousTime = 0;
     requestRender();

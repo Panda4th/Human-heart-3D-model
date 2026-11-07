@@ -45,7 +45,7 @@ footer{grid-column:1/-1;padding:18px 4%;border-top:1px solid #ffffff15;color:#a6
 body{height:100dvh;overflow:hidden;display:flex;flex-direction:column}
 header{flex:none;height:72px;min-height:0;padding:0 20px}.brand{font-size:16px}.badge{font-size:10px;padding:6px 8px}
 #pinned{flex:none;display:flex;flex-direction:column}
-main{flex:1;min-height:0;overflow-y:auto;overscroll-behavior:contain;display:flex;flex-direction:column;border-top:1px solid #ffffff26}
+main{flex:1;min-height:0;overflow-y:auto;align-items:stretch;overscroll-behavior:contain;display:flex;flex-direction:column;border-top:1px solid #ffffff26}
 .stage,aside{display:contents}
 .viewport{flex:none;height:clamp(220px,36dvh,420px);background:radial-gradient(ellipse at 50% 45%,#293d44 0%,#17242b 55%,#11191e 90%)}
 .detail{flex:none;height:clamp(120px,22dvh,230px);overflow:auto;margin:0;padding:12px 20px;background:#152027;border-top:0}
@@ -55,6 +55,13 @@ main{flex:1;min-height:0;overflow-y:auto;overscroll-behavior:contain;display:fle
 aside h2{order:7;margin:12px 20px 8px}#parts{order:8;padding:0 20px;display:grid;grid-template-columns:1fr 1fr;gap:0 9px}.part{font-size:12px}
 aside .note,aside .reference{order:9;margin-left:20px;margin-right:20px}main>footer{order:10;margin-top:18px}
 .tools button{font-size:12px;padding:10px}.note{margin-top:18px}
+}
+@media(max-width:760px) and (max-height:480px){
+/* Phone held sideways: the pinned header, model and description (72+220+120px) used to fill the whole
+   screen and leave <main> about 0px tall, so the buttons could not be reached. Shrink them so <main> keeps room. */
+header{height:44px}
+.viewport{height:clamp(110px,42dvh,200px)}
+.detail{height:clamp(64px,22dvh,120px);padding:8px 20px}
 }
 @media(prefers-reduced-motion:reduce){*{scroll-behavior:auto}}
 </style>
@@ -80,7 +87,7 @@ aside .note,aside .reference{order:9;margin-left:20px;margin-right:20px}main>foo
   <nav class="views" aria-label="定位置の視点">
     <button id="view-front" data-viewer-control>前面</button><button id="view-back" data-viewer-control>背面</button><button id="view-left" data-viewer-control>身体の左側</button>
   </nav>
-  <label id="cut" hidden><span>前寄り</span><input id="cut-depth" type="range" min="-1.5" max="1.5" step="0.05" value="-0.6" autocomplete="off" data-viewer-control aria-label="断面の位置（前から後ろ）"><span>後ろ寄り</span></label>
+  <label id="cut" hidden><span>前寄り</span><input id="cut-depth" type="range" min="-1.8" max="1.8" step="0.05" value="-0.6" autocomplete="off" data-viewer-control aria-label="断面の位置（前から後ろ）"><span>後ろ寄り</span></label>
   <div id="interior-overlay" class="views" hidden><button id="interior-conduction" data-viewer-control aria-pressed="false">刺激伝導系を重ねる</button></div>
   <p id="orientation" class="axis">前面 ／ 左右の名称は身体を基準</p>
   <nav class="tools" aria-label="表示操作">
