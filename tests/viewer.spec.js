@@ -289,14 +289,16 @@ for (const width of [1440, 390]) test(`cut view: removed parts, hidden labels, t
   expect(Number(await page.inputValue('#cut-depth'))).toBeLessThan(0.9);
   await expect(page.locator('#labels .model-label:visible')).toHaveText('洞房結節');
   await expect(part('洞房結節')).not.toHaveClass(/cut-out/);
-  // 2. At depth 0 seen from the front, the His bundle lies behind the cut wall; the sinoatrial node is in view.
-  await page.locator('#cut-depth').fill('0');
+  // 2. At -0.3 seen from the front, the His bundle lies behind the cut wall; the Purkinje label is in view
+  // (the same cases as the unit test).
+  await page.locator('#cut-depth').fill('-0.3');
   await part('ヒス束').click();
   await expect(page.locator('#labels .model-label:visible')).toHaveText('ヒス束');
   await expect(page.locator('#labels .model-label.behind:visible')).toHaveCount(1);
-  await part('洞房結節').click();
-  await expect(page.locator('#labels .model-label:visible')).toHaveText('洞房結節');
+  await part('プルキンエ線維').click();
+  await expect(page.locator('#labels .model-label:visible')).toHaveText('プルキンエ線維');
   await expect(page.locator('#labels .model-label.behind:visible')).toHaveCount(0);
+  await page.locator('#cut-depth').fill('0');
   // 3. A click on the cut face shows a ring and the chamber's own region in a brighter colour; a part button shows no ring.
   await part('大動脈弁').click();
   await settle(page);

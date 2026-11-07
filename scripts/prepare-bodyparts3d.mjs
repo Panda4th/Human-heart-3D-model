@@ -244,8 +244,8 @@ const parts = {
 
 // Anchor points for the explanatory conduction overlay. BodyParts3D has no conduction-system
 // meshes, so positions are derived from nearby structures in the usual textbook relation:
-// SA node at the SVC-right atrium junction, AV node between the coronary sinus ostium and the
-// septal tricuspid leaflet hinge, His bundle to the septal crest below the non-coronary aortic cusp,
+// SA node at the SVC-right atrium junction, AV node at the apex of the triangle of Koch, His bundle to the
+// septal crest beneath the non-coronary and right coronary aortic cusps,
 // bundle branches on each side of the ventricular septum, Purkinje fibres on the cavity walls.
 const pts = id => { const p = load(id).positions, out = []; for (let i = 0; i < p.length; i += 3) out.push(p.slice(i, i + 3)); return out; };
 const d2 = (a, b) => (a[0] - b[0]) ** 2 + (a[1] - b[1]) ** 2 + (a[2] - b[2]) ** 2;
@@ -267,17 +267,27 @@ const along = (surface, via, samples = 7) => {
 const svc = pts('FJ3645'), svcBottom = Math.min(...svc.map(p => p[1]));
 // OpenStax A&P 2e 19.2: SA node in the superior and posterior walls of the RA near the SVC orifice.
 const sa = extreme(svc.filter(p => p[1] < svcBottom + 6), p => -p[2]);
-const sinus = pts('FJ2655'), sinusRight = Math.min(...sinus.map(p => p[0]));
-const sinusOstium = mean(sinus.filter(p => p[0] < sinusRight + 5));
 // Septal tricuspid leaflet hinge: the part of the leaflet touching the RA cavity.
 const septalLeaflet = pts('FJ2436');
-const septalHinge = mean(septalLeaflet.filter(p => d2(nearest(cav.ra, p), p) < 4 ** 2));
-// The RA cavity mesh has no vertex there (tricuspid orifice), so keep the midpoint itself.
-const av = lerp(sinusOstium, septalHinge, .5);
+const septalHinge = septalLeaflet.filter(p => d2(nearest(cav.ra, p), p) < 4 ** 2);
+// Aortic cusps. The data names them anterior, left posterior and right posterior. The coronary trunks show which is
+// which: the right coronary trunk (FJ2723) starts nearest the anterior cusp, the left (FJ2737) nearest the left
+// posterior cusp, so the right posterior cusp is the non-coronary cusp (measured 2026-11-07, see README).
+const nonCoronary = pts('FJ2431'), rightCoronary = pts('FJ2435');
+// Stephenson et al. 2017 (Sci Rep 7:7188): the conduction axis originates at the apex of the triangle of Koch, whose
+// base is the coronary sinus ostium and whose sides are the septal leaflet hinge and the tendon of Todaro, meeting at the
+// central fibrous body by the aortic root. The tendon and the central fibrous body are not in the data, so the apex is
+// taken as the hinge point nearest the non-coronary cusp. (Until 2026-11-07 the node sat midway between the sinus
+// ostium and the hinge's centre, a third of the way from the ostium to this apex.)
+const av = septalHinge.reduce((best, p) => d2(nearest(nonCoronary, p), p) < d2(nearest(nonCoronary, best), best) ? p : best);
 const septumLV = cav.lv.filter(p => d2(nearest(cav.rv, p), p) < 15 ** 2);
 const septumRV = cav.rv.filter(p => d2(nearest(cav.lv, p), p) < 15 ** 2);
-const nonCoronaryCusp = extreme(pts('FJ2431'), p => -p[1]);
-const bifurcation = nearest(septumLV, [nonCoronaryCusp[0], nonCoronaryCusp[1] - 12, nonCoronaryCusp[2]]);
+// Branching bundle: on the crest of the septum beneath the non-coronary and right coronary cusps (Stephenson 2017,
+// Chen et al. 2025). Taken as the septal point of the LV cavity closest to both cusps' lowest points. No distance is
+// set; the distances it gives are measured afterwards, so their agreement with the papers is built in, not a check.
+const nadir = set => extreme(set, p => -p[1]);
+const [nccNadir, rccNadir] = [nadir(nonCoronary), nadir(rightCoronary)];
+const bifurcation = septumLV.reduce((best, p) => Math.sqrt(d2(p, nccNadir)) + Math.sqrt(d2(p, rccNadir)) < Math.sqrt(d2(best, nccNadir)) + Math.sqrt(d2(best, rccNadir)) ? p : best);
 const mitral = mean([...pts('FJ2420'), ...pts('FJ2432')]);
 const lvApex = extreme(cav.lv, p => d2(p, mitral));
 const rvModerator = extreme(pts('FJ2419'), p => -p[1]); // base of the anterior papillary muscle
