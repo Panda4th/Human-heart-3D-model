@@ -38,14 +38,17 @@ a{color:#c3d8e0;text-underline-offset:3px}.reference{border:1px solid #ffffff26;
 #error{position:absolute;top:30%;left:8%;right:8%;padding:24px;background:#382929;z-index:3;line-height:1.8}
 footer{grid-column:1/-1;padding:18px 4%;border-top:1px solid #ffffff15;color:#a6b9be;font-size:11px}summary{cursor:pointer}footer pre{white-space:pre-wrap;line-height:1.6}
 @media(max-width:760px){
-/* Phone: the page itself does not scroll. The model and the selected part's description are fixed at the top,
-   and everything else scrolls in its own box below them, so nothing slides underneath the model. */
-body{height:100dvh;overflow:hidden}
-header{height:72px;min-height:0;padding:0 20px}.brand{font-size:16px}.badge{font-size:10px;padding:6px 8px}
-main{--head:72px;--pin:clamp(220px,36dvh,420px);--note:clamp(120px,22dvh,230px);position:fixed;left:0;right:0;bottom:0;top:calc(var(--head) + var(--pin) + var(--note));overflow-y:auto;overscroll-behavior:contain;display:flex;flex-direction:column;border-top:1px solid #ffffff26}
+/* Phone: the page itself does not scroll. main.js moves the model and the selected part's description into
+   #pinned above <main>, and only <main> scrolls, so nothing slides underneath the model.
+   The model must not sit inside the scrolling box or under position:fixed: on the user's iPhone the
+   model stayed black in that arrangement (7535baf) while the description showed. */
+body{height:100dvh;overflow:hidden;display:flex;flex-direction:column}
+header{flex:none;height:72px;min-height:0;padding:0 20px}.brand{font-size:16px}.badge{font-size:10px;padding:6px 8px}
+#pinned{flex:none;display:flex;flex-direction:column}
+main{flex:1;min-height:0;overflow-y:auto;overscroll-behavior:contain;display:flex;flex-direction:column;border-top:1px solid #ffffff26}
 .stage,aside{display:contents}
-.viewport{position:fixed;left:0;right:0;top:var(--head);height:var(--pin);background:radial-gradient(ellipse at 50% 45%,#293d44 0%,#17242b 55%,#11191e 90%)}
-.detail{position:fixed;left:0;right:0;top:calc(var(--head) + var(--pin));height:var(--note);overflow:auto;margin:0;padding:12px 20px;background:#152027;border-top:0}
+.viewport{flex:none;height:clamp(220px,36dvh,420px);background:radial-gradient(ellipse at 50% 45%,#293d44 0%,#17242b 55%,#11191e 90%)}
+.detail{flex:none;height:clamp(120px,22dvh,230px);overflow:auto;margin:0;padding:12px 20px;background:#152027;border-top:0}
 .detail h3{font-size:19px}.detail p{font-size:12.5px;line-height:1.7;margin:6px 0 0}
 .stage-heading{order:0;padding:16px 20px 0}.stage-heading h1{font-size:21px;margin-bottom:12px}
 #steps{order:1;padding:0 20px}#cut{order:2;margin-top:12px}#interior-overlay{order:3}nav.views{order:4}#orientation{order:5}nav.tools{order:6}
@@ -58,6 +61,7 @@ aside .note,aside .reference{order:9;margin-left:20px;margin-right:20px}main>foo
 </head>
 <body>
 <header><div class="brand">心臓のアトリエ<small>HUMAN HEART / FORM & SIGNAL</small></div><span class="badge">試作 · v0.4</span></header>
+<div id="pinned"></div>
 <main>
 <section class="stage" aria-label="心臓の3Dモデル">
   <div class="stage-heading">
