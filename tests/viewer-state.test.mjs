@@ -196,7 +196,8 @@ test('a click on the cut face names the exact chamber that contains that point, 
   const total = [...covered.values()].reduce((a, b) => a + b, 0);
   assert.ok(wrong.length <= total * .1, `${wrong.length} of ${total} points name the wrong chamber: ${wrong.slice(0, 8)}`);
 });
-test('the wall meshes form a closed surface, so the cut face has no holes; vessels are open shells and get no face', () => {
+test('the wall meshes have no boundary edges (every edge is used an even number of times); vessels are open shells and get no face', () => {
+  // Even use only rules out open boundaries. It does not show that the wall is a clean solid: see the next test.
   const edges = new Map();
   const count = ids => {
     edges.clear();
@@ -211,6 +212,24 @@ test('the wall meshes form a closed surface, so the cut face has no holes; vesse
   };
   assert.equal(count(wallIds), 0, 'wall edges used an odd number of times');
   for (const id of ['ao', 'pa', 'vc']) assert.ok(count([id]) > 0, `${id} is expected to have open ends`);
+});
+test('wall duplicate triangles and edges shared by four or more triangles do not grow (Issue #9, item on wall mesh quality)', () => {
+  // Measured on 2026-11-07: of 457 duplicated triangles in the four chamber walls, 456 are a pair with opposite winding
+  // (a zero-thickness double sheet). The source mesh already has them (1335 before simplification); simplification
+  // removed some but raised the edges used by 4 or more triangles from 354 to 711. Why they are there, and whether they
+  // show on screen, is not settled. These bounds only stop the numbers from growing unnoticed.
+  const triangles = new Map(), edges = new Map();
+  for (const p of anatomy.parts.filter(q => wallIds.includes(q.id))) {
+    const key = i => [0, 1, 2].map(k => Math.round(p.positions[i * 3 + k] * 100)).join(',');
+    for (let t = 0; t < p.indices.length; t += 3) {
+      const v = [0, 1, 2].map(k => key(p.indices[t + k]));
+      const tri = [...v].sort().join('|'); triangles.set(tri, (triangles.get(tri) || 0) + 1);
+      for (let k = 0; k < 3; k++) { const a = v[k], b = v[(k + 1) % 3], e = a < b ? `${a}|${b}` : `${b}|${a}`; edges.set(e, (edges.get(e) || 0) + 1); }
+    }
+  }
+  const duplicated = [...triangles.values()].filter(n => n > 1).length, crowded = [...edges.values()].filter(n => n >= 4).length;
+  assert.ok(duplicated <= 460, `${duplicated} duplicated triangles (measured 457)`);
+  assert.ok(crowded <= 720, `${crowded} edges used by 4 or more triangles (measured 711)`);
 });
 test('bundle format is checked', () => {
   assert.equal(decodeAnatomy(bundle).meta.format, anatomyFormat);
@@ -298,4 +317,13 @@ test('the input hash check is skipped only when ALLOW_UNVERIFIED_INPUT is exactl
   const run = value => spawnSync(process.execPath, ['scripts/prepare-bodyparts3d.mjs', a, b], { encoding: 'utf8', env: { ...process.env, ...(value === undefined ? {ALLOW_UNVERIFIED_INPUT: ''} : {ALLOW_UNVERIFIED_INPUT: value}) } });
   for (const value of [undefined, '0', 'false', 'yes']) assert.match(run(value).stderr, /does not match the recorded/, `value ${value}`);
   assert.doesNotMatch(run('1').stderr, /does not match the recorded/);
+});
+
+test('the cross-section slider reaches both ends of the four chambers', () => {
+  const html = readFileSync(new URL('../index.html', import.meta.url), 'utf8');
+  const [, min, max] = /id="cut-depth" type="range" min="(-?[\d.]+)" max="(-?[\d.]+)"/.exec(html).map((x, i) => i ? Number(x) : x);
+  const box = new THREE.Box3();
+  for (const id of wallIds) parts.get(id).traverse(o => { if (o.isMesh) box.expandByObject(o); });
+  // The plane sits at z = -value, so the slider must cover -z for every z of the wall, to within one step (0.05).
+  assert.ok(min <= -box.max.z + .05 && max >= -box.min.z - .05, `slider ${min}..${max}, chambers z ${box.min.z.toFixed(3)}..${box.max.z.toFixed(3)}`);
 });
