@@ -213,6 +213,22 @@ test('the wall meshes have no boundary edges (every edge is used an even number 
   assert.equal(count(wallIds), 0, 'wall edges used an odd number of times');
   for (const id of ['ao', 'pa', 'vc']) assert.ok(count([id]) > 0, `${id} is expected to have open ends`);
 });
+test('the aorta has no flat caps left inside it where its shells meet (Issue #17, item 1)', () => {
+  // The aorta is separate shells, each closed by a cap. Left in place, the caps and the gap between the rims showed as a dark
+  // line and a step. Caps lie at about y 1302 (mm) and face up or down; the tube wall there faces sideways. The strip that joins
+  // the rims is also nearly flat but only a fraction of a mm wide. Measured 2026-11-07: 1735 mm2 of such triangles before the
+  // fix (the caps), 47 mm2 after (the strips). The bound sits between the two.
+  const p = anatomy.parts.find(q => q.id === 'ao'), at = (i, k) => p.positions[i * 3 + k];
+  let flat = 0;
+  for (let t = 0; t < p.indices.length; t += 3) {
+    const [a, b, c] = [0, 1, 2].map(k => p.indices[t + k]);
+    if (![a, b, c].every(i => at(i, 1) > 1299 && at(i, 1) < 1306)) continue;
+    const u = [0, 1, 2].map(k => at(b, k) - at(a, k)), w = [0, 1, 2].map(k => at(c, k) - at(a, k));
+    const n = [u[1] * w[2] - u[2] * w[1], u[2] * w[0] - u[0] * w[2], u[0] * w[1] - u[1] * w[0]];
+    if (Math.abs(n[1]) / Math.hypot(...n) > .7) flat += Math.hypot(...n) / 2;
+  }
+  assert.ok(flat < 300, `${flat.toFixed(0)} mm2 of up/down-facing triangles between y 1299 and 1306`);
+});
 test('wall duplicate triangles and edges shared by four or more triangles do not grow (Issue #9, item on wall mesh quality)', () => {
   // Measured on 2026-11-07: of 457 duplicated triangles in the four chamber walls, 456 are a pair with opposite winding
   // (a zero-thickness double sheet). They come from simplification: none of the 457 is among the 1335 duplicates of the
