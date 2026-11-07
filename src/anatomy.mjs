@@ -33,11 +33,11 @@ export const anatomyDefinitions = [
 ];
 
 export function createAnatomy(parent, parts, bytes, scale) {
-  const { parts: meshes } = decodeAnatomy(bytes);
+  const { meta, parts: meshes } = decodeAnatomy(bytes);
   const byId = new Map(meshes.map(m => [m.id, m]));
   for (const [id, name, en, desc, color] of anatomyDefinitions) {
     const group = new THREE.Group();
-    group.userData = { id: `bp-${id}`, name, en, desc, color, kind: 'anatomy' };
+    group.userData = { id, name, en, desc, color, kind: 'exterior' };
     const mesh = byId.get(id);
     const geometry = new THREE.BufferGeometry();
     geometry.setAttribute('position', new THREE.BufferAttribute(mesh.positions, 3));
@@ -49,8 +49,9 @@ export function createAnatomy(parent, parts, bytes, scale) {
   }
   // Centre on the heart wall and convert millimetres to viewer units.
   const wall = new THREE.Box3();
-  for (const id of ['lv', 'rv', 'ra', 'la']) wall.expandByObject(parts.get(`bp-${id}`));
+  for (const id of ['lv', 'rv', 'ra', 'la']) wall.expandByObject(parts.get(id));
   const center = wall.getCenter(new THREE.Vector3());
   parent.scale.setScalar(scale);
   parent.position.copy(center).multiplyScalar(-scale);
+  return meta;
 }

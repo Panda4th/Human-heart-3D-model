@@ -2,9 +2,8 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import * as THREE from 'three';
 import { fitDistance, TapGesture } from '../src/viewer-state.mjs';
-import { createExterior } from '../src/model.mjs';
-import { createConduction } from '../src/conduction.mjs';
-import { decodeAnatomy, anatomyDefinitions } from '../src/anatomy.mjs';
+import { createConduction, conductionDefinitions } from '../src/conduction.mjs';
+import { createAnatomy, decodeAnatomy, anatomyDefinitions } from '../src/anatomy.mjs';
 import { readFileSync } from 'node:fs';
 
 test('tap selects, but drag out-and-back, pinch, cancel and mismatched pointer do not', () => {
@@ -17,13 +16,18 @@ test('tap selects, but drag out-and-back, pinch, cancel and mismatched pointer d
   g.down(3, 10, 10); assert.equal(g.up(3, 10, 10), true);
 });
 
+const bundle = readFileSync(new URL('../src/data/bodyparts3d-heart.bin', import.meta.url));
+// Same structure as src/main.js.
 const heart = new THREE.Group(), exterior = new THREE.Group(), conduction = new THREE.Group(), parts = new Map();
-heart.add(exterior, conduction); heart.rotation.z = -.13;
-createExterior(exterior, parts); createConduction(conduction, parts);
+heart.add(exterior);
+const meta = createAnatomy(exterior, parts, bundle, .033);
+exterior.add(conduction);
+createConduction(conduction, parts, meta.conduction);
+heart.updateMatrixWorld(true);
 const bounds = new THREE.Box3().setFromObject(heart).getBoundingSphere(new THREE.Sphere());
 
 test('model geometry is finite and each selectable group has geometry', () => {
-  assert.equal(parts.size, 14);
+  assert.equal(parts.size, anatomyDefinitions.length + conductionDefinitions.length);
   for (const group of parts.values()) {
     assert.ok(group.children.length > 0);
     group.traverse(o => {
@@ -55,7 +59,7 @@ test('standalone HTML includes license and has no external runtime resources', (
   assert.ok(!html.includes('/* APP */'));
 });
 
-const anatomy = decodeAnatomy(readFileSync(new URL('../src/data/bodyparts3d-heart.bin', import.meta.url)));
+const anatomy = decodeAnatomy(bundle);
 test('BodyParts3D bundle has every defined part with valid geometry', () => {
   assert.deepEqual(anatomy.parts.map(p => p.id), anatomyDefinitions.map(d => d[0]));
   for (const p of anatomy.parts) {
@@ -80,4 +84,27 @@ test('BodyParts3D heart wall has a plausible size and coronary vessels lie on it
     samples++; if (best < 25) near++;
   }
   assert.ok(near / samples > .9, `${near}/${samples} coronary samples within 5 mm of the wall`);
+});
+test('conduction overlay sits on the matching heart walls', () => {
+  // Nearest wall vertex for each point; chamber labels on the wall are estimates, so check majorities.
+  const walls = anatomy.parts.filter(p => ['lv', 'rv', 'ra', 'la', 'vc'].includes(p.id));
+  const nearestWall = q => {
+    let best = [Infinity, ''];
+    for (const p of walls) for (let i = 0; i < p.positions.length; i += 3) {
+      const d = (p.positions[i] - q[0]) ** 2 + (p.positions[i + 1] - q[1]) ** 2 + (p.positions[i + 2] - q[2]) ** 2;
+      if (d < best[0]) best = [d, p.id];
+    }
+    return { id: best[1], distance: Math.sqrt(best[0]) };
+  };
+  const { nodes, paths } = anatomy.meta.conduction;
+  const sa = nearestWall(nodes.sa);
+  assert.ok(['ra', 'vc'].includes(sa.id) && sa.distance < 5, `SA node near ${sa.id} at ${sa.distance} mm`);
+  for (const list of Object.values(paths)) for (const line of list) for (const p of line) {
+    assert.ok(nearestWall(p).distance < 15, `point ${p} is ${nearestWall(p).distance} mm from the wall`);
+  }
+  const share = (line, id) => line.filter(p => nearestWall(p).id === id).length / line.length;
+  assert.ok(share(paths.branches[0], 'lv') > .8, 'left bundle branch on the left ventricle');
+  assert.ok(share(paths.branches[1], 'rv') > .7, 'right bundle branch on the right ventricle');
+  for (const line of paths.purkinje.slice(0, 2)) assert.ok(share(line, 'lv') > .8);
+  for (const line of paths.purkinje.slice(2)) assert.ok(share(line, 'rv') > .8);
 });

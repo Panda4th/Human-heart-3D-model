@@ -1,6 +1,5 @@
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
-import { createExterior } from './model.mjs';
 import { createConduction } from './conduction.mjs';
 import { createAnatomy } from './anatomy.mjs';
 import anatomyData from './data/bodyparts3d-heart.bin';
@@ -31,25 +30,15 @@ try {
     light.position.set(...pos);
     scene.add(light);
   }
-  const heart = new THREE.Group();
+  // BodyParts3D meshes in millimetres; createAnatomy scales them to viewer units.
+  const heart = new THREE.Group(), exterior = new THREE.Group(), conduction = new THREE.Group(), parts = new Map();
   scene.add(heart);
-  heart.rotation.z = -.13;
-  const exterior = new THREE.Group(), conduction = new THREE.Group(), parts = new Map();
-  // BodyParts3D meshes are already in anatomical orientation, so undo the schematic tilt.
-  const anatomyRoot = new THREE.Group(), anatomy = new THREE.Group();
-  anatomyRoot.rotation.z = -heart.rotation.z;
-  anatomyRoot.add(anatomy);
-  heart.add(exterior, conduction, anatomyRoot);
-  createExterior(exterior, parts);
-  createConduction(conduction, parts);
-  createAnatomy(anatomy, parts, anatomyData, .033);
+  heart.add(exterior);
+  const meta = createAnatomy(exterior, parts, anatomyData, .033);
+  exterior.add(conduction);
+  const labelAnchors = createConduction(conduction, parts, meta.conduction);
   heart.updateMatrixWorld(true);
-  const schematicBox = new THREE.Box3().expandByObject(exterior).expandByObject(conduction);
-  const boundsByModel = {
-    schematic: schematicBox.getBoundingSphere(new THREE.Sphere()),
-    anatomy: new THREE.Box3().setFromObject(anatomyRoot).getBoundingSphere(new THREE.Sphere()),
-  };
-  let bounds = boundsByModel.schematic;
+  const bounds = new THREE.Box3().setFromObject(heart).getBoundingSphere(new THREE.Sphere());
   controls.target.copy(bounds.center);
   let mode = 'exterior', selected = 'lv', frame = 0, previousTime = 0, failed = false;
   let fittedDistance = 12, userZoom = 1;
@@ -57,10 +46,6 @@ try {
   const ray = new THREE.Raycaster();
   ray.params.Line.threshold = .08;
   const stageOrder = ['sa', 'atria', 'av', 'his', 'branches', 'purkinje'];
-  const labelAnchors = new Map([
-    ['sa', [-1.12, 1.25, .12]], ['av', [-.28, .44, .02]], ['his', [-.03, .1, .17]],
-    ['branches', [.25, -.5, .03]], ['purkinje', [.94, -1.12, .32]],
-  ]);
   const labels = new Map();
   for (const [id] of labelAnchors) {
     const label = document.createElement('span');
@@ -71,7 +56,7 @@ try {
   }
   function updateLabels() {
     for (const [id, anchor] of labelAnchors) {
-      const p = heart.localToWorld(new THREE.Vector3(...anchor)).project(camera);
+      const p = conduction.localToWorld(new THREE.Vector3(...anchor)).project(camera);
       const el = labels.get(id);
       // Show one selected label to avoid overlaps in small viewports.
       el.hidden = mode !== 'conduction' || selected !== id || Math.abs(p.x) > 1 || Math.abs(p.y) > 1 || Math.abs(p.z) > 1;
@@ -163,11 +148,6 @@ try {
     mode = next;
     stopRotation();
     conduction.visible = mode === 'conduction';
-    exterior.visible = mode !== 'anatomy';
-    anatomyRoot.visible = mode === 'anatomy';
-    bounds = boundsByModel[mode === 'anatomy' ? 'anatomy' : 'schematic'];
-    controls.target.copy(bounds.center);
-    resize();
     for (const group of parts.values()) {
       group.userData.button.hidden = group.userData.kind !== mode;
       if (group.userData.kind !== 'exterior') continue;
@@ -179,20 +159,17 @@ try {
         object.material.needsUpdate = true;
       });
     }
-    for (const m of ['exterior', 'conduction', 'anatomy']) $(`mode-${m}`).setAttribute('aria-pressed', String(mode === m));
+    for (const m of ['exterior', 'conduction']) $(`mode-${m}`).setAttribute('aria-pressed', String(mode === m));
     $('steps').hidden = mode !== 'conduction';
     $('conduction-note').hidden = mode !== 'conduction';
-    $('anatomy-note').hidden = mode !== 'anatomy';
-    $('schematic-note').hidden = mode === 'anatomy';
-    $('mode-title').textContent = ({exterior: 'かたちから、心臓を知る。', conduction: '刺激の通り道をたどる。', anatomy: '実際の形に近づける。'})[mode];
-    $('mode-number').textContent = ({exterior: '01 / EXTERIOR', conduction: '02 / CONDUCTION', anatomy: '03 / ANATOMY · 試作'})[mode];
-    select(({exterior: 'lv', conduction: 'sa', anatomy: 'bp-lv'})[mode]);
+    $('mode-title').textContent = ({exterior: 'かたちから、心臓を知る。', conduction: '刺激の通り道をたどる。'})[mode];
+    $('mode-number').textContent = ({exterior: '01 / EXTERIOR', conduction: '02 / CONDUCTION'})[mode];
+    select(({exterior: 'lv', conduction: 'sa'})[mode]);
     setView('front');
   }
   $('mode-exterior').onclick = () => setMode('exterior');
   $('mode-conduction').onclick = () => setMode('conduction');
-  $('mode-anatomy').onclick = () => setMode('anatomy');
-  $('previous').onclick = () => select(stageOrder[Math.max(0, stageOrder.indexOf(selected) - 1)]);
+    $('previous').onclick = () => select(stageOrder[Math.max(0, stageOrder.indexOf(selected) - 1)]);
   $('next').onclick = () => select(stageOrder[Math.min(stageOrder.length - 1, stageOrder.indexOf(selected) + 1)]);
   for (const view of ['front', 'back', 'left']) $(`view-${view}`).onclick = () => setView(view);
   $('reset').onclick = () => setView('front');
@@ -220,7 +197,8 @@ try {
     if (!gesture.up(event.pointerId, event.clientX, event.clientY) || event.button !== 0) return;
     const rect = canvas.getBoundingClientRect();
     ray.setFromCamera(new THREE.Vector2((event.clientX - rect.left) / rect.width * 2 - 1, -(event.clientY - rect.top) / rect.height * 2 + 1), camera);
-    const hit = ray.intersectObjects(({conduction, anatomy})[mode]?.children ?? exterior.children, true)[0];
+    const targets = mode === 'conduction' ? conduction.children : [...parts.values()].filter(g => g.userData.kind === 'exterior');
+    const hit = ray.intersectObjects(targets, true)[0];
     if (hit) {
       let object = hit.object;
       while (object && !object.userData.id) object = object.parent;

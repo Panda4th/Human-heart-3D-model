@@ -41,7 +41,7 @@ footer{padding:18px 4%;border-top:1px solid #ffffff15;color:#a6b9be;font-size:11
 </style>
 </head>
 <body>
-<header><div class="brand">心臓のアトリエ<small>HUMAN HEART / FORM & SIGNAL</small></div><span class="badge">模式モデル · v0.2</span></header>
+<header><div class="brand">心臓のアトリエ<small>HUMAN HEART / FORM & SIGNAL</small></div><span class="badge">試作 · v0.3</span></header>
 <main>
 <section class="stage" aria-label="心臓の3Dモデル">
   <div class="stage-heading">
@@ -49,7 +49,6 @@ footer{padding:18px 4%;border-top:1px solid #ffffff15;color:#a6b9be;font-size:11
     <nav class="modes" aria-label="観察モード">
       <button id="mode-exterior" data-viewer-control aria-pressed="true">外観</button>
       <button id="mode-conduction" data-viewer-control aria-pressed="false">刺激伝導系</button>
-      <button id="mode-anatomy" data-viewer-control aria-pressed="false">実形状（試作）</button>
     </nav>
   </div>
   <div class="viewport">
@@ -71,10 +70,10 @@ footer{padding:18px 4%;border-top:1px solid #ffffff15;color:#a6b9be;font-size:11
   <div id="parts"></div>
   <div id="steps" hidden><button id="previous" data-viewer-control>← 前へ</button><span id="step-count" aria-live="polite"></span><button id="next" data-viewer-control>次へ →</button></div>
   <div class="detail" aria-live="polite"><h3 id="name">心臓を観察する</h3><small id="en">Heart study</small><p id="description">部位を選ぶと、名前と役割を表示します。</p></div>
-  <p class="note" id="conduction-note" hidden>電気刺激の経路を示す模式図です。神経や血管ではなく、主に特殊な心筋細胞による仕組みです。破線は心房への広がりを表します。位置と太さは説明用で、断面の再現や伝導速度のシミュレーションではありません。</p>
-  <p class="note" id="anatomy-note" hidden>BodyParts3D（© ライフサイエンス統合データベースセンター、<a href="https://creativecommons.org/licenses/by/4.0/deed.ja" target="_blank" rel="noopener noreferrer">CC BY 4.0</a>）の成人男性1体の心臓と周囲の血管を、面数を減らして表示する試作です。心室・心房の色分けは、各内腔に最も近い壁を自動で割り当てた推定で、実際の境界とは一致しません。血管は心臓の近くで切っています。</p>
-  <p class="note">ドラッグで回転、スクロール／ピンチで拡大縮小。キーボードでも操作できます。<br><span id="schematic-note">外形と配置は概形です。内腔、弁、冠動脈は未実装。</span>色は識別用です。医療用途ではありません。</p>
-  <div class="reference"><a id="msd-reference" href="https://www.msdmanuals.com/ja-jp/home/multimedia/3dmodel/心臓の刺激伝導系" target="_blank" rel="noopener noreferrer">MSDの参考3Dモデルを開く ↗</a><p>BioDigital提供。別タブで開きます（要ネット接続）。本モデルは独自に作成した模式図です。</p></div>
+  <p class="note" id="conduction-note" hidden>電気刺激の経路を示す模式図です。神経や血管ではなく、主に特殊な心筋細胞による仕組みです。破線は心房への広がりを表します。元データに刺激伝導系の形状はないため、上大静脈、冠静脈洞、三尖弁、大動脈弁、乳頭筋、内腔の位置から配置を推定しました。太さは誇張しており、断面の再現や伝導速度のシミュレーションではありません。</p>
+  <p class="note" id="anatomy-note">BodyParts3D（© ライフサイエンス統合データベースセンター、<a href="https://creativecommons.org/licenses/by/4.0/deed.ja" target="_blank" rel="noopener noreferrer">CC BY 4.0</a>）の成人男性1体の心臓と周囲の血管を、面数を減らして表示しています。心室・心房の色分けは、各内腔に最も近い壁を自動で割り当てた推定で、実際の境界とは一致しません。血管は心臓の近くで切っています。</p>
+  <p class="note">ドラッグで回転、スクロール／ピンチで拡大縮小。キーボードでも操作できます。<br>内腔と弁の表示は未実装。色は識別用です。医療用途ではありません。</p>
+  <div class="reference"><a id="msd-reference" href="https://www.msdmanuals.com/ja-jp/home/multimedia/3dmodel/心臓の刺激伝導系" target="_blank" rel="noopener noreferrer">MSDの参考3Dモデルを開く ↗</a><p>BioDigital提供。別タブで開きます（要ネット接続）。本モデルの刺激伝導系は独自に作成した模式図です。</p></div>
   <p class="note">説明の参考：<a href="https://www.nhlbi.nih.gov/health/heart/anatomy" target="_blank" rel="noopener noreferrer">NHLBI：心臓の構造</a> ／ <a href="https://www.nhlbi.nih.gov/health/heart/heart-beats" target="_blank" rel="noopener noreferrer">拍動の仕組み</a> ／ <a href="https://www.medlineplus.gov/ency/anatomyvideos/000021.htm" target="_blank" rel="noopener noreferrer">MedlinePlus：刺激伝導系</a></p>
 </aside>
 </main>
