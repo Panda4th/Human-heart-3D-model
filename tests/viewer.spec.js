@@ -93,6 +93,7 @@ for (const width of [1440,390,320]) test(`offline model and interactions at widt
   await page.mouse.click(interiorBox.x + interiorBox.width*.5, interiorBox.y + interiorBox.height*.6);
   await expect(page.locator('#name')).toHaveText(/^(左心室|右心室|右心房|左心房|僧帽弁|三尖弁|大動脈弁|肺動脈弁|乳頭筋)$/);
   await page.screenshot({path:testInfo.outputPath('interior.png'),fullPage:true});
+  expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
   await page.locator('#mode-exterior').click();
   await expect(page.locator('#interior-note')).toBeHidden();
   await expect(page.locator('#cut')).toBeHidden();

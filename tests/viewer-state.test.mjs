@@ -1,9 +1,9 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import * as THREE from 'three';
-import { firstUnclippedHit, fitDistance, modelSphere, TapGesture } from '../src/viewer-state.mjs';
+import { createCrossSection, fitDistance, modelSphere, pickPart, TapGesture } from '../src/viewer-state.mjs';
 import { createConduction, conductionDefinitions } from '../src/conduction.mjs';
-import { createAnatomy, decodeAnatomy, anatomyDefinitions, interiorDefinitions } from '../src/anatomy.mjs';
+import { createAnatomy, decodeAnatomy, anatomyDefinitions, anatomyFormat, interiorDefinitions } from '../src/anatomy.mjs';
 import { readFileSync } from 'node:fs';
 
 test('tap selects, but drag out-and-back, pinch, cancel and mismatched pointer do not', () => {
@@ -82,11 +82,40 @@ test('valves and papillary muscles sit inside the heart wall and only the interi
   for (const id of ['lv', 'rv', 'ra', 'la']) assert.deepEqual(parts.get(id).userData.modes, ['exterior', 'interior']);
   assert.deepEqual(parts.get('ao').userData.modes, ['exterior']);
 });
-test('clicks ignore hits on the side removed by the cross-section', () => {
-  const plane = new THREE.Plane(new THREE.Vector3(0, 0, -1), .5); // keeps z <= 0.5
-  const hits = [{ point: new THREE.Vector3(0, 0, 1), id: 'removed' }, { point: new THREE.Vector3(0, 0, .2), id: 'kept' }];
-  assert.equal(firstUnclippedHit(hits, [plane]).id, 'kept');
-  assert.equal(firstUnclippedHit(hits.slice(0, 1), [plane]), undefined);
+test('in the cross-section, a click on a valve picks the valve, not the removed front wall', () => {
+  // Separate copy of the scene, built as in src/main.js with the interior view enabled.
+  const root = new THREE.Group(), ext = new THREE.Group(), map = new Map();
+  root.add(ext);
+  createAnatomy(ext, map, bundle, .033);
+  const plane = new THREE.Plane(new THREE.Vector3(0, 0, -1), 0); // keeps z <= 0, as the slider at its middle
+  const section = createCrossSection(ext, map, plane, 0xc98478);
+  section.setEnabled(true);
+  root.updateMatrixWorld(true);
+  const camera = new THREE.PerspectiveCamera(36, 1, .1, 150);
+  camera.position.set(0, .06, 1).normalize().multiplyScalar(fitDistance(bounds.radius, 1)).add(bounds.center);
+  camera.lookAt(bounds.center); camera.updateMatrixWorld();
+  const targets = [...map.values()];
+  for (const id of ['aov', 'tv', 'pm']) {
+    // Aim at the visible vertex of the part nearest the camera, behind the cut.
+    const mesh = map.get(id).children[0], p = mesh.geometry.attributes.position, v = new THREE.Vector3();
+    let aim = null;
+    for (let i = 0; i < p.count; i++) {
+      mesh.localToWorld(v.fromBufferAttribute(p, i));
+      if (v.z < -.02 && (!aim || v.z > aim.z)) aim = v.clone();
+    }
+    const ray = new THREE.Raycaster(camera.position, aim.clone().sub(camera.position).normalize());
+    assert.equal(pickPart(ray, targets, [plane]), id);
+    assert.notEqual(pickPart(ray, targets, []), id, `${id}: without the plane filter the removed wall is picked`);
+  }
+  section.setEnabled(false);
+  assert.ok(map.get('aov').visible === false && map.get('lv').children[0].visible === true);
+});
+test('bundle format is checked', () => {
+  assert.equal(decodeAnatomy(bundle).meta.format, anatomyFormat);
+  const copy = new Uint8Array(bundle), text = new TextDecoder().decode(copy.subarray(8, 8 + new DataView(copy.buffer, copy.byteOffset).getUint32(4, true)));
+  const at = 8 + text.indexOf(`"format":${anatomyFormat}`) + '"format":'.length;
+  copy[at] = 0x32; // "2"
+  assert.throws(() => decodeAnatomy(copy), /format 2/);
 });
 test('BodyParts3D heart wall has a plausible size and coronary vessels lie on it', () => {
   const wall = anatomy.parts.filter(p => ['lv', 'rv', 'ra', 'la'].includes(p.id)).flatMap(p => [...p.positions]);

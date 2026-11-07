@@ -3,7 +3,7 @@ import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { createConduction } from './conduction.mjs';
 import { createAnatomy } from './anatomy.mjs';
 import anatomyData from './data/bodyparts3d-heart.bin';
-import { firstUnclippedHit, fitDistance, modelSphere, TapGesture } from './viewer-state.mjs';
+import { createCrossSection, fitDistance, modelSphere, pickPart, TapGesture } from './viewer-state.mjs';
 
 const canvas = document.querySelector('canvas');
 const $ = id => document.getElementById(id);
@@ -37,20 +37,9 @@ try {
   heart.add(exterior);
   const meta = createAnatomy(exterior, parts, anatomyData, .033);
   // Interior view: a front-to-back cut fixed to the heart. Points with z > constant are removed.
-  // Back faces seen through the cut are drawn flat so the cut wall reads as a solid face.
-  const cutPlane = new THREE.Plane(new THREE.Vector3(0, 0, -1), .6), caps = new THREE.Group();
-  const capMaterial = new THREE.MeshBasicMaterial({ color: 0xc98478, side: THREE.BackSide, clippingPlanes: [cutPlane] });
-  for (const group of parts.values()) {
-    if (group.userData.kind !== 'exterior') continue;
-    group.traverse(object => {
-      if (!object.isMesh) return;
-      const cap = new THREE.Mesh(object.geometry, capMaterial);
-      cap.raycast = () => {};
-      caps.add(cap);
-    });
-  }
-  caps.visible = false;
-  exterior.add(caps);
+  // Read the slider so a value restored by the browser matches the drawn cut.
+  const cutPlane = new THREE.Plane(new THREE.Vector3(0, 0, -1), -Number($('cut-depth').value));
+  const crossSection = createCrossSection(exterior, parts, cutPlane, 0xc98478);
   exterior.add(conduction);
   const labelAnchors = createConduction(conduction, parts, meta.conduction);
   const bounds = modelSphere(heart);
@@ -171,17 +160,16 @@ try {
     stopRotation();
     const interior = mode === 'interior';
     conduction.visible = mode === 'conduction';
-    caps.visible = interior;
+    crossSection.setEnabled(interior);
+    const conductionView = mode === 'conduction';
     for (const group of parts.values()) {
       group.userData.button.hidden = !group.userData.modes.includes(mode);
-      if (group.userData.kind === 'interior') group.visible = interior;
-      if (group.userData.kind === 'conduction') continue;
+      if (group.userData.kind !== 'exterior') continue;
       group.traverse(object => {
-        if (!object.isMesh) return;
-        object.material.transparent = mode === 'conduction';
-        object.material.opacity = mode === 'conduction' ? .12 : 1;
-        object.material.depthWrite = mode !== 'conduction';
-        object.material.clippingPlanes = interior ? [cutPlane] : [];
+        if (!object.isMesh || object.userData.crossSection || object.material.transparent === conductionView) return;
+        object.material.transparent = conductionView;
+        object.material.opacity = conductionView ? .12 : 1;
+        object.material.depthWrite = !conductionView;
         object.material.needsUpdate = true;
       });
     }
@@ -231,14 +219,9 @@ try {
     if (!gesture.up(event.pointerId, event.clientX, event.clientY) || event.button !== 0) return;
     const rect = canvas.getBoundingClientRect();
     ray.setFromCamera(new THREE.Vector2((event.clientX - rect.left) / rect.width * 2 - 1, -(event.clientY - rect.top) / rect.height * 2 + 1), camera);
-    const targets = mode === 'conduction' ? conduction.children : [...parts.values()].filter(g => g.userData.kind !== 'conduction' && g.visible);
-    const hits = ray.intersectObjects(targets, true);
-    const hit = mode === 'interior' ? firstUnclippedHit(hits, [cutPlane]) : hits[0];
-    if (hit) {
-      let object = hit.object;
-      while (object && !object.userData.id) object = object.parent;
-      if (object) select(object.userData.id);
-    }
+    const targets = mode === 'conduction' ? conduction.children : [...parts.values()].filter(g => g.userData.kind !== 'conduction');
+    const id = pickPart(ray, targets, mode === 'interior' ? [cutPlane] : []);
+    if (id) select(id);
   });
   controls.addEventListener('start', () => {
     stopRotation();

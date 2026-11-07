@@ -225,7 +225,7 @@ for (const mesh of Object.values(parts)) mesh.positions.forEach((v, i) => {
   min[i % 3] = Math.min(min[i % 3], v); max[i % 3] = Math.max(max[i % 3], v);
 });
 const center = [0, 1, 2].map(k => Math.round((min[k] + max[k]) / 2 * 100) / 100);
-const step = .01, chunks = [], meta = { format: 2, unit: 'mm', step, center, parts: [], conduction };
+const step = .01, chunks = [], meta = { format: 3, unit: 'mm', step, center, parts: [], conduction };
 let offset = 0;
 for (const [id, mesh] of Object.entries(parts)) {
   const count = mesh.positions.length / 3;
