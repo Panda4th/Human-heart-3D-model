@@ -53,6 +53,10 @@ export function createCrossSection(parent, parts, plane, capColor) {
   return { setEnabled };
 }
 
+// A part is selectable when its own modes include the view, or when it belongs to the conduction
+// overlay that can be shown on the cross-section.
+export const selectableIn = (data, mode, overlay) => data.modes.includes(mode) || (overlay && mode === 'interior' && data.kind === 'conduction');
+
 const isShown = object => { for (let o = object; o; o = o.parent) if (!o.visible) return false; return true; };
 // Raycasting ignores visibility and clipping planes. Return the id of the first part hit that is
 // actually drawn: shown, and not on the side the cross-section has removed.
