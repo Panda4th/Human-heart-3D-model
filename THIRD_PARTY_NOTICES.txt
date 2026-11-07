@@ -31,10 +31,21 @@ License page checked on 2026-11-07: https://dbarchive.biosciencedbc.jp/en/bodypa
 (updated 2025-02-27). The 2011/2013 OBJ files themselves still carry the earlier notice
 "CC Attribution-Share Alike 2.1 Japan".
 
-Changes made by this project: selected the heart wall from version 3.0 and the chamber
-cavities, pulmonary vessels, coronary arteries, cardiac veins and arch branches from
-version 4.0; moved the 4.0 meshes up by 10 mm to meet the 3.0 heart wall; cut vessels
-near the heart; reduced polygon counts; split the heart wall into chambers by the
-nearest cavity; converted coordinates to the viewer's axes; derived the positions of the
-explanatory conduction-system overlay from the 4.0 cavities, valves, papillary muscles,
-superior vena cava and coronary sinus (BodyParts3D itself has no conduction-system meshes).
+Changes made by this project:
+- Data used. From version 3.0: the heart wall (FMA7274), the three aorta parts (FMA3736,
+  FMA3768, FMA3784) and the vena cavae (FMA4720, FMA10951). From version 4.0: the pulmonary
+  trunk and arteries, the pulmonary veins, the coronary arteries and cardiac veins, the three
+  branches of the aortic arch, 11 valve leaflets and 5 papillary muscles (the last two groups
+  are shown in the interior view). The 4.0 chamber cavities, superior vena cava, coronary sinus
+  and atrial walls are used only for calculations and are not shown.
+- Processing. Moved the 4.0 meshes up by 10 mm to meet the 3.0 heart wall; cut the vessels near
+  the heart; reduced polygon counts (mitral and tricuspid leaflets to 30 %, the other valves,
+  papillary muscles and vessels to 50 % or less); split the heart wall into the four chambers by
+  the nearest 4.0 cavity; converted coordinates to the viewer's axes and to a quantised binary
+  format.
+- Display. In the interior view the meshes are cut by a plane; the heart wall gets a flat
+  cut face and the vessels are shown as open shells. Colours are for identification only.
+- Added by this project, not part of BodyParts3D: the positions of the explanatory
+  conduction-system overlay, derived from the 4.0 cavities, valves, papillary muscles,
+  superior vena cava, coronary sinus and atrial walls (BodyParts3D itself has no
+  conduction-system meshes). They are estimates and not anatomical data.

@@ -37,7 +37,19 @@ aside h2{font-size:11px;font-weight:500;letter-spacing:.12em;color:#a8b9bd;margi
 a{color:#c3d8e0;text-underline-offset:3px}.reference{border:1px solid #ffffff26;border-radius:10px;padding:14px;margin-top:24px}.reference p{margin:8px 0 0;font-size:12px;line-height:1.8;color:#a6b9be}.reference a{font-size:13px}
 #error{position:absolute;top:30%;left:8%;right:8%;padding:24px;background:#382929;z-index:3;line-height:1.8}
 footer{padding:18px 4%;border-top:1px solid #ffffff15;color:#a6b9be;font-size:11px}summary{cursor:pointer}footer pre{white-space:pre-wrap;line-height:1.6}
-@media(max-width:760px){header{min-height:72px;padding:16px 20px}.brand{font-size:16px}.badge{font-size:10px;padding:6px 8px}main{display:block}.stage-heading{padding:20px 20px 0}.stage-heading h1{font-size:23px}.viewport{height:52dvh;min-height:340px;max-height:540px}aside{border-top:1px solid #ffffff15;border-left:0;padding:24px}#parts{display:grid;grid-template-columns:1fr 1fr;gap:0 9px}.part{font-size:12px}.tools button{font-size:12px;padding:10px}.note{margin-top:18px}}
+@media(max-width:760px){
+header{min-height:72px;padding:16px 20px}.brand{font-size:16px}.badge{font-size:10px;padding:6px 8px}
+/* Phone: the model and the selected part's description stay pinned while the part list and controls scroll beneath. */
+main{display:flex;flex-direction:column;--pin:clamp(250px,38dvh,440px)}.stage,aside{display:contents}
+.stage-heading{order:0;padding:20px 20px 0}.stage-heading h1{font-size:23px}
+.viewport{order:1;position:sticky;top:0;z-index:5;height:var(--pin);background:radial-gradient(ellipse at 50% 45%,#293d44 0%,#17242b 55%,#11191e 90%)}
+.detail{order:2;position:sticky;top:var(--pin);z-index:4;margin:0;padding:12px 20px;height:clamp(116px,24dvh,230px);overflow:auto;background:#152027;border-top:0;border-bottom:1px solid #ffffff20}
+.detail h3{font-size:19px}.detail p{font-size:12.5px;line-height:1.7;margin:6px 0 0}
+#steps{order:3;padding:0 20px}#cut{order:4}#interior-overlay{order:5}nav.views{order:6}#orientation{order:7}nav.tools{order:8}
+aside h2{order:9;margin:12px 20px 8px}#parts{order:10;padding:0 20px;display:grid;grid-template-columns:1fr 1fr;gap:0 9px}.part{font-size:12px}
+aside .note,aside .reference{order:11;margin-left:20px;margin-right:20px}
+.tools button{font-size:12px;padding:10px}.note{margin-top:18px}
+}
 @media(prefers-reduced-motion:reduce){*{scroll-behavior:auto}}
 </style>
 </head>
@@ -75,7 +87,7 @@ footer{padding:18px 4%;border-top:1px solid #ffffff15;color:#a6b9be;font-size:11
   <div id="steps" hidden><button id="previous" data-viewer-control>← 前へ</button><span id="step-count" aria-live="polite"></span><button id="next" data-viewer-control>次へ →</button></div>
   <div class="detail" aria-live="polite"><h3 id="name">心臓を観察する</h3><small id="en">Heart study</small><p id="description">部位を選ぶと、名前と役割を表示します。</p></div>
   <p class="note" id="conduction-note" hidden>電気刺激の経路を示す模式図です。神経や血管ではなく、主に特殊な心筋細胞による仕組みです。破線は心房への広がりを表します。元データに刺激伝導系の形状はないため、上大静脈、冠静脈洞、三尖弁、大動脈弁、乳頭筋、内腔の位置から配置を推定しました。太さは誇張しており、断面の再現や伝導速度のシミュレーションではありません。</p>
-  <p class="note" id="interior-note" hidden>心臓を前後方向の平面で切り、切った面より前を取り除いて表示しています。断面は心臓に固定されていて、回転すると切り口を斜めから見られます。切り口の色は識別用です。弁と乳頭筋はBodyParts3D 4.0の形状で、弁の開き具合は元データの1時点のもので、拍動による変化は表しません。弁から乳頭筋へ伸びる糸状の部分は腱索とみられますが、元データでは弁尖と同じ部品です。心室中隔と心室の心筋は個別の形状がないため、区別して選べません。左心室の後ろの乳頭筋は元データにありません。この表示で選べるのは心房・心室・弁・乳頭筋で、血管は外観で選べます。「刺激伝導系を重ねる」を押すと、刺激伝導系も同じ断面で切って重ね、選べるようになります。その位置は推定です。切り口は前面から見たときに見え、背面からは見えません。</p>
+  <p class="note" id="interior-note" hidden>心臓を前後方向の平面で切り、切った面より前を取り除いて表示しています。断面は心臓に固定されていて、回転すると切り口を斜めから見られます。切り口の色は識別用で、切り口の面を作るのは心臓の壁だけです。血管は元データに壁の厚みがなく、切ると薄い殻の内側（内腔）が見えます。弁と乳頭筋はBodyParts3D 4.0の形状で、弁の開き具合は元データの1時点のもので、拍動による変化は表しません。弁から乳頭筋へ伸びる糸状の部分は腱索とみられますが、元データでは弁尖と同じ部品です。心室中隔と心室の心筋は個別の形状がないため、区別して選べません。左心室の後ろの乳頭筋は元データにありません。この表示で選べるのは心房・心室・弁・乳頭筋で、血管は外観で選べます。「刺激伝導系を重ねる」を押すと、刺激伝導系も同じ断面で切って重ね、選べるようになります。その位置は推定です。切り口は前面から見たときに見え、背面からは見えません。</p>
   <p class="note" id="anatomy-note">BodyParts3D（© ライフサイエンス統合データベースセンター、<a href="https://creativecommons.org/licenses/by/4.0/deed.ja" target="_blank" rel="noopener noreferrer">CC BY 4.0</a>）の成人男性1体の心臓と周囲の血管を、面数を減らして表示しています。心室・心房の色分けは、各内腔に最も近い壁を自動で割り当てた推定で、実際の境界とは一致しません。血管は心臓の近くで切っています。</p>
   <p class="note">ドラッグで回転、スクロール／ピンチで拡大縮小。キーボードでも操作できます。<br>血流と拍動は未実装。色は識別用です。医療用途ではありません。</p>
   <div class="reference"><a id="msd-reference" href="https://www.msdmanuals.com/ja-jp/home/multimedia/3dmodel/心臓の刺激伝導系" target="_blank" rel="noopener noreferrer">MSDの参考3Dモデルを開く ↗</a><p>BioDigital提供。別タブで開きます（要ネット接続）。本モデルの刺激伝導系は独自に作成した模式図です。</p></div>

@@ -27,3 +27,26 @@ jobs:
             test-results/
             playwright-report/
           retention-days: 14
+  # Not a gate: the WebKit engine on Linux is not iOS Safari, and WebGL on the runner may not work.
+  # The result shows whether the single HTML file starts on WebKit at all.
+  webkit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npx playwright install --with-deps webkit
+      - run: npm run test:webkit
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: webkit-checks
+          path: |
+            test-results/
+            playwright-report/
+          retention-days: 14

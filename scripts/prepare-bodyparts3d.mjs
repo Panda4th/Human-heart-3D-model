@@ -3,11 +3,25 @@
 // Downloads (free, no registration): https://dbarchive.biosciencedbc.jp/en/bodyparts3d/download.html
 // and https://dbarchive.biosciencedbc.jp/data/bodyparts3d/20110915/
 import { readFileSync, writeFileSync, mkdirSync } from 'node:fs';
+import { createHash } from 'node:crypto';
 import { inflateRawSync } from 'node:zlib';
 import { MeshoptSimplifier } from 'meshoptimizer';
 
 const [v3Path, v4Path] = process.argv.slice(2);
 if (!v3Path || !v4Path) throw new Error('Usage: node scripts/prepare-bodyparts3d.mjs <v3 zip> <v4 partof zip>');
+
+// The 4.0 download is served from a LATEST path, so the same URL could one day return different data.
+// The bundle was made from these exact files (fetched 2026-11-07; the server lists both as last modified
+// in 2011 and 2013). Refuse any other input rather than silently produce a different model.
+// ALLOW_UNVERIFIED_INPUT=1 skips the check for deliberate experiments; do not commit output made that way.
+const expectedSha256 = {
+  [v3Path]: '2125f6d761b14ead4ee64f71713f56f3f0f29982693ff20aac63474470cb92f4', // BodyParts3D_3.0_obj_99.zip
+  [v4Path]: '9fbc713fffeee924a5a657d9813d84d7eb957bded63adb854931dd5e3eb61c97', // partof_BP3D_4.0_obj_99.zip
+};
+for (const [path, expected] of Object.entries(expectedSha256)) {
+  const actual = createHash('sha256').update(readFileSync(path)).digest('hex');
+  if (actual !== expected && !process.env.ALLOW_UNVERIFIED_INPUT) throw new Error(`${path}: SHA-256 ${actual} does not match the recorded ${expected}`);
+}
 
 function readZip(path) {
   const buf = readFileSync(path), entries = new Map();
