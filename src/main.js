@@ -2,6 +2,8 @@ import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { createExterior } from './model.mjs';
 import { createConduction } from './conduction.mjs';
+import { createAnatomy } from './anatomy.mjs';
+import anatomyData from './data/bodyparts3d-heart.bin';
 import { fitDistance, TapGesture } from './viewer-state.mjs';
 
 const canvas = document.querySelector('canvas');
@@ -33,10 +35,21 @@ try {
   scene.add(heart);
   heart.rotation.z = -.13;
   const exterior = new THREE.Group(), conduction = new THREE.Group(), parts = new Map();
-  heart.add(exterior, conduction);
+  // BodyParts3D meshes are already in anatomical orientation, so undo the schematic tilt.
+  const anatomyRoot = new THREE.Group(), anatomy = new THREE.Group();
+  anatomyRoot.rotation.z = -heart.rotation.z;
+  anatomyRoot.add(anatomy);
+  heart.add(exterior, conduction, anatomyRoot);
   createExterior(exterior, parts);
   createConduction(conduction, parts);
-  const bounds = new THREE.Box3().setFromObject(heart).getBoundingSphere(new THREE.Sphere());
+  createAnatomy(anatomy, parts, anatomyData, .033);
+  heart.updateMatrixWorld(true);
+  const schematicBox = new THREE.Box3().expandByObject(exterior).expandByObject(conduction);
+  const boundsByModel = {
+    schematic: schematicBox.getBoundingSphere(new THREE.Sphere()),
+    anatomy: new THREE.Box3().setFromObject(anatomyRoot).getBoundingSphere(new THREE.Sphere()),
+  };
+  let bounds = boundsByModel.schematic;
   controls.target.copy(bounds.center);
   let mode = 'exterior', selected = 'lv', frame = 0, previousTime = 0, failed = false;
   let fittedDistance = 12, userZoom = 1;
@@ -150,6 +163,11 @@ try {
     mode = next;
     stopRotation();
     conduction.visible = mode === 'conduction';
+    exterior.visible = mode !== 'anatomy';
+    anatomyRoot.visible = mode === 'anatomy';
+    bounds = boundsByModel[mode === 'anatomy' ? 'anatomy' : 'schematic'];
+    controls.target.copy(bounds.center);
+    resize();
     for (const group of parts.values()) {
       group.userData.button.hidden = group.userData.kind !== mode;
       if (group.userData.kind !== 'exterior') continue;
@@ -161,17 +179,19 @@ try {
         object.material.needsUpdate = true;
       });
     }
-    $('mode-exterior').setAttribute('aria-pressed', String(mode === 'exterior'));
-    $('mode-conduction').setAttribute('aria-pressed', String(mode === 'conduction'));
+    for (const m of ['exterior', 'conduction', 'anatomy']) $(`mode-${m}`).setAttribute('aria-pressed', String(mode === m));
     $('steps').hidden = mode !== 'conduction';
     $('conduction-note').hidden = mode !== 'conduction';
-    $('mode-title').textContent = mode === 'conduction' ? '刺激の通り道をたどる。' : 'かたちから、心臓を知る。';
-    $('mode-number').textContent = mode === 'conduction' ? '02 / CONDUCTION' : '01 / EXTERIOR';
-    select(mode === 'conduction' ? 'sa' : 'lv');
+    $('anatomy-note').hidden = mode !== 'anatomy';
+    $('schematic-note').hidden = mode === 'anatomy';
+    $('mode-title').textContent = ({exterior: 'かたちから、心臓を知る。', conduction: '刺激の通り道をたどる。', anatomy: '実際の形に近づける。'})[mode];
+    $('mode-number').textContent = ({exterior: '01 / EXTERIOR', conduction: '02 / CONDUCTION', anatomy: '03 / ANATOMY · 試作'})[mode];
+    select(({exterior: 'lv', conduction: 'sa', anatomy: 'bp-lv'})[mode]);
     setView('front');
   }
   $('mode-exterior').onclick = () => setMode('exterior');
   $('mode-conduction').onclick = () => setMode('conduction');
+  $('mode-anatomy').onclick = () => setMode('anatomy');
   $('previous').onclick = () => select(stageOrder[Math.max(0, stageOrder.indexOf(selected) - 1)]);
   $('next').onclick = () => select(stageOrder[Math.min(stageOrder.length - 1, stageOrder.indexOf(selected) + 1)]);
   for (const view of ['front', 'back', 'left']) $(`view-${view}`).onclick = () => setView(view);
@@ -200,7 +220,7 @@ try {
     if (!gesture.up(event.pointerId, event.clientX, event.clientY) || event.button !== 0) return;
     const rect = canvas.getBoundingClientRect();
     ray.setFromCamera(new THREE.Vector2((event.clientX - rect.left) / rect.width * 2 - 1, -(event.clientY - rect.top) / rect.height * 2 + 1), camera);
-    const hit = ray.intersectObjects((mode === 'conduction' ? conduction : exterior).children, true)[0];
+    const hit = ray.intersectObjects(({conduction, anatomy})[mode]?.children ?? exterior.children, true)[0];
     if (hit) {
       let object = hit.object;
       while (object && !object.userData.id) object = object.parent;

@@ -1,6 +1,6 @@
 import { build } from 'esbuild';
 import { readFile, writeFile } from 'node:fs/promises';
-const result = await build({entryPoints: ['src/main.js'], bundle: true, write: false, format: 'iife', minify: true, legalComments: 'inline'});
+const result = await build({entryPoints: ['src/main.js'], bundle: true, write: false, format: 'iife', minify: true, legalComments: 'inline', loader: {'.bin': 'binary'}});
 const template = await readFile('src/template.html', 'utf8');
 const notices = await readFile('THIRD_PARTY_NOTICES.txt', 'utf8');
 const escapeHtml = text => text.replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;');

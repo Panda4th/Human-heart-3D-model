@@ -14,7 +14,7 @@ iOSのファイルプレビュー、実機Safariでの動作は未確認。
 
 - ドラッグ／タッチで回転、スクロール／ピンチで拡大縮小。
 - 部位ボタンまたはモデルのクリックで部位を選択。
-- 「外観」と「刺激伝導系」を切り替えて観察。
+- 「外観」「刺激伝導系」「実形状（試作）」を切り替えて観察。
 - 刺激伝導系では「前へ」「次へ」で電気刺激の経路を順に確認。
 - 前面、背面、身体の左側へボタンで移動。
 - モデルにキーボードフォーカスを移すと、矢印キーで回転、＋／−で拡大縮小、Homeで前面へ戻る。
@@ -31,6 +31,12 @@ v0.2は外観の概形と刺激伝導系の模式表示を備える試作。
 刺激伝導系の位置と太さは説明用に模式化しており、伝導時間は再現しない。
 内腔、弁、冠動脈、血流、拍動は未実装。
 医療用途ではない。
+
+「実形状（試作）」はBodyParts3Dの成人男性1体の心臓と周囲の血管を簡略化して表示する比較用の試作。
+心房、心室、大動脈、肺動脈、大静脈、肺静脈、冠動脈、冠静脈を選択できる。
+心房・心室の境界は自動推定で、実際の境界とは一致しない。
+刺激伝導系はまだ手作りの外観に合わせた配置で、この形状には重ねていない。
+採用するか、手作りの外観を置き換えるかは未決定。
 
 ## 進め方
 
@@ -77,7 +83,7 @@ v0.2は外観の概形と刺激伝導系の模式表示を備える試作。
 
 | 候補 | 内容 | 閲覧・取得 | ライセンス | 評価 |
 |---|---|---|---|---|
-| [BodyParts3D](https://dbarchive.biosciencedbc.jp/en/bodyparts3d/desc.html)（ライフサイエンス統合データベースセンター） | 成人男性の全身モデル。心臓は心房、心室、弁、心腔、冠動脈、主要血管がFMA IDごとのOBJに分かれる | 登録不要。部位別zip（62MB）を取得し、心臓は83ファイル、計6.8MB、約6万頂点・10万面と確認 | [利用許諾ページ](https://dbarchive.biosciencedbc.jp/jp/bodyparts3d/lic.html)はCC BY 4.0（2025-02-27更新）。OBJ内の注記は旧版のCC BY-SA 2.1 日本 | 第一候補。内部観察の段階でも使える部位分けを持つ。HTMLに入れるには軽量化が必要 |
+| [BodyParts3D](https://dbarchive.biosciencedbc.jp/en/bodyparts3d/desc.html)（ライフサイエンス統合データベースセンター） | 成人男性の全身モデル。4.0の心臓は心房壁、心腔、弁、乳頭筋、冠動脈がFMA IDごとのOBJに分かれる | 登録不要。部位別zip（62MB）を取得し、心臓は83ファイル、計6.8MB、約6万頂点・10万面と確認 | [利用許諾ページ](https://dbarchive.biosciencedbc.jp/jp/bodyparts3d/lic.html)はCC BY 4.0（2025-02-27更新）。OBJ内の注記は旧版のCC BY-SA 2.1 日本 | 「実形状（試作）」で採用。詳細は次節 |
 | [NIH 3D 3DPX-002636](https://3d.nih.gov/entries/3DPX-002636)「17 yo Female, Normal Heart」 | 患者画像から作成した正常心臓。拡張期の撮像で、弁は細部を再現しないと記載 | ページは登録不要。ファイルは8〜130MB。データ置き場からの取得はこの環境で未確認 | Public Domain | 実形状との比較用 |
 | [NIH 3D 3DPX-022787](https://3d.nih.gov/entries/3DPX-022787)「Human Heart 3d Model」 | 教育用の心臓モデル。説明にBiology Notes Online提供とある | 同上 | Public Domain（CC0へのリンク） | 元データの来歴が不明なため保留 |
 | [Z-Anatomy](https://github.com/Z-Anatomy/Models-of-human-anatomy) | BodyParts3D派生のBlender解剖アトラス | GitHubから取得可 | CC BY-SA 4.0 | 元のBodyParts3Dの方が条件が軽いため採用しない |
@@ -95,10 +101,29 @@ OpenStaxから照合に使う主な点：
 - 心房と心室の間に冠状溝、心室の間に前・後室間溝があり、冠動脈が走る。
 - 左心室の壁は右心室より厚い。
 
+### BodyParts3D試作の作り方（2026-11-07）
+
+4.0の心臓には心室の心筋（壁）のメッシュがなく、心室は内腔、弁、乳頭筋だけだった。
+そのため心臓の壁は3.0の「wall of heart」（1メッシュ、約13万面）を使う。
+壁を約2.7万面へ減らし、各三角形を最も近い4.0の心腔（左右の心房・心室）に割り当てて区分けした。
+前面では、右心室と左心室の推定境界が前室間枝（冠動脈）の走る位置とほぼ一致することを画面で確認した。
+
+血管、冠動脈、冠静脈、心腔は4.0から取る。
+4.0の部品は同じ3.0の部品より10mm低い位置にある（上大静脈、右冠動脈、冠静脈洞で確認）ため、4.0側を10mm上げて合わせる。
+補正しないと冠動脈が心臓表面から外れる。
+この補正は単体テストで検査する。
+大動脈は4.0で形が作り直されていて差が一定でないため、3.0を使う。
+血管は心臓の近くで平面に沿って切る。
+
+生成データは`src/data/bodyparts3d-heart.bin`（約460KB）で、`index.html`は約1.2MBになる。
+権利表記は`THIRD_PARTY_NOTICES.txt`、画面の注記、HTML末尾のライセンス欄に入れた。
+
 ## AI向け開発手順
 
 `npm ci` → `npm run build` → `npm run test:unit` → `npm test`。
 テスト用Chromiumがなければ `npx playwright install chromium`。
+BodyParts3Dデータを作り直す場合だけ、[3.0のzip](https://dbarchive.biosciencedbc.jp/data/bodyparts3d/20110915/BodyParts3D_3.0_obj_99.zip)と[4.0の部位別zip](https://dbarchive.biosciencedbc.jp/data/bodyparts3d/LATEST/partof_BP3D_4.0_obj_99.zip)を取得し、`node scripts/prepare-bodyparts3d.mjs <3.0のzip> <4.0のzip>`を実行する。
+zipはリポジトリに入れない。
 システムのChromiumを利用する場合は `CHROMIUM_PATH=/path/to/chromium npm test`。
 ユーザーにビルドを要求しない。
 ソースと生成物を同じコミットに含める。
@@ -108,6 +133,9 @@ OpenStaxから照合に使う主な点：
 | `src/main.js` | 描画、選択、モード切り替え、操作 |
 | `src/model.mjs` | 独自の外観概形 |
 | `src/conduction.mjs` | 独自の刺激伝導系模式表示 |
+| `src/anatomy.mjs` | BodyParts3Dデータの読み込みと部位定義 |
+| `src/data/bodyparts3d-heart.bin` | BodyParts3Dから生成した軽量メッシュ |
+| `scripts/prepare-bodyparts3d.mjs` | BodyParts3Dのzipから上記メッシュを生成 |
 | `src/viewer-state.mjs` | 画角とタップ判定 |
 | `src/template.html` | 日本語画面 |
 | `scripts/build.mjs` | Three.jsと権利表記を単一HTMLへ埋め込む |
@@ -121,6 +149,8 @@ OpenStaxから照合に使う主な点：
 - 静止時は必要なときだけ描画する。自動回転は初期停止で、ユーザー操作やタブ非表示時にも停止する。
 - 画面比率とモデル全体の境界から初期距離を計算し、視点切り替えとリサイズでも適用する。
 - 外観試作の形状を将来の内部モデルとして使えるとは仮定しない。
+- BodyParts3Dの試作は別モードにし、手作りの外観と見比べられるようにする。画角はモードごとのモデル境界で決める。
+- 外部データは変換済みの軽量メッシュだけをリポジトリに置き、ビルド時はネット接続を使わない。
 - 専用の引き継ぎ書やSTATUS.mdは設けない。判断はREADME、変更理由と検証はコミット、未完了事項はIssueに残す。
 
 ## 自己レビューと対応（2026-11-07）
@@ -141,6 +171,10 @@ OpenStaxから照合に使う主な点：
 
 ## 検証状況
 
+BodyParts3D試作を追加した版で、ビルド、Nodeの10テスト、Chromiumの5テストが成功（2026-11-07、Claudeのクラウド環境、導入済みChromiumを使用）。
+追加したテストは、メッシュの有効性、心臓の壁の大きさ、冠動脈が壁の表面から5mm以内にあることを検査する。
+試作モードの前面・背面・左側と、幅320pxの画面を目視確認した。
+
 v0.2のビルドとNodeの8テストは成功。
 幾何データの有限値、モデルの画角内配置、タップ判定、外部読込なし、ライセンス同梱を検証した。
 
@@ -159,7 +193,8 @@ PC幅1440pxの外観と刺激伝導系、幅320pxの刺激伝導系の保存画�
 - [MSD：心臓の生物学](https://www.msdmanuals.com/ja-jp/home/06-心臓と血管の病気/心臓と血管の生物学/心臓の生物学)
 - [MedlinePlus：Cardiac conduction system](https://www.medlineplus.gov/ency/anatomyvideos/000021.htm)
 
-外部の画像やモデルデータは使用していない。
-説明は独自に要約し、形状は本プロジェクトでコード生成。
-内蔵Three.jsのMITライセンスは`THIRD_PARTY_NOTICES.txt`とHTML内に記載。
+外部の画像は使用していない。
+モデルデータは「実形状（試作）」でBodyParts3D（© ライフサイエンス統合データベースセンター、CC BY 4.0）を加工して使用し、加工内容を`THIRD_PARTY_NOTICES.txt`に記載。
+それ以外の形状は本プロジェクトでコード生成し、説明は独自に要約。
+内蔵Three.jsのMITライセンスとBodyParts3Dの表記は`THIRD_PARTY_NOTICES.txt`とHTML内に記載。
 本プロジェクト固有コードの配布ライセンスは未指定。
