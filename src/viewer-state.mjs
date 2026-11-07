@@ -1,16 +1,26 @@
-import { BackSide, Box3, FrontSide, Group, Mesh, MeshBasicMaterial, Sphere, Vector3 } from 'three';
+import {
+  AlwaysStencilFunc, BackSide, Box3, DecrementWrapStencilOp, DoubleSide, FrontSide, Group, IncrementWrapStencilOp, Matrix4, Mesh,
+  MeshBasicMaterial, NotEqualStencilFunc, PlaneGeometry, Raycaster, ReplaceStencilOp, Sphere, Vector3,
+} from 'three';
 
 // Keep framing and gesture decisions independent of WebGL for regression tests.
 // The sphere is measured from vertices: the box's circumscribed sphere was about 25% larger
 // than the model and left it small on screen. Any orbit angle still keeps every vertex inside.
 export function modelSphere(object) {
   object.updateMatrixWorld(true);
-  const center = new Box3().setFromObject(object).getCenter(new Vector3()), p = new Vector3();
-  let radius = 0;
-  object.traverse(o => {
+  const p = new Vector3(), box = new Box3(), points = [];
+  // Helpers (the cut face is thousands of millimetres wide) do not count as model.
+  const visit = o => {
+    if (o.userData.helper) return;
     const positions = o.geometry?.attributes.position;
-    if (positions) for (let i = 0; i < positions.count; i++) radius = Math.max(radius, o.localToWorld(p.fromBufferAttribute(positions, i)).distanceTo(center));
-  });
+    if (positions) for (let i = 0; i < positions.count; i++) points.push(o.localToWorld(new Vector3().fromBufferAttribute(positions, i)));
+    o.children.forEach(visit);
+  };
+  visit(object);
+  for (const point of points) box.expandByPoint(point);
+  const center = box.getCenter(new Vector3());
+  let radius = 0;
+  for (const point of points) radius = Math.max(radius, point.distanceTo(center));
   return new Sphere(center, radius);
 }
 export function fitDistance(radius, aspect, verticalFovDegrees = 36) {
@@ -19,38 +29,74 @@ export function fitDistance(radius, aspect, verticalFovDegrees = 36) {
   return radius / Math.sin(Math.min(vertical, horizontal)) * 1.15;
 }
 
-// Interior view. Each exterior mesh gets a clipped, front-faces-only copy (shown instead of the
-// original) and a flat back-face cap. Only the cap draws the faces seen through the cut, so the
-// cut face never depends on two meshes drawn at the same depth. Switching modes only toggles
-// visibility, so no material changes and no shader recompiles.
+// Interior view. Every exterior mesh is shown as a clipped copy (the original is hidden), and the
+// cut face of the heart wall is a real quad lying on the cutting plane, drawn with the stencil
+// technique: the wall's faces behind the plane are counted per pixel (back faces +1, front faces -1),
+// and the quad is drawn where the count is not zero, i.e. where the plane passes through the wall
+// material. The count is 0 inside a cavity, so cavities are not painted like tissue.
+// Vessels in the data are thin shells without wall thickness, so they get no cut face: the clipped
+// shell is drawn on both sides and the lumen stays visible.
+// Switching modes only toggles visibility, so no material changes and no shader recompiles.
+export const wallIds = ['lv', 'rv', 'ra', 'la'];
 export function createCrossSection(parent, parts, plane, capColor) {
-  const caps = new Group(), originals = [], copies = [];
-  const capMaterial = new MeshBasicMaterial({ color: capColor, side: BackSide, clippingPlanes: [plane] });
+  const caps = new Group(), originals = [], copies = [], solids = [];
+  const stencil = (side, op) => new MeshBasicMaterial({
+    side, colorWrite: false, depthWrite: false, depthTest: false, clippingPlanes: [plane],
+    stencilWrite: true, stencilFunc: AlwaysStencilFunc, stencilFail: op, stencilZFail: op, stencilZPass: op,
+  });
+  const behind = stencil(BackSide, IncrementWrapStencilOp), ahead = stencil(FrontSide, DecrementWrapStencilOp);
   for (const group of parts.values()) {
     if (group.userData.kind === 'interior') group.traverse(o => { if (o.isMesh) o.material.clippingPlanes = [plane]; });
     if (group.userData.kind !== 'exterior') continue;
+    const wall = wallIds.includes(group.userData.id);
     for (const object of [...group.children].filter(o => o.isMesh)) {
       const material = object.material.clone();
-      Object.assign(material, { side: FrontSide, clippingPlanes: [plane] });
+      Object.assign(material, { side: wall ? FrontSide : DoubleSide, clippingPlanes: [plane] });
       const copy = new Mesh(object.geometry, material);
       copy.userData.crossSection = true;
       group.add(copy);
-      const cap = new Mesh(object.geometry, capMaterial);
-      cap.raycast = () => {};
-      caps.add(cap);
+      if (wall) {
+        for (const m of [behind, ahead]) {
+          const count = new Mesh(object.geometry, m);
+          count.renderOrder = 10;
+          count.raycast = () => {};
+          caps.add(count);
+        }
+        solids.push(object);
+      }
       originals.push(object);
       copies.push(copy);
     }
   }
+  // The quad is not clipped. Its ops reset the stencil wherever it is drawn or rejected, so the buffer is clean for the next frame.
+  const face = new Mesh(new PlaneGeometry(1, 1), new MeshBasicMaterial({
+    color: capColor, side: DoubleSide, stencilWrite: true, stencilRef: 0, stencilFunc: NotEqualStencilFunc,
+    stencilFail: ReplaceStencilOp, stencilZFail: ReplaceStencilOp, stencilZPass: ReplaceStencilOp,
+  }));
+  Object.assign(face, { renderOrder: 11, frustumCulled: false });
+  face.raycast = () => {};
+  face.scale.setScalar(5000);
+  caps.add(face);
+  caps.userData.helper = true;
   parent.add(caps);
+  const z = new Vector3(0, 0, 1);
+  // The plane is given in world space; the heart group may be scaled and moved, so place the quad in its frame.
+  const update = () => {
+    parent.updateWorldMatrix(true, false);
+    const local = plane.clone().applyMatrix4(new Matrix4().copy(parent.matrixWorld).invert());
+    local.coplanarPoint(face.position);
+    face.quaternion.setFromUnitVectors(z, local.normal);
+    face.updateMatrixWorld(true);
+  };
   const setEnabled = on => {
     caps.visible = on;
     for (const o of originals) o.visible = !on;
     for (const o of copies) o.visible = on;
     for (const group of parts.values()) if (group.userData.kind === 'interior') group.visible = on;
+    if (on) update();
   };
   setEnabled(false);
-  return { setEnabled };
+  return { setEnabled, update, solids };
 }
 
 // A part is selectable when its own modes include the view, or when it belongs to the conduction
@@ -58,15 +104,32 @@ export function createCrossSection(parent, parts, plane, capColor) {
 export const selectableIn = (data, mode, overlay) => data.modes.includes(mode) || (overlay && mode === 'interior' && data.kind === 'conduction');
 
 const isShown = object => { for (let o = object; o; o = o.parent) if (!o.visible) return false; return true; };
+const idOf = object => { while (object && !object.userData.id) object = object.parent; return object?.userData.id; };
+// The cut face of the wall is drawn where the plane passes through wall material. Count the wall's
+// faces beyond the plane along the ray as the GPU does (back faces +1, front faces -1); a non-zero
+// count means the face is drawn there, and the first surface beyond it names the chamber.
+// Seen from the kept side the face is hidden behind the near wall, so only rays from the removed side count.
+function cutFace(ray, plane, solids) {
+  if (plane.distanceToPoint(ray.origin) >= 0) return;
+  const point = ray.intersectPlane(plane, new Vector3());
+  if (!point) return;
+  const inner = new Raycaster(point.addScaledVector(ray.direction, 1e-5), ray.direction), normal = new Vector3();
+  const hits = inner.intersectObjects(solids, false);
+  const count = hits.reduce((sum, h) => sum + (normal.copy(h.face.normal).transformDirection(h.object.matrixWorld).dot(ray.direction) > 0 ? 1 : -1), 0);
+  if (count !== 0) return { id: idOf(hits[0].object), distance: ray.origin.distanceTo(point) };
+}
 // Raycasting ignores visibility and clipping planes. Return the id of the first part hit that is
-// actually drawn: shown, and not on the side the cross-section has removed.
-export function pickPart(raycaster, targets, planes = []) {
+// actually drawn: shown, and not on the side the cross-section has removed. `solids` are the wall
+// meshes whose cut face is drawn on the plane; that face is nearer than anything it covers.
+export function pickPart(raycaster, targets, planes = [], solids = []) {
+  const cut = planes.length && solids.length ? cutFace(raycaster.ray, planes[0], solids) : undefined;
   for (const hit of raycaster.intersectObjects(targets, true)) {
+    if (cut && cut.distance <= hit.distance) break;
     if (!isShown(hit.object) || !planes.every(plane => plane.distanceToPoint(hit.point) >= 0)) continue;
-    let object = hit.object;
-    while (object && !object.userData.id) object = object.parent;
-    if (object) return object.userData.id;
+    const id = idOf(hit.object);
+    if (id) return id;
   }
+  return cut?.id;
 }
 
 export class TapGesture {

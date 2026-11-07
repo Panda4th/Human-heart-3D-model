@@ -4,8 +4,9 @@
   "description": "",
   "scripts": {
     "build": "node scripts/build.mjs",
-    "test": "playwright test",
-    "test:unit": "node --test tests/*.test.mjs"
+    "test": "playwright test --project=chromium",
+    "test:unit": "node --test tests/*.test.mjs",
+    "test:webkit": "playwright test --project=webkit"
   },
   "repository": {
     "type": "git",

@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import * as THREE from 'three';
-import { createCrossSection, fitDistance, modelSphere, pickPart, selectableIn, TapGesture } from '../src/viewer-state.mjs';
+import { createCrossSection, fitDistance, modelSphere, pickPart, selectableIn, TapGesture, wallIds } from '../src/viewer-state.mjs';
 import { createConduction, conductionDefinitions } from '../src/conduction.mjs';
 import { createAnatomy, decodeAnatomy, anatomyDefinitions, anatomyFormat, interiorDefinitions } from '../src/anatomy.mjs';
 import { readFileSync } from 'node:fs';
@@ -71,12 +71,14 @@ test('BodyParts3D bundle has every defined part with valid geometry', () => {
     assert.ok(p.indices.every(i => i < p.positions.length / 3), p.id);
   }
 });
-test('valves and papillary muscles sit inside the heart wall and only the interior view selects them', () => {
+// This checks the bounding box of the four chambers only. It cannot tell whether a valve lies in a cavity
+// or pierces the wall; that needs the cavity meshes, which are not in the bundle.
+test('valves and papillary muscles fit within the bounding box of the four chambers; only the interior view selects them', () => {
   const wall = new THREE.Box3();
   for (const id of ['lv', 'rv', 'ra', 'la']) wall.expandByObject(parts.get(id));
   for (const [id] of interiorDefinitions) {
     const group = parts.get(id), box = new THREE.Box3().setFromObject(group);
-    assert.ok(wall.containsBox(box), `${id} outside the heart wall`);
+    assert.ok(wall.containsBox(box), `${id} outside the chambers' bounding box`);
     assert.deepEqual(group.userData.modes, ['interior']);
   }
   for (const id of ['lv', 'rv', 'ra', 'la']) assert.deepEqual(parts.get(id).userData.modes, ['exterior', 'interior']);
@@ -93,19 +95,25 @@ test('the conduction overlay makes conduction selectable only on the cross-secti
   assert.equal(selectableIn(sa, 'interior', false), false);
   assert.equal(selectableIn(sa, 'interior', true), true);
 });
-test('in the cross-section, a click on a valve picks the valve, not the removed front wall', () => {
-  // Separate copy of the scene, built as in src/main.js with the interior view enabled.
+// Separate copy of the scene, built as in src/main.js with the interior view enabled.
+// The plane keeps z <= constant (the slider's -constant), seen from the front.
+function sectionScene(constant) {
   const root = new THREE.Group(), ext = new THREE.Group(), map = new Map();
   root.add(ext);
   createAnatomy(ext, map, bundle, .033);
-  const plane = new THREE.Plane(new THREE.Vector3(0, 0, -1), 0); // keeps z <= 0, as the slider at its middle
+  const plane = new THREE.Plane(new THREE.Vector3(0, 0, -1), constant);
   const section = createCrossSection(ext, map, plane, 0xc98478);
   section.setEnabled(true);
   root.updateMatrixWorld(true);
   const camera = new THREE.PerspectiveCamera(36, 1, .1, 150);
   camera.position.set(0, .06, 1).normalize().multiplyScalar(fitDistance(bounds.radius, 1)).add(bounds.center);
   camera.lookAt(bounds.center); camera.updateMatrixWorld();
-  const targets = [...map.values()];
+  return { map, plane, section, camera, targets: [...map.values()] };
+}
+const rayAt = (camera, x, y) => { const r = new THREE.Raycaster(); r.setFromCamera(new THREE.Vector2(x, y), camera); return r; };
+
+test('in the cross-section, a click on a valve picks the valve, not the removed front wall', () => {
+  const { map, plane, section, camera, targets } = sectionScene(0);
   for (const id of ['aov', 'tv', 'pm']) {
     // Aim at the visible vertex of the part nearest the camera, behind the cut.
     const mesh = map.get(id).children[0], p = mesh.geometry.attributes.position, v = new THREE.Vector3();
@@ -115,11 +123,54 @@ test('in the cross-section, a click on a valve picks the valve, not the removed 
       if (v.z < -.02 && (!aim || v.z > aim.z)) aim = v.clone();
     }
     const ray = new THREE.Raycaster(camera.position, aim.clone().sub(camera.position).normalize());
-    assert.equal(pickPart(ray, targets, [plane]), id);
+    assert.equal(pickPart(ray, targets, [plane], section.solids), id);
     assert.notEqual(pickPart(ray, targets, []), id, `${id}: without the plane filter the removed wall is picked`);
   }
   section.setEnabled(false);
   assert.ok(map.get('aov').visible === false && map.get('lv').children[0].visible === true);
+});
+test('a click on the drawn cut face of the wall picks that chamber, not the valve or vessel behind it', () => {
+  // Regression for a reported bug: the cut face is drawn but was not pickable, so a click on it
+  // selected whatever lay behind (e.g. the mitral valve behind the left ventricle's cut wall).
+  // The expected answer does not come from pickPart's own logic: a point on the plane is wall
+  // material when a ray in any other direction also crosses a non-zero net count of wall faces.
+  const winding = (point, direction, solids) => {
+    const inner = new THREE.Raycaster(point.clone().addScaledVector(direction, 1e-5), direction), n = new THREE.Vector3();
+    return inner.intersectObjects(solids, false).reduce((sum, h) => sum + (n.copy(h.face.normal).transformDirection(h.object.matrixWorld).dot(direction) > 0 ? 1 : -1), 0);
+  };
+  const other = new THREE.Vector3(.31, -.77, -.55).normalize();
+  let flipped = 0, faces = 0;
+  for (const constant of [0, -.5, .5]) {
+    const { plane, section, camera, targets } = sectionScene(constant);
+    for (let x = -.6; x <= .6; x += .03) for (let y = -.7; y <= .7; y += .03) {
+      const ray = rayAt(camera, x, y), point = ray.ray.intersectPlane(plane, new THREE.Vector3());
+      const onWall = winding(point, other, section.solids) !== 0;
+      const withCut = pickPart(ray, targets, [plane], section.solids), withoutCut = pickPart(ray, targets, [plane]);
+      if (onWall) {
+        faces++;
+        assert.ok(wallIds.includes(withCut), `plane ${constant}, pixel ${x.toFixed(2)},${y.toFixed(2)}: cut face picked ${withCut}`);
+        if (!wallIds.includes(withoutCut)) flipped++;
+      } else assert.equal(withCut, withoutCut, `plane ${constant}, pixel ${x.toFixed(2)},${y.toFixed(2)}: outside the wall the pick must not change`);
+    }
+  }
+  assert.ok(faces > 300, `${faces} pixels on the cut face`);
+  assert.ok(flipped > 50, `only ${flipped} pixels differ from the old pick, so the case the report describes is not covered`);
+});
+test('the wall meshes form a closed surface, so the cut face has no holes; vessels are open shells and get no face', () => {
+  const edges = new Map();
+  const count = ids => {
+    edges.clear();
+    for (const p of anatomy.parts.filter(q => ids.includes(q.id))) {
+      const key = i => [0, 1, 2].map(k => Math.round(p.positions[i * 3 + k] * 100)).join(',');
+      for (let t = 0; t < p.indices.length; t += 3) for (let k = 0; k < 3; k++) {
+        const u = key(p.indices[t + k]), v = key(p.indices[t + (k + 1) % 3]), e = u < v ? `${u}|${v}` : `${v}|${u}`;
+        edges.set(e, (edges.get(e) || 0) + 1);
+      }
+    }
+    return [...edges.values()].filter(n => n % 2).length;
+  };
+  assert.equal(count(wallIds), 0, 'wall edges used an odd number of times');
+  for (const id of ['ao', 'pa', 'vc']) assert.ok(count([id]) > 0, `${id} is expected to have open ends`);
 });
 test('bundle format is checked', () => {
   assert.equal(decodeAnatomy(bundle).meta.format, anatomyFormat);
@@ -169,10 +220,34 @@ test('conduction overlay sits on the matching heart walls', () => {
   for (const line of paths.purkinje.slice(0, 2)) assert.ok(share(line, 'lv') > .8);
   for (const line of paths.purkinje.slice(2)) assert.ok(share(line, 'rv') > .8);
 });
-test('aortic arch keeps all three branches, including the brachiocephalic trunk', () => {
-  // The brachiocephalic trunk is the only aortic part above the arch on the patient's right.
-  const ao = anatomy.parts.find(p => p.id === 'ao').positions;
-  let right = 0;
-  for (let i = 0; i < ao.length; i += 3) if (ao[i] < -10 && ao[i + 1] > 1330) right++;
-  assert.ok(right > 20, `${right} aorta vertices right of the arch`);
+test('above the aortic arch there are exactly three separate branch stubs (one on the right, two on the left), each touching the arch', () => {
+  // Meaning of the check: the aorta is built from separate meshes (three from 3.0, three branches from 4.0), so
+  // "connected" is a distance, not shared vertices. It does not check the branches' shape or that they are the
+  // brachiocephalic, left common carotid and left subclavian arteries (the data's file names say so).
+  const ao = anatomy.parts.find(p => p.id === 'ao');
+  const key = i => [0, 1, 2].map(k => Math.round(ao.positions[i * 3 + k] * 100)).join(',');
+  const pieces = (keep) => {
+    const parent = new Map(), vertex = new Map(), find = x => { while (parent.get(x) !== x) { parent.set(x, parent.get(parent.get(x))); x = parent.get(x); } return x; };
+    for (let t = 0; t < ao.indices.length; t += 3) {
+      const tri = [0, 1, 2].map(k => ao.indices[t + k]);
+      if (!tri.every(i => keep(i))) continue;
+      const ks = tri.map(key);
+      ks.forEach((k, i) => { if (!parent.has(k)) parent.set(k, k); vertex.set(k, tri[i]); });
+      parent.set(find(ks[1]), find(ks[0])); parent.set(find(ks[2]), find(ks[0]));
+    }
+    const groups = new Map();
+    for (const [k, i] of vertex) { const r = find(k); (groups.get(r) || groups.set(r, []).get(r)).push(i); }
+    return [...groups.values()];
+  };
+  const x = i => ao.positions[i * 3], y = i => ao.positions[i * 3 + 1], meanX = list => list.reduce((s, i) => s + x(i), 0) / list.length;
+  const stubs = pieces(i => y(i) > 1340).sort((a, b) => meanX(a) - meanX(b));
+  assert.equal(stubs.length, 3, `${stubs.length} separate stubs above the arch`);
+  assert.deepEqual(stubs.map(list => meanX(list) < 0), [true, false, false]);
+  const all = pieces(() => true);
+  for (const stub of stubs) {
+    const own = all.find(list => list.includes(stub[0]) || stub.some(i => list.some(j => key(j) === key(i)))), others = all.filter(list => list !== own).flat();
+    let nearest = Infinity;
+    for (const i of own) for (const j of others) nearest = Math.min(nearest, Math.hypot(...[0, 1, 2].map(k => ao.positions[i * 3 + k] - ao.positions[j * 3 + k])));
+    assert.ok(nearest < 3, `branch ends ${nearest.toFixed(1)} mm from the arch`);
+  }
 });

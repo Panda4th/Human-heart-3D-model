@@ -13,8 +13,23 @@ function showError(message) {
   document.documentElement.dataset.ready = 'false';
   document.querySelectorAll('[data-viewer-control]').forEach(b => b.disabled = true);
 }
+// Phone layout: the model and the description go to #pinned above the scrolling <main>, and back to their
+// places on wider screens. Moving the canvas keeps its WebGL context. See the phone rules in template.html.
+{
+  const phone = matchMedia('(max-width:760px)');
+  const moved = [canvas.closest('.viewport'), document.querySelector('.detail')].map(el => {
+    const home = document.createComment('');
+    el.before(home);
+    return [el, home];
+  });
+  const place = () => {
+    for (const [el, home] of moved) phone.matches ? $('pinned').append(el) : home.after(el);
+  };
+  phone.addEventListener('change', place);
+  place();
+}
 try {
-  const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true });
+  const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true, stencil: true });
   renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
   renderer.setClearColor(0x000000, 0);
   renderer.localClippingEnabled = true;
@@ -206,6 +221,7 @@ try {
   // The slider runs from front (left) to back (right); the plane keeps everything behind it.
   $('cut-depth').oninput = event => {
     cutPlane.constant = -Number(event.target.value);
+    crossSection.update();
     showConduction();
     requestRender();
   };
@@ -246,7 +262,7 @@ try {
     ray.setFromCamera(new THREE.Vector2((event.clientX - rect.left) / rect.width * 2 - 1, -(event.clientY - rect.top) / rect.height * 2 + 1), camera);
     // Outside the conduction view, unselectable vessels stay in the targets so they still block clicks.
     const targets = mode === 'conduction' ? conduction.children : [...parts.values()].filter(g => g.userData.kind !== 'conduction' || conduction.visible);
-    const id = pickPart(ray, targets, mode === 'interior' ? [cutPlane] : []);
+    const id = pickPart(ray, targets, mode === 'interior' ? [cutPlane] : [], mode === 'interior' ? crossSection.solids : []);
     if (id) select(id);
   });
   controls.addEventListener('start', () => {

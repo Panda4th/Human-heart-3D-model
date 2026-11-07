@@ -36,13 +36,32 @@ aside h2{font-size:11px;font-weight:500;letter-spacing:.12em;color:#a8b9bd;margi
 .note{font-size:12px;line-height:1.8;color:#a6b9be;margin-top:22px}#conduction-note{color:#e1c998;border-left:2px solid #ae8d56;padding-left:12px}
 a{color:#c3d8e0;text-underline-offset:3px}.reference{border:1px solid #ffffff26;border-radius:10px;padding:14px;margin-top:24px}.reference p{margin:8px 0 0;font-size:12px;line-height:1.8;color:#a6b9be}.reference a{font-size:13px}
 #error{position:absolute;top:30%;left:8%;right:8%;padding:24px;background:#382929;z-index:3;line-height:1.8}
-footer{padding:18px 4%;border-top:1px solid #ffffff15;color:#a6b9be;font-size:11px}summary{cursor:pointer}footer pre{white-space:pre-wrap;line-height:1.6}
-@media(max-width:760px){header{min-height:72px;padding:16px 20px}.brand{font-size:16px}.badge{font-size:10px;padding:6px 8px}main{display:block}.stage-heading{padding:20px 20px 0}.stage-heading h1{font-size:23px}.viewport{height:52dvh;min-height:340px;max-height:540px}aside{border-top:1px solid #ffffff15;border-left:0;padding:24px}#parts{display:grid;grid-template-columns:1fr 1fr;gap:0 9px}.part{font-size:12px}.tools button{font-size:12px;padding:10px}.note{margin-top:18px}}
+footer{grid-column:1/-1;padding:18px 4%;border-top:1px solid #ffffff15;color:#a6b9be;font-size:11px}summary{cursor:pointer}footer pre{white-space:pre-wrap;line-height:1.6}
+@media(max-width:760px){
+/* Phone: the page itself does not scroll. main.js moves the model and the selected part's description into
+   #pinned above <main>, and only <main> scrolls, so nothing slides underneath the model.
+   The model must not sit inside the scrolling box or under position:fixed: on the user's iPhone the
+   model stayed black in that arrangement (7535baf) while the description showed. */
+body{height:100dvh;overflow:hidden;display:flex;flex-direction:column}
+header{flex:none;height:72px;min-height:0;padding:0 20px}.brand{font-size:16px}.badge{font-size:10px;padding:6px 8px}
+#pinned{flex:none;display:flex;flex-direction:column}
+main{flex:1;min-height:0;overflow-y:auto;overscroll-behavior:contain;display:flex;flex-direction:column;border-top:1px solid #ffffff26}
+.stage,aside{display:contents}
+.viewport{flex:none;height:clamp(220px,36dvh,420px);background:radial-gradient(ellipse at 50% 45%,#293d44 0%,#17242b 55%,#11191e 90%)}
+.detail{flex:none;height:clamp(120px,22dvh,230px);overflow:auto;margin:0;padding:12px 20px;background:#152027;border-top:0}
+.detail h3{font-size:19px}.detail p{font-size:12.5px;line-height:1.7;margin:6px 0 0}
+.stage-heading{order:0;padding:16px 20px 0}.stage-heading h1{font-size:21px;margin-bottom:12px}
+#steps{order:1;padding:0 20px}#cut{order:2;margin-top:12px}#interior-overlay{order:3}nav.views{order:4}#orientation{order:5}nav.tools{order:6}
+aside h2{order:7;margin:12px 20px 8px}#parts{order:8;padding:0 20px;display:grid;grid-template-columns:1fr 1fr;gap:0 9px}.part{font-size:12px}
+aside .note,aside .reference{order:9;margin-left:20px;margin-right:20px}main>footer{order:10;margin-top:18px}
+.tools button{font-size:12px;padding:10px}.note{margin-top:18px}
+}
 @media(prefers-reduced-motion:reduce){*{scroll-behavior:auto}}
 </style>
 </head>
 <body>
 <header><div class="brand">心臓のアトリエ<small>HUMAN HEART / FORM & SIGNAL</small></div><span class="badge">試作 · v0.4</span></header>
+<div id="pinned"></div>
 <main>
 <section class="stage" aria-label="心臓の3Dモデル">
   <div class="stage-heading">
@@ -75,14 +94,14 @@ footer{padding:18px 4%;border-top:1px solid #ffffff15;color:#a6b9be;font-size:11
   <div id="steps" hidden><button id="previous" data-viewer-control>← 前へ</button><span id="step-count" aria-live="polite"></span><button id="next" data-viewer-control>次へ →</button></div>
   <div class="detail" aria-live="polite"><h3 id="name">心臓を観察する</h3><small id="en">Heart study</small><p id="description">部位を選ぶと、名前と役割を表示します。</p></div>
   <p class="note" id="conduction-note" hidden>電気刺激の経路を示す模式図です。神経や血管ではなく、主に特殊な心筋細胞による仕組みです。破線は心房への広がりを表します。元データに刺激伝導系の形状はないため、上大静脈、冠静脈洞、三尖弁、大動脈弁、乳頭筋、内腔の位置から配置を推定しました。太さは誇張しており、断面の再現や伝導速度のシミュレーションではありません。</p>
-  <p class="note" id="interior-note" hidden>心臓を前後方向の平面で切り、切った面より前を取り除いて表示しています。断面は心臓に固定されていて、回転すると切り口を斜めから見られます。切り口の色は識別用です。弁と乳頭筋はBodyParts3D 4.0の形状で、弁の開き具合は元データの1時点のもので、拍動による変化は表しません。弁から乳頭筋へ伸びる糸状の部分は腱索とみられますが、元データでは弁尖と同じ部品です。心室中隔と心室の心筋は個別の形状がないため、区別して選べません。左心室の後ろの乳頭筋は元データにありません。この表示で選べるのは心房・心室・弁・乳頭筋で、血管は外観で選べます。「刺激伝導系を重ねる」を押すと、刺激伝導系も同じ断面で切って重ね、選べるようになります。その位置は推定です。切り口は前面から見たときに見え、背面からは見えません。</p>
+  <p class="note" id="interior-note" hidden>心臓を前後方向の平面で切り、切った面より前を取り除いて表示しています。断面は心臓に固定されていて、回転すると切り口を斜めから見られます。切り口の色は識別用で、切り口の面を作るのは心臓の壁だけです。血管は元データに壁の厚みがなく、切ると薄い殻の内側（内腔）が見えます。弁と乳頭筋はBodyParts3D 4.0の形状で、弁の開き具合は元データの1時点のもので、拍動による変化は表しません。弁から乳頭筋へ伸びる糸状の部分は腱索とみられますが、元データでは弁尖と同じ部品です。心室中隔と心室の心筋は個別の形状がないため、区別して選べません。左心室の後ろの乳頭筋は元データにありません。この表示で選べるのは心房・心室・弁・乳頭筋で、血管は外観で選べます。「刺激伝導系を重ねる」を押すと、刺激伝導系も同じ断面で切って重ね、選べるようになります。その位置は推定です。切り口は前面から見たときに見え、背面からは見えません。</p>
   <p class="note" id="anatomy-note">BodyParts3D（© ライフサイエンス統合データベースセンター、<a href="https://creativecommons.org/licenses/by/4.0/deed.ja" target="_blank" rel="noopener noreferrer">CC BY 4.0</a>）の成人男性1体の心臓と周囲の血管を、面数を減らして表示しています。心室・心房の色分けは、各内腔に最も近い壁を自動で割り当てた推定で、実際の境界とは一致しません。血管は心臓の近くで切っています。</p>
   <p class="note">ドラッグで回転、スクロール／ピンチで拡大縮小。キーボードでも操作できます。<br>血流と拍動は未実装。色は識別用です。医療用途ではありません。</p>
   <div class="reference"><a id="msd-reference" href="https://www.msdmanuals.com/ja-jp/home/multimedia/3dmodel/心臓の刺激伝導系" target="_blank" rel="noopener noreferrer">MSDの参考3Dモデルを開く ↗</a><p>BioDigital提供。別タブで開きます（要ネット接続）。本モデルの刺激伝導系は独自に作成した模式図です。</p></div>
   <p class="note">説明の参考：<a href="https://www.nhlbi.nih.gov/health/heart/anatomy" target="_blank" rel="noopener noreferrer">NHLBI：心臓の構造</a> ／ <a href="https://www.nhlbi.nih.gov/health/heart/heart-beats" target="_blank" rel="noopener noreferrer">拍動の仕組み</a> ／ <a href="https://www.medlineplus.gov/ency/anatomyvideos/000021.htm" target="_blank" rel="noopener noreferrer">MedlinePlus：刺激伝導系</a></p>
 </aside>
-</main>
 <footer><details><summary>内蔵ライブラリとデータのライセンス</summary><pre><!-- LICENSE --></pre></details></footer>
+</main>
 <noscript><p>このモデルを操作するにはJavaScriptを有効にしてください。</p></noscript>
 <script>/* APP */</script>
 </body>
