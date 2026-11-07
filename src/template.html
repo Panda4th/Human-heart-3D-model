@@ -56,6 +56,13 @@ aside h2{order:7;margin:12px 20px 8px}#parts{order:8;padding:0 20px;display:grid
 aside .note,aside .reference{order:9;margin-left:20px;margin-right:20px}main>footer{order:10;margin-top:18px}
 .tools button{font-size:12px;padding:10px}.note{margin-top:18px}
 }
+@media(max-width:760px) and (max-height:480px){
+/* Phone held sideways: the pinned header, model and description (72+220+120px) used to fill the whole
+   screen and leave <main> about 0px tall, so the buttons could not be reached. Shrink them so <main> keeps room. */
+header{height:44px}
+.viewport{height:clamp(110px,42dvh,200px)}
+.detail{height:clamp(64px,22dvh,120px);padding:8px 20px}
+}
 @media(prefers-reduced-motion:reduce){*{scroll-behavior:auto}}
 </style>
 </head>

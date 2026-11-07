@@ -226,3 +226,19 @@ test('context loss stops controls and explains recovery',async({page})=>{
   await expect(page.locator('#rotate')).toBeDisabled();
   await expect(page.locator('html')).toHaveAttribute('data-ready','false');
 });
+
+// A phone held sideways: the scrolling box must keep enough height to reach the controls (Codex review on PR #12).
+for (const [width,height] of [[667,375],[568,320]]) test(`controls stay reachable on a short phone screen ${width}x${height}`, async ({browser}) => {
+  const context = await browser.newContext({viewport:{width,height},hasTouch:true,isMobile:true});
+  const page = await context.newPage();
+  await page.goto(url);
+  await expect(page.locator('html')).toHaveAttribute('data-ready','true');
+  const main = await page.locator('main').boundingBox();
+  expect(main.height).toBeGreaterThanOrEqual(60);
+  expect(main.y + main.height).toBeLessThanOrEqual(height + 1);
+  await page.locator('#mode-interior').scrollIntoViewIfNeeded();
+  await expect(page.locator('#mode-interior')).toBeInViewport();
+  await page.locator('.part:visible').last().scrollIntoViewIfNeeded();
+  await expect(page.locator('.part:visible').last()).toBeInViewport();
+  await context.close();
+});
