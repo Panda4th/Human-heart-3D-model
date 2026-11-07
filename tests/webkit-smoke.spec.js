@@ -14,7 +14,7 @@ test('WebKit engine: single HTML starts, switches modes and selects parts',async
   await page.getByRole('button',{name:'大動脈',exact:true}).click();
   await expect(page.locator('#name')).toHaveText('大動脈');
   await page.locator('#mode-conduction').click();
-  await expect(page.locator('.part:visible')).toHaveCount(6);
+  await expect(page.locator('.part:visible')).toHaveCount(7);
   await page.locator('#mode-interior').click();
   await expect(page.locator('.part:visible')).toHaveCount(9);
   await page.locator('#cut-depth').fill('0');
