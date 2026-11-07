@@ -19,6 +19,8 @@ canvas{display:block;width:100%;height:100%;touch-action:none}
 canvas:focus-visible{outline:2px solid #f0bb90;outline-offset:-4px}
 #labels{position:absolute;inset:0;pointer-events:none;overflow:hidden}
 .model-label{position:absolute;transform:translate(-50%,calc(-100% - 15px));padding:5px 10px;background:#121e29e8;border:1px solid #d0aa70;border-radius:6px;color:#ffe0a3;font-size:12px;white-space:nowrap}
+.model-label.behind{border-style:dashed;color:#d9c598;background:#121e29b8}.model-label.behind::after{content:'（壁や弁の奥）';font-size:10px;margin-left:6px;color:#b9c7c9}
+.pick-mark{position:absolute;width:22px;height:22px;margin:-11px 0 0 -11px;border:2px solid #fff;border-radius:50%;box-shadow:0 0 0 2px #1b1214,inset 0 0 0 2px #1b1214;pointer-events:none}
 .axis{text-align:center;color:#acbec1;font-size:11px;margin:12px 16px}
 .tools{display:flex;justify-content:center;flex-wrap:wrap;gap:7px;padding:0 12px 20px}
 #cut{display:flex;align-items:center;justify-content:center;gap:10px;margin:0 16px 12px;font-size:12px;color:#acbec1}#cut[hidden]{display:none}#cut input{width:min(260px,52vw);accent-color:#d39c86}
@@ -29,8 +31,10 @@ button[aria-pressed=true]{border-color:#dca27f;background:#3a3330}button:disable
 aside{padding:28px 24px;border-left:1px solid #ffffff15;background:#152027}
 aside h2{font-size:11px;font-weight:500;letter-spacing:.12em;color:#a8b9bd;margin:0 0 16px}
 .part{width:100%;display:flex;align-items:center;text-align:left;margin:7px 0;padding:11px 12px;font-size:13px}
+.part .cut-tag{display:none}.part.cut-out{opacity:.55;border-style:dashed}.part.cut-out .cut-tag{display:inline;margin-left:auto;padding-left:8px;font-size:10px;color:#e1c998;white-space:nowrap}
 .part i{height:8px;width:8px;border-radius:50%;margin-right:11px;flex-shrink:0}
 .detail{border-top:1px solid #ffffff20;margin-top:24px;padding-top:20px}.detail h3{font-weight:400;font-size:23px;margin:0 0 6px}
+.detail-note{font-size:12px;line-height:20px;color:#e1c998;border-left:2px solid #ae8d56;padding-left:10px;margin:12px 0 0;max-width:640px}.detail-note button{display:block;margin-top:8px;min-height:38px;font-size:12px}
 .detail small{color:#d0ac91;font-size:11px}.detail p{font-size:13px;line-height:1.9;color:#c3cfd1}
 #steps{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-top:16px}#steps button{font-size:12px}#step-count{font-size:12px;color:#d3bb9d}
 .note{font-size:12px;line-height:1.8;color:#a6b9be;margin-top:22px}#conduction-note{color:#e1c998;border-left:2px solid #ae8d56;padding-left:12px}
@@ -49,6 +53,7 @@ main{flex:1;min-height:0;overflow-y:auto;align-items:stretch;overscroll-behavior
 .stage,aside{display:contents}
 .viewport{flex:none;height:clamp(220px,36dvh,420px);background:radial-gradient(ellipse at 50% 45%,#293d44 0%,#17242b 55%,#11191e 90%)}
 .detail{flex:none;height:clamp(120px,22dvh,230px);overflow:auto;margin:0;padding:12px 20px;background:#152027;border-top:0}
+.detail-note{flex:none;margin:0;padding:6px 20px;max-height:96px;overflow:auto;border-left:0;border-top:1px solid #ffffff20;background:#152027}.detail-note button{display:inline-block;margin:4px 0 0}
 .detail h3{font-size:19px}.detail p{font-size:12.5px;line-height:1.7;margin:6px 0 0}
 .stage-heading{order:0;padding:16px 20px 0}.stage-heading h1{font-size:21px;margin-bottom:12px}
 #steps{order:1;padding:0 20px}#cut{order:2;margin-top:12px}#interior-overlay{order:3}nav.views{order:4}#orientation{order:5}nav.tools{order:6}
@@ -62,6 +67,7 @@ aside .note,aside .reference{order:9;margin-left:20px;margin-right:20px}main>foo
 header{height:44px}
 .viewport{height:clamp(110px,42dvh,200px)}
 .detail{height:clamp(64px,22dvh,120px);padding:8px 20px}
+.detail-note{max-height:60px;padding:4px 20px}
 }
 @media(prefers-reduced-motion:reduce){*{scroll-behavior:auto}}
 </style>
@@ -78,10 +84,12 @@ header{height:44px}
       <button id="mode-conduction" data-viewer-control aria-pressed="false">刺激伝導系</button>
       <button id="mode-interior" data-viewer-control aria-pressed="false">内部（断面）</button>
     </nav>
+    <p id="cut-notice" class="detail-note" hidden>この部位は現在の断面では見えません。切断面より手前にあり、取り除かれています。<button id="cut-restore" data-viewer-control>見える位置へ動かす</button></p>
+    <p id="pick-note" class="detail-note" hidden>切り口をクリックして選んだ名前です。切り口の奥で最初に当たる壁面から推定したもので、実際の所属とは限りません（検査では一部で食い違いました）。印の円がクリックした位置、明るい色の領域が選んだ心腔の切り口です。</p>
   </div>
   <div class="viewport">
     <canvas tabindex="0" aria-label="心臓モデル。ドラッグまたは矢印キーで回転、ピンチまたはプラス・マイナスキーで拡大縮小、Homeキーで前面へ"></canvas>
-    <div id="labels" aria-hidden="true"></div>
+    <div id="labels" aria-hidden="true"></div><div id="pick-mark" class="pick-mark" hidden aria-hidden="true"></div>
     <div id="error" role="alert" hidden></div>
   </div>
   <nav class="views" aria-label="定位置の視点">
@@ -100,8 +108,8 @@ header{height:44px}
   <div id="parts"></div>
   <div id="steps" hidden><button id="previous" data-viewer-control>← 前へ</button><span id="step-count" aria-live="polite"></span><button id="next" data-viewer-control>次へ →</button></div>
   <div class="detail" aria-live="polite"><h3 id="name">心臓を観察する</h3><small id="en">Heart study</small><p id="description">部位を選ぶと、名前と役割を表示します。</p></div>
-  <p class="note" id="conduction-note" hidden>電気刺激の経路を示す模式図です。神経や血管ではなく、主に特殊な心筋細胞による仕組みです。破線は心房への広がりを表します。元データに刺激伝導系の形状はないため、上大静脈、冠静脈洞、三尖弁、大動脈弁、乳頭筋、内腔の位置から配置を推定しました。太さは誇張しており、断面の再現や伝導速度のシミュレーションではありません。</p>
-  <p class="note" id="interior-note" hidden>心臓を前後方向の平面で切り、切った面より前を取り除いて表示しています。断面は心臓に固定されていて、回転すると切り口を斜めから見られます。切り口の色は識別用で、切り口の面を作るのは心臓の壁だけです。血管は元データに壁の厚みがなく、切ると薄い殻の内側（内腔）が見えます。弁と乳頭筋はBodyParts3D 4.0の形状で、弁の開き具合は元データの1時点のもので、拍動による変化は表しません。弁から乳頭筋へ伸びる糸状の部分は腱索とみられますが、元データでは弁尖と同じ部品です。心室中隔と心室の心筋は個別の形状がないため、区別して選べません。左心室の後ろの乳頭筋は元データにありません。この表示で選べるのは心房・心室・弁・乳頭筋で、血管は外観で選べます。「刺激伝導系を重ねる」を押すと、刺激伝導系も同じ断面で切って重ね、選べるようになります。その位置は推定です。切り口は前面から見たときに見え、背面からは見えません。</p>
+  <p class="note" id="conduction-note" hidden>電気刺激の経路を示す模式図です。神経や血管ではなく、主に特殊な心筋細胞による仕組みです。破線は心房への広がりを表します。右脚・左脚は別々に選べますが、どちらも1本の線に簡略化しています。元データに刺激伝導系の形状はないため、上大静脈、冠静脈洞、三尖弁、大動脈弁、乳頭筋、内腔の位置から配置を推定しました。太さは誇張しており、断面の再現や伝導速度のシミュレーションではありません。位置は解剖学的に妥当と確かめられたものではありません（資料との照合は途中です）。</p>
+  <p class="note" id="interior-note" hidden>心臓を前後方向の平面で切り、切った面より前を取り除いて表示しています。断面は心臓に固定されていて、回転すると切り口を斜めから見られます。切り口の色は識別用で、切り口の面を作るのは心臓の壁だけです。血管は元データに壁の厚みがなく、切ると薄い殻の内側（内腔）が見えます。弁と乳頭筋はBodyParts3D 4.0の形状で、弁の開き具合は元データの1時点のもので、拍動による変化は表しません。弁から乳頭筋へ伸びる糸状の部分は腱索とみられますが、元データでは弁尖と同じ部品です。心室中隔と心室の心筋は個別の形状がないため、区別して選べません。左心室の後ろの乳頭筋は元データにありません。この表示で選べるのは心房・心室・弁・乳頭筋で、血管は外観で選べます。「刺激伝導系を重ねる」を押すと、刺激伝導系も同じ断面で切って重ね、選べるようになります。その位置は推定です。壁や弁の奥にある部位のラベルは破線で「（壁や弁の奥）」と示します。選んだ心房・心室の切り口は明るい色になります。切り口は前面から見たときに見え、背面からは見えません。</p>
   <p class="note" id="anatomy-note">BodyParts3D（© ライフサイエンス統合データベースセンター、<a href="https://creativecommons.org/licenses/by/4.0/deed.ja" target="_blank" rel="noopener noreferrer">CC BY 4.0</a>）の成人男性1体の心臓と周囲の血管を、面数を減らして表示しています。心室・心房の色分けは、各内腔に最も近い壁を自動で割り当てた推定で、実際の境界とは一致しません。血管は心臓の近くで切っています。</p>
   <p class="note">ドラッグで回転、スクロール／ピンチで拡大縮小。キーボードでも操作できます。<br>血流と拍動は未実装。色は識別用です。医療用途ではありません。</p>
   <div class="reference"><a id="msd-reference" href="https://www.msdmanuals.com/ja-jp/home/multimedia/3dmodel/心臓の刺激伝導系" target="_blank" rel="noopener noreferrer">MSDの参考3Dモデルを開く ↗</a><p>BioDigital提供。別タブで開きます（要ネット接続）。本モデルの刺激伝導系は独自に作成した模式図です。</p></div>

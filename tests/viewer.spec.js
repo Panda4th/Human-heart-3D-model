@@ -109,7 +109,7 @@ for (const width of [1440,390,320]) test(`offline model and interactions at widt
   await expect(page.locator('#rotate')).toHaveAttribute('aria-pressed','false');
   await page.screenshot({path:testInfo.outputPath('exterior.png'),fullPage:!mobile});
   await page.locator('#mode-conduction').click();
-  await expect(page.locator('.part:visible')).toHaveCount(6);
+  await expect(page.locator('.part:visible')).toHaveCount(7);
   await expect(page.locator('#name')).toHaveText('洞房結節');
   await expect(page.locator('#previous')).toBeDisabled();
   await c.screenshot();
@@ -121,7 +121,7 @@ for (const width of [1440,390,320]) test(`offline model and interactions at widt
   await clickAnchor(page,'心房への広がり',1.5);
   await expect(page.locator('#name')).toHaveText('心房への広がり');
   await page.getByRole('button',{name:'洞房結節',exact:true}).click();
-  for(const name of ['心房への広がり','房室結節','ヒス束','右脚・左脚','プルキンエ線維']) {
+  for(const name of ['心房への広がり','房室結節','ヒス束','右脚','左脚','プルキンエ線維']) {
     await page.locator('#next').click(); await expect(page.locator('#name')).toHaveText(name);
   }
   await expect(page.locator('#next')).toBeDisabled();
@@ -177,11 +177,16 @@ for (const width of [1440,390,320]) test(`offline model and interactions at widt
   const overlayOffAt0 = await stableShot(c);
   await page.locator('#cut-depth').fill('0.9');
   await settle(page);
+  await page.evaluate(() => scrollTo(0, 0));
+  await settle(page);
   const overlayOffBehind = await stableShot(c);
   await page.locator('#interior-conduction').click();
   await expect(page.locator('#interior-conduction')).toHaveAttribute('aria-pressed','true');
-  await expect(page.locator('.part:visible')).toHaveCount(15);
+  await expect(page.locator('.part:visible')).toHaveCount(16);
   await expect(page.locator('#conduction-note')).toBeVisible();
+  // Clicking the button scrolled the page. A canvas at a different fractional scroll position differs in its first pixel row,
+  // so put the page back where overlayOffBehind was taken (the selected aortic valve may now show a cut notice that shifts the layout).
+  await page.evaluate(() => scrollTo(0, 0));
   await settle(page);
   expect((await stableShot(c)).equals(overlayOffBehind)).toBe(true);
   await page.locator('#cut-depth').fill('0');
@@ -249,6 +254,128 @@ for (const width of [1440,390,320]) test(`offline model and interactions at widt
   expect(await page.evaluate(()=>window.renderRequests)).toBe(frames);
   expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
   expect(errors).toEqual([]); expect(requests).toEqual([]);
+  await context.close();
+});
+// Number of pixels whose colour is within `tolerance` (per channel) of the given colour.
+const countColor = (page, png, [r, g, b], tolerance) => page.evaluate(async ([b64, r, g, b, tolerance]) => {
+  const image = new Image(); image.src = 'data:image/png;base64,' + b64; await image.decode();
+  const canvas = document.createElement('canvas'); canvas.width = image.width; canvas.height = image.height;
+  const context = canvas.getContext('2d'); context.drawImage(image, 0, 0);
+  const { data } = context.getImageData(0, 0, image.width, image.height);
+  let count = 0;
+  for (let i = 0; i < data.length; i += 4) if (Math.abs(data[i] - r) <= tolerance && Math.abs(data[i + 1] - g) <= tolerance && Math.abs(data[i + 2] - b) <= tolerance) count++;
+  return count;
+}, [png.toString('base64'), r, g, b, tolerance]);
+for (const width of [1440, 390]) test(`cut view: removed parts, hidden labels, the clicked cut face and the dashed line at width ${width}`, async ({ browser }) => {
+  const mobile = width < 700;
+  const context = await browser.newContext({ viewport: { width, height: 900 }, hasTouch: mobile, isMobile: mobile });
+  const page = await context.newPage(), errors = [];
+  page.on('pageerror', e => errors.push(e.message));
+  await page.goto(url);
+  await expect(page.locator('html')).toHaveAttribute('data-ready', 'true');
+  const c = page.locator('canvas'), part = name => page.locator('.part', { hasText: name }).first();
+  await page.locator('#mode-interior').click();
+  await page.locator('#interior-conduction').click();
+  // 1. At 0.9 the whole conduction system is cut away: say so, mark the button, and offer a way back.
+  await page.locator('#cut-depth').fill('0.9');
+  await part('洞房結節').click();
+  await expect(page.locator('#name')).toHaveText('洞房結節');
+  await expect(page.locator('#cut-notice')).toBeVisible();
+  await expect(part('洞房結節')).toHaveClass(/cut-out/);
+  await expect(part('洞房結節')).toHaveAttribute('aria-description', /見えません/);
+  await expect(part('僧帽弁')).not.toHaveClass(/cut-out/);
+  await page.locator('#cut-restore').click();
+  await expect(page.locator('#cut-notice')).toBeHidden();
+  expect(Number(await page.inputValue('#cut-depth'))).toBeLessThan(0.9);
+  await expect(page.locator('#labels .model-label:visible')).toHaveText('洞房結節');
+  await expect(part('洞房結節')).not.toHaveClass(/cut-out/);
+  // 2. At depth 0 seen from the front, the His bundle lies behind the cut wall; the sinoatrial node is in view.
+  await page.locator('#cut-depth').fill('0');
+  await part('ヒス束').click();
+  await expect(page.locator('#labels .model-label:visible')).toHaveText('ヒス束');
+  await expect(page.locator('#labels .model-label.behind:visible')).toHaveCount(1);
+  await part('洞房結節').click();
+  await expect(page.locator('#labels .model-label:visible')).toHaveText('洞房結節');
+  await expect(page.locator('#labels .model-label.behind:visible')).toHaveCount(0);
+  // 3. A click on the cut face shows a ring and the chamber's own region in a brighter colour; a part button shows no ring.
+  await part('大動脈弁').click();
+  await settle(page);
+  const regionColor = [255, 199, 158];
+  expect(await countColor(page, await stableShot(c), regionColor, 6)).toBe(0);
+  const facePoints = await page.evaluate(async b64 => {
+    const image = new Image(); image.src = 'data:image/png;base64,' + b64; await image.decode();
+    const canvas = document.createElement('canvas'); canvas.width = image.width; canvas.height = image.height;
+    const g = canvas.getContext('2d'); g.drawImage(image, 0, 0);
+    const { data, width, height } = g.getImageData(0, 0, image.width, image.height);
+    const isFace = (x, y) => { const i = (y * width + x) * 4; return Math.abs(data[i] - 201) < 3 && Math.abs(data[i + 1] - 132) < 3 && Math.abs(data[i + 2] - 120) < 3; };
+    const points = [];
+    for (let y = 2; y < height - 2; y++) for (let x = 2; x < width - 2; x++) if ([[0, 0], [2, 0], [-2, 0], [0, 2], [0, -2]].every(([dx, dy]) => isFace(x + dx, y + dy))) points.push([x + .5, y + .5]);
+    return points.filter((_, i) => i % Math.ceil(points.length / 5) === 0);
+  }, (await stableShot(c)).toString('base64'));
+  expect(facePoints.length).toBeGreaterThan(2);
+  await c.scrollIntoViewIfNeeded();
+  const box = await c.boundingBox();
+  const [fx, fy] = facePoints[Math.floor(facePoints.length / 2)];
+  await page.mouse.click(box.x + fx, box.y + fy);
+  await expect(page.locator('#name')).toHaveText(/^(左心室|右心室|右心房|左心房)$/);
+  await expect(page.locator('#pick-mark')).toBeVisible();
+  await expect(page.locator('#pick-note')).toBeVisible();
+  await settle(page);
+  expect(await countColor(page, await stableShot(c), regionColor, 6)).toBeGreaterThan(50);
+  await page.locator('#cut-depth').fill('0.3'); // the ring marked a point on the old plane
+  await expect(page.locator('#pick-mark')).toBeHidden();
+  await expect(page.locator('#pick-note')).toBeHidden();
+  await part('大動脈弁').click();
+  await expect(page.locator('#pick-mark')).toBeHidden();
+  await settle(page);
+  expect(await countColor(page, await stableShot(c), regionColor, 6)).toBe(0);
+  // Leaving the interior view clears the region.
+  await part('左心室').click();
+  await page.locator('#mode-exterior').click();
+  await settle(page);
+  expect(await countColor(page, await stableShot(c), regionColor, 6)).toBe(0);
+  // 4. The dashed atrial line turns bright when it is the selected part, and dims when another part is selected.
+  await page.locator('#mode-conduction').click();
+  await part('心房への広がり').click();
+  await settle(page);
+  await c.scrollIntoViewIfNeeded();
+  // The line is 1 px wide and blends with the background, so count pixels whose weakest channel is above 150
+  // (measured at 1440 px: 96 with the line selected, 17 without; the labels and nodes are not that bright).
+  const brightPixels = async () => countColor(page, await stableShot(c), [255, 255, 255], 105);
+  const selectedLine = await brightPixels();
+  await part('洞房結節').click();
+  await settle(page);
+  const otherSelected = await brightPixels();
+  expect(selectedLine, 'selected dashed line').toBeGreaterThan(otherSelected + 30);
+  expect(errors).toEqual([]);
+  await context.close();
+});
+for (const width of [1440, 390]) test(`the two bundle branches are selected and drawn separately at width ${width}`, async ({ browser }) => {
+  const mobile = width < 700;
+  const context = await browser.newContext({ viewport: { width, height: 900 }, hasTouch: mobile, isMobile: mobile });
+  const page = await context.newPage();
+  await page.goto(url);
+  await expect(page.locator('html')).toHaveAttribute('data-ready', 'true');
+  await page.locator('#mode-conduction').click();
+  const c = page.locator('canvas');
+  await page.getByRole('button', { name: '右脚', exact: true }).click();
+  await expect(page.locator('#name')).toHaveText('右脚');
+  await expect(page.locator('#labels .model-label:visible')).toHaveText('右脚');
+  await settle(page);
+  await c.scrollIntoViewIfNeeded();
+  const right = await stableShot(c);
+  await page.getByRole('button', { name: '左脚', exact: true }).click();
+  await expect(page.locator('#name')).toHaveText('左脚');
+  await expect(page.locator('#labels .model-label:visible')).toHaveText('左脚');
+  await settle(page);
+  expect((await stableShot(c)).equals(right)).toBe(false);
+  // The label of each branch sits on its own path: clicking at the anchor picks that branch.
+  await clickAnchor(page, '左脚');
+  await expect(page.locator('#name')).toHaveText('左脚');
+  await page.getByRole('button', { name: '右脚', exact: true }).click();
+  await settle(page);
+  await clickAnchor(page, '右脚');
+  await expect(page.locator('#name')).toHaveText('右脚');
   await context.close();
 });
 test('WebGL failure leaves an explanation and source links',async({page})=>{

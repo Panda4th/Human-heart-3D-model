@@ -38,8 +38,8 @@ export function fitDistance(radius, aspect, verticalFovDegrees = 36) {
 // shell is drawn on both sides and the lumen stays visible.
 // Switching modes only toggles visibility, so no material changes and no shader recompiles.
 export const wallIds = ['lv', 'rv', 'ra', 'la'];
-export function createCrossSection(parent, parts, plane, capColor) {
-  const caps = new Group(), originals = [], copies = [], solids = [];
+export function createCrossSection(parent, parts, plane, capColor, regionColor = 0xffc79e) {
+  const caps = new Group(), originals = [], copies = [], solids = [], regions = new Map();
   const stencil = (side, op) => new MeshBasicMaterial({
     side, colorWrite: false, depthWrite: false, depthTest: false, clippingPlanes: [plane],
     stencilWrite: true, stencilFunc: AlwaysStencilFunc, stencilFail: op, stencilZFail: op, stencilZPass: op,
@@ -62,6 +62,16 @@ export function createCrossSection(parent, parts, plane, capColor) {
           count.raycast = () => {};
           caps.add(count);
         }
+        // The selected chamber's own cut region: the same count on this chamber's shell alone, drawn after the
+        // common face, with a brighter quad. Hidden until setRegion shows it.
+        const own = [behind, ahead].map(m => {
+          const count = new Mesh(object.geometry, m);
+          Object.assign(count, { renderOrder: 12, visible: false });
+          count.raycast = () => {};
+          caps.add(count);
+          return count;
+        });
+        regions.set(group.userData.id, [...(regions.get(group.userData.id) || []), ...own]);
         solids.push(object);
       }
       originals.push(object);
@@ -69,14 +79,19 @@ export function createCrossSection(parent, parts, plane, capColor) {
     }
   }
   // The quad is not clipped. Its ops reset the stencil wherever it is drawn or rejected, so the buffer is clean for the next frame.
-  const face = new Mesh(new PlaneGeometry(1, 1), new MeshBasicMaterial({
-    color: capColor, side: DoubleSide, stencilWrite: true, stencilRef: 0, stencilFunc: NotEqualStencilFunc,
-    stencilFail: ReplaceStencilOp, stencilZFail: ReplaceStencilOp, stencilZPass: ReplaceStencilOp,
-  }));
-  Object.assign(face, { renderOrder: 11, frustumCulled: false });
-  face.raycast = () => {};
-  face.scale.setScalar(5000);
-  caps.add(face);
+  const quad = (color, renderOrder) => {
+    const q = new Mesh(new PlaneGeometry(1, 1), new MeshBasicMaterial({
+      color, side: DoubleSide, stencilWrite: true, stencilRef: 0, stencilFunc: NotEqualStencilFunc,
+      stencilFail: ReplaceStencilOp, stencilZFail: ReplaceStencilOp, stencilZPass: ReplaceStencilOp,
+    }));
+    Object.assign(q, { renderOrder, frustumCulled: false });
+    q.raycast = () => {};
+    q.scale.setScalar(5000);
+    caps.add(q);
+    return q;
+  };
+  const face = quad(capColor, 11), regionFace = quad(regionColor, 13);
+  regionFace.visible = false;
   caps.userData.helper = true;
   parent.add(caps);
   const z = new Vector3(0, 0, 1);
@@ -84,9 +99,16 @@ export function createCrossSection(parent, parts, plane, capColor) {
   const update = () => {
     parent.updateWorldMatrix(true, false);
     const local = plane.clone().applyMatrix4(new Matrix4().copy(parent.matrixWorld).invert());
-    local.coplanarPoint(face.position);
-    face.quaternion.setFromUnitVectors(z, local.normal);
-    face.updateMatrixWorld(true);
+    for (const q of [face, regionFace]) {
+      local.coplanarPoint(q.position);
+      q.quaternion.setFromUnitVectors(z, local.normal);
+      q.updateMatrixWorld(true);
+    }
+  };
+  // Show the cut region of one chamber (lv, rv, ra or la) in a brighter colour; any other id clears it.
+  const setRegion = id => {
+    for (const [key, meshes] of regions) for (const m of meshes) m.visible = key === id;
+    regionFace.visible = regions.has(id);
   };
   const setEnabled = on => {
     caps.visible = on;
@@ -94,9 +116,10 @@ export function createCrossSection(parent, parts, plane, capColor) {
     for (const o of copies) o.visible = on;
     for (const group of parts.values()) if (group.userData.kind === 'interior') group.visible = on;
     if (on) update();
+    else setRegion(null);
   };
   setEnabled(false);
-  return { setEnabled, update, solids };
+  return { setEnabled, update, setRegion, solids };
 }
 
 // A part is selectable when its own modes include the view, or when it belongs to the conduction
@@ -113,23 +136,33 @@ function cutFace(ray, plane, solids) {
   if (plane.distanceToPoint(ray.origin) >= 0) return;
   const point = ray.intersectPlane(plane, new Vector3());
   if (!point) return;
-  const inner = new Raycaster(point.addScaledVector(ray.direction, 1e-5), ray.direction), normal = new Vector3();
+  const inner = new Raycaster(point.clone().addScaledVector(ray.direction, 1e-5), ray.direction), normal = new Vector3();
   const hits = inner.intersectObjects(solids, false);
   const count = hits.reduce((sum, h) => sum + (normal.copy(h.face.normal).transformDirection(h.object.matrixWorld).dot(ray.direction) > 0 ? 1 : -1), 0);
-  if (count !== 0) return { id: idOf(hits[0].object), distance: ray.origin.distanceTo(point) };
+  if (count !== 0) return { id: idOf(hits[0].object), distance: ray.origin.distanceTo(point), point };
 }
 // Raycasting ignores visibility and clipping planes. Return the id of the first part hit that is
 // actually drawn: shown, and not on the side the cross-section has removed. `solids` are the wall
 // meshes whose cut face is drawn on the plane; that face is nearer than anything it covers.
-export function pickPart(raycaster, targets, planes = [], solids = []) {
+// The result also gives the distance along the ray to the drawn surface and whether it is the cut face (onCut,
+// with the point on the plane). The chamber named for the cut face is the first wall surface beyond it, an estimate.
+export function pickHit(raycaster, targets, planes = [], solids = []) {
   const cut = planes.length && solids.length ? cutFace(raycaster.ray, planes[0], solids) : undefined;
   for (const hit of raycaster.intersectObjects(targets, true)) {
     if (cut && cut.distance <= hit.distance) break;
     if (!isShown(hit.object) || !planes.every(plane => plane.distanceToPoint(hit.point) >= 0)) continue;
     const id = idOf(hit.object);
-    if (id) return id;
+    if (id) return { id, distance: hit.distance, onCut: false };
   }
-  return cut?.id;
+  return cut && { ...cut, onCut: true };
+}
+export const pickPart = (...args) => pickHit(...args)?.id;
+
+// True when the cut leaves nothing of an object with this world-space box (the plane keeps distance >= 0).
+// For a box this is exact only for an axis-aligned plane, which is the case for the front-to-back cut.
+export function removedByCut(box, plane) {
+  const n = plane.normal;
+  return plane.distanceToPoint(new Vector3(n.x > 0 ? box.max.x : box.min.x, n.y > 0 ? box.max.y : box.min.y, n.z > 0 ? box.max.z : box.min.z)) < 0;
 }
 
 export class TapGesture {
