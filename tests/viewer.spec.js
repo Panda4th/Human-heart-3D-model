@@ -1,0 +1,20 @@
+const {test,expect}=require('@playwright/test');
+const {pathToFileURL}=require('node:url');
+const path=require('node:path');
+for(const mobile of [false,true])test(mobile?'mobile layout and touch':'desktop offline viewer',async({browser})=>{
+ const context=await browser.newContext({viewport:mobile?{width:390,height:844}:{width:1440,height:1000},hasTouch:mobile,isMobile:mobile});
+ await context.setOffline(true);
+ const page=await context.newPage();const errors=[];page.on('pageerror',e=>errors.push(e.message));
+ await page.goto(pathToFileURL(path.resolve('index.html')).href);
+ await expect(page.locator('html')).toHaveAttribute('data-ready','true');
+ await expect(page.locator('#error')).toBeHidden();
+ await page.getByRole('button',{name:'大動脈'}).click();await expect(page.locator('#name')).toHaveText('大動脈');
+ await page.locator('#rotate').click();await expect(page.locator('#rotate')).toHaveAttribute('aria-pressed','true');
+ await page.locator('#in').click();await page.locator('#out').click();
+ await page.locator('#reset').click();await expect(page.locator('#rotate')).toHaveAttribute('aria-pressed','false');
+ const c=page.locator('canvas'),box=await c.boundingBox();await page.mouse.move(box.x+box.width*.5,box.y+box.height*.55);await page.mouse.down();await page.mouse.move(box.x+box.width*.7,box.y+box.height*.5,{steps:12});await page.mouse.up();
+ expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
+ await page.locator('#reset').click();await page.waitForTimeout(200);
+ await page.screenshot({path:mobile?'/tmp/heart-mobile.png':'/tmp/heart-desktop.png',fullPage:true});
+ expect(errors).toEqual([]);await context.close();
+});
