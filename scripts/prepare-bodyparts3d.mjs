@@ -151,11 +151,83 @@ for (let t = 0; t < wall.indices.length; t += 3) {
 const coronaryArtery = /coronary artery|conus artery/i, cardiacVein = /cardiac vein|coronary sinus|marginal vein|posterior vein of left ventricle/i;
 const v4ByName = re => [...v4.keys()].filter(id => id.startsWith('FJ') && re.test(headerName(v4.get(id)().slice(0, 1500))));
 const part = (ids, planes = [], ratio = .5) => simplify(weld(clip(merge(ids.map(load)), planes)), ratio);
+
+// The aorta is six separate shells, and each one is closed by a flat cap where the next begins. Where two of them
+// meet, the caps stay inside the vessel, and the thin gap between the rims showed on screen as a dark line and a
+// small step. Cut the caps away from the shells, then join the open rims with a strip of triangles.
+const dropTriangles = (mesh, drop) => {
+  const indices = [];
+  for (let t = 0; t < mesh.indices.length; t += 3) {
+    const ids = mesh.indices.slice(t, t + 3), p = ids.map(i => mesh.positions.slice(i * 3, i * 3 + 3));
+    const u = p[1].map((v, k) => v - p[0][k]), w = p[2].map((v, k) => v - p[0][k]);
+    const n = [u[1] * w[2] - u[2] * w[1], u[2] * w[0] - u[0] * w[2], u[0] * w[1] - u[1] * w[0]];
+    if (!drop(p, Math.abs(n[1]) / (Math.hypot(...n) || 1))) indices.push(...ids);
+  }
+  return { positions: mesh.positions, indices };
+};
+// The open rims of a mesh, each as a closed loop of vertex indices that follows the direction of its boundary edges.
+function openRims(mesh) {
+  const directed = new Set(), next = new Map();
+  for (let t = 0; t < mesh.indices.length; t += 3) for (let k = 0; k < 3; k++) directed.add(mesh.indices[t + k] + ',' + mesh.indices[t + (k + 1) % 3]);
+  for (const key of directed) {
+    const [a, b] = key.split(',').map(Number);
+    if (!directed.has(b + ',' + a)) { if (next.has(a)) throw new Error('an aorta rim touches itself'); next.set(a, b); }
+  }
+  const loops = [], seen = new Set();
+  for (const first of next.keys()) {
+    if (seen.has(first)) continue;
+    const loop = [first];
+    seen.add(first);
+    for (let v = next.get(first); v !== first; v = next.get(v)) {
+      if (v === undefined || seen.has(v)) throw new Error('an aorta rim is not a closed loop');
+      seen.add(v); loop.push(v);
+    }
+    loops.push(loop);
+  }
+  return loops;
+}
+// Join two rims of one mesh with a strip of triangles. At each step the shorter of the two possible new edges is taken.
+function zipRims(mesh, loopA, loopB) {
+  const P = mesh.positions, dist = (a, b) => Math.hypot(...[0, 1, 2].map(k => P[a * 3 + k] - P[b * 3 + k]));
+  // Rims of two shells that face each other run in opposite directions, so walk B backwards, from the vertex closest to A's first.
+  const reversed = [...loopB].reverse();
+  let start = 0;
+  reversed.forEach((v, j) => { if (dist(loopA[0], v) < dist(loopA[0], reversed[start])) start = j; });
+  const b = [...reversed.slice(start), ...reversed.slice(0, start)], out = [...mesh.indices];
+  let i = 0, m = 0;
+  while (i < loopA.length || m < b.length) {
+    const a0 = loopA[i % loopA.length], a1 = loopA[(i + 1) % loopA.length], c0 = b[m % b.length], c1 = b[(m + 1) % b.length];
+    if (m >= b.length || (i < loopA.length && dist(a1, c0) <= dist(a0, c1))) { out.push(a1, a0, c0); i++; } else { out.push(c0, c1, a0); m++; }
+  }
+  return { positions: mesh.positions, indices: out };
+}
+const centroid = (mesh, loop) => [0, 1, 2].map(k => loop.reduce((sum, v) => sum + mesh.positions[v * 3 + k], 0) / loop.length);
+// A cap triangle lies in a narrow height band at a joint and faces mostly up or down.
+const capTriangle = (lowest, highest, where = () => true, facing = .7) => (p, ny) => ny > facing && p.every(q => q[1] >= lowest && q[1] <= highest && where(q));
+// The three main aorta shells (ascending FMA3736, arch FMA3768, descending FMA3784) with the caps between them cut away
+// and the rims joined. Joints in viewer mm: ascending top and the arch's front end near z 112-138, the arch's back end
+// and the descending top near z 54-77.
+function joinedAorta() {
+  const shells = [
+    dropTriangles(weld(load('FMA3736')), capTriangle(1300.5, 1400)),
+    dropTriangles(weld(load('FMA3768')), capTriangle(0, 1304.8, q => q[2] > 100 || q[2] < 90)),
+    dropTriangles(weld(load('FMA3784')), capTriangle(1298, 1400, () => true, .8))
+  ];
+  const mesh = merge(shells), sizes = shells.map(shell => shell.positions.length / 3), base = [0, sizes[0], sizes[0] + sizes[1]];
+  const rims = shells.map((shell, k) => openRims(shell).map(loop => loop.map(v => v + base[k])));
+  // Rim counts are checked so that a cap left in place, or a piece of the tube cut away by mistake, stops the build.
+  if (rims[0].length !== 1 || rims[1].length !== 2 || rims[2].length !== 1) throw new Error(`aorta rims: ${rims.map(r => r.length)} (expected 1, 2, 1)`);
+  const nearest = (target, loops) => {
+    const c = centroid(mesh, target), d = loop => Math.hypot(...centroid(mesh, loop).map((v, k) => v - c[k]));
+    return loops.reduce((best, loop) => d(loop) < d(best) ? loop : best);
+  };
+  return zipRims(zipRims(mesh, rims[0][0], nearest(rims[0][0], rims[1])), nearest(rims[2][0], rims[1]), rims[2][0]);
+}
 // Viewer axes in mm: 0 = patient's left, 1 = superior. Cuts keep vessel stubs near the heart.
 const X = 0, Y = 1;
 const parts = {
   ...Object.fromEntries(Object.entries(chambers).map(([id, indices]) => [id, compact({ positions: wall.positions, indices })])),
-  ao: part(['FMA3736', 'FMA3768', 'FMA3784', 'FJ3417', 'FJ3479', 'FJ3483'], [[Y, 1175, 1], [Y, 1355, -1], [X, 45, -1]]),
+  ao: simplify(weld(clip(merge([joinedAorta(), ...['FJ3417', 'FJ3479', 'FJ3483'].map(load)]), [[Y, 1175, 1], [Y, 1355, -1], [X, 45, -1]])), .5),
   pa: part(['FJ2966', 'FJ2924', 'FJ3019'], [[X, -45, 1], [X, 70, -1]]),
   vc: part(['FMA4720', 'FMA10951'], [[Y, 1165, 1]]),
   pv: part(['FJ2925', 'FJ2933', 'FJ2944', 'FJ2950', 'FJ2955', 'FJ3020', 'FJ3040']),
