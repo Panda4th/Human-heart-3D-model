@@ -109,3 +109,10 @@ test('conduction overlay sits on the matching heart walls', () => {
   for (const line of paths.purkinje.slice(0, 2)) assert.ok(share(line, 'lv') > .8);
   for (const line of paths.purkinje.slice(2)) assert.ok(share(line, 'rv') > .8);
 });
+test('aortic arch keeps all three branches, including the brachiocephalic trunk', () => {
+  // The brachiocephalic trunk is the only aortic part above the arch on the patient's right.
+  const ao = anatomy.parts.find(p => p.id === 'ao').positions;
+  let right = 0;
+  for (let i = 0; i < ao.length; i += 3) if (ao[i] < -10 && ao[i + 1] > 1330) right++;
+  assert.ok(right > 20, `${right} aorta vertices right of the arch`);
+});
