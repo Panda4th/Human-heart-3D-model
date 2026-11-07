@@ -4,6 +4,16 @@ const path=require('node:path');
 const url = pathToFileURL(path.resolve('index.html')).href;
 // Rendering happens in the next animation frame after a state change, so a screenshot taken right away can
 // still show the previous frame. Wait for the frame to be drawn before comparing pictures.
+// Number of pixels that belong to the model: the background is blue-grey and dark, the heart is clearly redder or brighter.
+const modelPixels = (page, png) => page.evaluate(async b64 => {
+  const image = new Image(); image.src = 'data:image/png;base64,' + b64; await image.decode();
+  const canvas = document.createElement('canvas'); canvas.width = image.width; canvas.height = image.height;
+  const g = canvas.getContext('2d'); g.drawImage(image, 0, 0);
+  const { data } = g.getImageData(0, 0, image.width, image.height);
+  let count = 0;
+  for (let i = 0; i < data.length; i += 4) if (Math.max(data[i], data[i + 1], data[i + 2]) > 90 || data[i] - data[i + 2] > 25) count++;
+  return count;
+}, png.toString('base64'));
 const settle = page => page.evaluate(() => new Promise(done => requestAnimationFrame(() => requestAnimationFrame(() => requestAnimationFrame(done)))));
 // Viewport position of a label's anchor, read at the moment of the click so that scrolling cannot make it stale.
 const anchorOf = (page, text) => page.locator('canvas').evaluate((canvas, text) => {
@@ -57,11 +67,28 @@ for (const width of [1440,390,320]) test(`offline model and interactions at widt
   await expect(page.locator('#name')).toHaveText('大動脈');
   if (mobile) {
     const client=await context.newCDPSession(page);
+    const beforePinch = await modelPixels(page, await c.screenshot());
     await client.send('Input.dispatchTouchEvent',{type:'touchStart',touchPoints:[{x:x-30,y,id:1},{x:x+30,y,id:2}]});
-    await client.send('Input.dispatchTouchEvent',{type:'touchMove',touchPoints:[{x:x-55,y,id:1},{x:x+55,y,id:2}]});
+    for (const d of [40,50,60]) await client.send('Input.dispatchTouchEvent',{type:'touchMove',touchPoints:[{x:x-d,y,id:1},{x:x+d,y,id:2}]});
     await client.send('Input.dispatchTouchEvent',{type:'touchEnd',touchPoints:[]});
     await expect(page.locator('#name')).toHaveText('大動脈');
+    // Spreading two fingers must zoom in (the model covers more pixels); a pan or a rotation would not do that.
+    await settle(page);
+    expect(await modelPixels(page, await c.screenshot())).toBeGreaterThan(beforePinch * 1.1);
   }
+  await page.locator('#reset').click();
+  await settle(page);
+  // Auto-rotation must turn the model, say that the view is no longer a named one, and stop moving when switched off.
+  const stillView = await c.screenshot();
+  await page.locator('#rotate').click();
+  await expect(page.locator('#orientation')).toContainText('自由視点');
+  await expect.poll(async () => (await c.screenshot()).equals(stillView), {timeout:5000}).toBe(false);
+  await page.locator('#rotate').click();
+  await expect(page.locator('#rotate')).toHaveAttribute('aria-pressed','false');
+  await settle(page);
+  const stoppedView = await c.screenshot();
+  await page.waitForTimeout(400); await settle(page);
+  expect((await c.screenshot()).equals(stoppedView)).toBe(true);
   await page.locator('#reset').click();
   await page.locator('#rotate').click();
   await expect(page.locator('#rotate')).toHaveAttribute('aria-pressed','true');
@@ -240,5 +267,36 @@ for (const [width,height] of [[667,375],[568,320]]) test(`controls stay reachabl
   await expect(page.locator('#mode-interior')).toBeInViewport();
   await page.locator('.part:visible').last().scrollIntoViewIfNeeded();
   await expect(page.locator('.part:visible').last()).toBeInViewport();
+  await context.close();
+});
+
+// A new part must show its description from the top, whichever way it was chosen (Review of main be90ada, item 6).
+test('selecting another part scrolls the description box back to its top on a phone', async ({browser}) => {
+  const context = await browser.newContext({viewport:{width:667,height:375},hasTouch:true,isMobile:true});
+  const page = await context.newPage();
+  await page.goto(url);
+  await expect(page.locator('html')).toHaveAttribute('data-ready','true');
+  const scrolled = () => page.locator('.detail').evaluate(e => { e.scrollTop = 9999; return e.scrollTop; });
+  await page.getByRole('button',{name:'大動脈',exact:true}).click();
+  expect(await scrolled()).toBeGreaterThan(0);
+  await page.getByRole('button',{name:'右心室',exact:true}).click();
+  await expect(page.locator('#name')).toHaveText('右心室');
+  expect(await page.locator('.detail').evaluate(e => e.scrollTop)).toBe(0);
+  expect(await scrolled()).toBeGreaterThan(0);
+  await page.locator('#mode-conduction').click();
+  expect(await page.locator('.detail').evaluate(e => e.scrollTop)).toBe(0);
+  await context.close();
+});
+// On a phone every block of the scrolling box must use the full width (Review item 12: align-items:start shrank them).
+for (const width of [320,390]) test(`phone blocks fill the width at ${width}px`, async ({browser}) => {
+  const context = await browser.newContext({viewport:{width,height:844},hasTouch:true,isMobile:true});
+  const page = await context.newPage();
+  await page.goto(url);
+  await expect(page.locator('html')).toHaveAttribute('data-ready','true');
+  const widths = await page.evaluate(() => {
+    const main = document.querySelector('main').clientWidth, w = sel => Math.round(document.querySelector(sel).getBoundingClientRect().width);
+    return {main, heading: w('.stage-heading'), tools: w('nav.tools'), footer: w('main > footer')};
+  });
+  expect(widths.heading).toBe(widths.main); expect(widths.tools).toBe(widths.main); expect(widths.footer).toBe(widths.main);
   await context.close();
 });

@@ -20,7 +20,7 @@ const expectedSha256 = {
 };
 for (const [path, expected] of Object.entries(expectedSha256)) {
   const actual = createHash('sha256').update(readFileSync(path)).digest('hex');
-  if (actual !== expected && !process.env.ALLOW_UNVERIFIED_INPUT) throw new Error(`${path}: SHA-256 ${actual} does not match the recorded ${expected}`);
+  if (actual !== expected && process.env.ALLOW_UNVERIFIED_INPUT !== '1') throw new Error(`${path}: SHA-256 ${actual} does not match the recorded ${expected}`);
 }
 
 function readZip(path) {

@@ -4,7 +4,10 @@ import * as THREE from 'three';
 import { createCrossSection, fitDistance, modelSphere, pickPart, selectableIn, TapGesture, wallIds } from '../src/viewer-state.mjs';
 import { createConduction, conductionDefinitions } from '../src/conduction.mjs';
 import { createAnatomy, decodeAnatomy, anatomyDefinitions, anatomyFormat, interiorDefinitions } from '../src/anatomy.mjs';
-import { readFileSync } from 'node:fs';
+import { readFileSync, mkdtempSync, writeFileSync } from 'node:fs';
+import { spawnSync } from 'node:child_process';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 
 test('tap selects, but drag out-and-back, pinch, cancel and mismatched pointer do not', () => {
   const g = new TapGesture();
@@ -156,6 +159,43 @@ test('a click on the drawn cut face of the wall picks that chamber, not the valv
   assert.ok(faces > 300, `${faces} pixels on the cut face`);
   assert.ok(flipped > 50, `only ${flipped} pixels differ from the old pick, so the case the report describes is not covered`);
 });
+test('a click on the cut face names the exact chamber that contains that point, from several viewpoints and planes', () => {
+  // The expected chamber is found without pickPart. The chamber walls are shells that stay open at the valve
+  // openings, so one ray can escape and give a wrong "inside". Only points are used where three different rays
+  // all find the point inside exactly one wall mesh and outside all the others; that mesh is the chamber.
+  const directions = [[.31, -.77, -.55], [.9, .2, .1], [-.2, .5, .8]].map(d => new THREE.Vector3(...d).normalize()), n = new THREE.Vector3();
+  const netOf = (point, direction, solid) => new THREE.Raycaster(point.clone().addScaledVector(direction, 1e-5), direction)
+    .intersectObject(solid, false).reduce((sum, h) => sum + (n.copy(h.face.normal).transformDirection(h.object.matrixWorld).dot(direction) > 0 ? 1 : -1), 0);
+  const containing = (point, solidIds) => {
+    const verdicts = solidIds.map(([solid, id]) => [id, directions.map(d => netOf(point, d, solid) !== 0)]);
+    if (verdicts.some(([, v]) => new Set(v).size > 1)) return null;
+    const inside = verdicts.filter(([, v]) => v[0]).map(([id]) => id);
+    return inside.length === 1 ? inside[0] : null;
+  };
+  const covered = new Map(), wrong = [];
+  for (const constant of [0, -.5, .5]) for (const eye of [[0, .06, 1], [.5, .2, 1], [-.5, -.1, 1]]) {
+    const { map, plane, section, camera, targets } = sectionScene(constant);
+    camera.position.set(...eye).normalize().multiplyScalar(fitDistance(bounds.radius, 1)).add(bounds.center);
+    camera.lookAt(bounds.center); camera.updateMatrixWorld();
+    const solidIds = section.solids.map(solid => [solid, wallIds.find(id => map.get(id).getObjectById(solid.id))]);
+    assert.ok(solidIds.every(([, id]) => id), 'every wall mesh belongs to one of the four chambers');
+    for (let x = -.6; x <= .6; x += .04) for (let y = -.7; y <= .7; y += .04) {
+      const ray = rayAt(camera, x, y);
+      if (plane.distanceToPoint(ray.ray.origin) >= 0) continue;
+      const point = ray.ray.intersectPlane(plane, new THREE.Vector3());
+      const expected = point && containing(point, solidIds);
+      if (!expected) continue;
+      const got = pickPart(ray, targets, [plane], section.solids);
+      covered.set(expected, (covered.get(expected) || 0) + 1);
+      if (got !== expected) wrong.push(`${expected}->${got}`);
+    }
+  }
+  for (const id of wallIds) assert.ok((covered.get(id) || 0) >= 5, `${id}: only ${covered.get(id) || 0} checked points`);
+  // Not exact: at about 5% of these points a left-ventricle or right-ventricle point is answered as the left atrium,
+  // where the shells overlap (Issue #9). Swapping the chambers' ids gives well under half, so the bound still catches that.
+  const total = [...covered.values()].reduce((a, b) => a + b, 0);
+  assert.ok(wrong.length <= total * .1, `${wrong.length} of ${total} points name the wrong chamber: ${wrong.slice(0, 8)}`);
+});
 test('the wall meshes form a closed surface, so the cut face has no holes; vessels are open shells and get no face', () => {
   const edges = new Map();
   const count = ids => {
@@ -250,4 +290,12 @@ test('above the aortic arch there are exactly three separate branch stubs (one o
     for (const i of own) for (const j of others) nearest = Math.min(nearest, Math.hypot(...[0, 1, 2].map(k => ao.positions[i * 3 + k] - ao.positions[j * 3 + k])));
     assert.ok(nearest < 3, `branch ends ${nearest.toFixed(1)} mm from the arch`);
   }
+});
+
+test('the input hash check is skipped only when ALLOW_UNVERIFIED_INPUT is exactly 1', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'heart-input-')), a = join(dir, 'a.zip'), b = join(dir, 'b.zip');
+  writeFileSync(a, 'not the recorded file'); writeFileSync(b, 'not the recorded file either');
+  const run = value => spawnSync(process.execPath, ['scripts/prepare-bodyparts3d.mjs', a, b], { encoding: 'utf8', env: { ...process.env, ...(value === undefined ? {ALLOW_UNVERIFIED_INPUT: ''} : {ALLOW_UNVERIFIED_INPUT: value}) } });
+  for (const value of [undefined, '0', 'false', 'yes']) assert.match(run(value).stderr, /does not match the recorded/, `value ${value}`);
+  assert.doesNotMatch(run('1').stderr, /does not match the recorded/);
 });
