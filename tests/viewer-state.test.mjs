@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import * as THREE from 'three';
-import { fitDistance, TapGesture } from '../src/viewer-state.mjs';
+import { fitDistance, modelSphere, TapGesture } from '../src/viewer-state.mjs';
 import { createConduction, conductionDefinitions } from '../src/conduction.mjs';
 import { createAnatomy, decodeAnatomy, anatomyDefinitions } from '../src/anatomy.mjs';
 import { readFileSync } from 'node:fs';
@@ -23,8 +23,7 @@ heart.add(exterior);
 const meta = createAnatomy(exterior, parts, bundle, .033);
 exterior.add(conduction);
 createConduction(conduction, parts, meta.conduction);
-heart.updateMatrixWorld(true);
-const bounds = new THREE.Box3().setFromObject(heart).getBoundingSphere(new THREE.Sphere());
+const bounds = modelSphere(heart);
 
 test('model geometry is finite and each selectable group has geometry', () => {
   assert.equal(parts.size, anatomyDefinitions.length + conductionDefinitions.length);
@@ -49,6 +48,10 @@ for (const aspect of [.5, .8, 1, 1.6, 2.4]) test(`all model vertices fit reset v
       }
     });
   }
+});
+test('framing sphere is tight around the model, not the bounding box', () => {
+  const boxSphere = new THREE.Box3().setFromObject(heart).getBoundingSphere(new THREE.Sphere());
+  assert.ok(bounds.radius < boxSphere.radius * .85, `${bounds.radius} vs ${boxSphere.radius}`);
 });
 test('standalone HTML includes license and has no external runtime resources', () => {
   const html = readFileSync(new URL('../index.html', import.meta.url), 'utf8');
