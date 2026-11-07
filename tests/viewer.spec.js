@@ -1,20 +1,101 @@
 const {test,expect}=require('@playwright/test');
 const {pathToFileURL}=require('node:url');
 const path=require('node:path');
-for(const mobile of [false,true])test(mobile?'mobile layout and touch':'desktop offline viewer',async({browser})=>{
- const context=await browser.newContext({viewport:mobile?{width:390,height:844}:{width:1440,height:1000},hasTouch:mobile,isMobile:mobile});
- await context.setOffline(true);
- const page=await context.newPage();const errors=[];page.on('pageerror',e=>errors.push(e.message));
- await page.goto(pathToFileURL(path.resolve('index.html')).href);
- await expect(page.locator('html')).toHaveAttribute('data-ready','true');
- await expect(page.locator('#error')).toBeHidden();
- await page.getByRole('button',{name:'大動脈'}).click();await expect(page.locator('#name')).toHaveText('大動脈');
- await page.locator('#rotate').click();await expect(page.locator('#rotate')).toHaveAttribute('aria-pressed','true');
- await page.locator('#in').click();await page.locator('#out').click();
- await page.locator('#reset').click();await expect(page.locator('#rotate')).toHaveAttribute('aria-pressed','false');
- const c=page.locator('canvas'),box=await c.boundingBox();await page.mouse.move(box.x+box.width*.5,box.y+box.height*.55);await page.mouse.down();await page.mouse.move(box.x+box.width*.7,box.y+box.height*.5,{steps:12});await page.mouse.up();
- expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
- await page.locator('#reset').click();await page.waitForTimeout(200);
- await page.screenshot({path:mobile?'/tmp/heart-mobile.png':'/tmp/heart-desktop.png',fullPage:true});
- expect(errors).toEqual([]);await context.close();
+const url = pathToFileURL(path.resolve('index.html')).href;
+for (const width of [1440,390,320]) test(`offline model and interactions at width ${width}`, async ({browser}, testInfo) => {
+  const mobile = width < 700;
+  const context = await browser.newContext({viewport:{width,height:900},hasTouch:mobile,isMobile:mobile});
+  await context.setOffline(true);
+  const page=await context.newPage(), errors=[], requests=[];
+  page.on('pageerror',e=>errors.push(e.message));
+  page.on('request',r=>{if(/^https?:/.test(r.url())) requests.push(r.url());});
+  await page.addInitScript(() => {
+    window.renderRequests=0;
+    const original=window.requestAnimationFrame.bind(window);
+    window.requestAnimationFrame=cb=>{window.renderRequests++; return original(cb);};
+  });
+  await page.goto(url);
+  await expect(page.locator('html')).toHaveAttribute('data-ready','true');
+  await expect(page.locator('#error')).toBeHidden();
+  await expect(page.locator('.part:visible')).toHaveCount(8);
+  await page.getByRole('button',{name:'大動脈',exact:true}).click();
+  await expect(page.locator('#name')).toHaveText('大動脈');
+  const c=page.locator('canvas');
+  await c.scrollIntoViewIfNeeded();
+  await c.focus();
+  const original = await c.screenshot();
+  await page.keyboard.press('ArrowLeft');
+  const rotated = await c.screenshot();
+  expect(rotated.equals(original)).toBe(false);
+  await page.keyboard.press('+');
+  expect((await c.screenshot()).equals(rotated)).toBe(false);
+  await page.locator('#reset').click();
+  await page.waitForTimeout(100);
+  await c.focus();
+  expect((await c.screenshot()).equals(original)).toBe(true);
+  // A drag that returns to its origin must not select the mesh under the release.
+  const box = await c.boundingBox(); const x=box.x+box.width*.5,y=box.y+box.height*.5;
+  await page.mouse.move(x,y); await page.mouse.down();
+  await page.mouse.move(x+40,y,{steps:6}); await page.mouse.move(x,y,{steps:6}); await page.mouse.up();
+  await expect(page.locator('#name')).toHaveText('大動脈');
+  if (mobile) {
+    const client=await context.newCDPSession(page);
+    await client.send('Input.dispatchTouchEvent',{type:'touchStart',touchPoints:[{x:x-30,y,id:1},{x:x+30,y,id:2}]});
+    await client.send('Input.dispatchTouchEvent',{type:'touchMove',touchPoints:[{x:x-55,y,id:1},{x:x+55,y,id:2}]});
+    await client.send('Input.dispatchTouchEvent',{type:'touchEnd',touchPoints:[]});
+    await expect(page.locator('#name')).toHaveText('大動脈');
+  }
+  await page.locator('#reset').click();
+  await page.locator('#rotate').click();
+  await expect(page.locator('#rotate')).toHaveAttribute('aria-pressed','true');
+  await page.locator('#reset').click();
+  await expect(page.locator('#rotate')).toHaveAttribute('aria-pressed','false');
+  await page.screenshot({path:testInfo.outputPath('exterior.png'),fullPage:true});
+  await page.locator('#mode-conduction').click();
+  await expect(page.locator('.part:visible')).toHaveCount(6);
+  await expect(page.locator('#name')).toHaveText('洞房結節');
+  await expect(page.locator('#previous')).toBeDisabled();
+  await c.screenshot();
+  const anchor = await page.locator('.model-label').filter({hasText:'洞房結節'}).evaluate(el => ({x:parseFloat(el.style.left)/100,y:parseFloat(el.style.top)/100}));
+  await page.getByRole('button',{name:'房室結節',exact:true}).click();
+  await c.scrollIntoViewIfNeeded();
+  const pickBox = await c.boundingBox();
+  await page.mouse.click(pickBox.x + pickBox.width*anchor.x, pickBox.y + pickBox.height*anchor.y);
+  await expect(page.locator('#name')).toHaveText('洞房結節');
+  for(const name of ['心房への広がり','房室結節','ヒス束','右脚・左脚','プルキンエ線維']) {
+    await page.locator('#next').click(); await expect(page.locator('#name')).toHaveText(name);
+  }
+  await expect(page.locator('#next')).toBeDisabled();
+  await page.locator('#view-back').click(); await expect(page.locator('#orientation')).toContainText('背面');
+  await page.locator('#view-left').click(); await expect(page.locator('#orientation')).toContainText('身体の左側');
+  await page.locator('#view-front').click();
+  await page.getByRole('button',{name:'房室結節',exact:true}).click();
+  await page.screenshot({path:testInfo.outputPath('conduction.png'),fullPage:true});
+  await expect(page.locator('#labels .model-label:visible')).toHaveText('房室結節');
+  await page.locator('#mode-exterior').click();
+  await expect(page.locator('#conduction-note')).toBeHidden();
+  await expect(page.locator('.part:visible')).toHaveCount(8);
+  await expect(page.locator('#name')).toHaveText('左心室');
+  await page.waitForTimeout(100);
+  const frames=await page.evaluate(()=>window.renderRequests);
+  await page.waitForTimeout(250);
+  expect(await page.evaluate(()=>window.renderRequests)).toBe(frames);
+  expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
+  expect(errors).toEqual([]); expect(requests).toEqual([]);
+  await context.close();
+});
+test('WebGL failure leaves an explanation and source links',async({page})=>{
+  await page.addInitScript(()=>{HTMLCanvasElement.prototype.getContext=()=>null;});
+  await page.goto(url);
+  await expect(page.locator('#error')).toBeVisible();
+  await expect(page.locator('#mode-conduction')).toBeDisabled();
+  await expect(page.locator('#msd-reference')).toBeVisible();
+});
+test('context loss stops controls and explains recovery',async({page})=>{
+  await page.goto(url);
+  await expect(page.locator('html')).toHaveAttribute('data-ready','true');
+  await page.locator('canvas').evaluate(c=>c.dispatchEvent(new Event('webglcontextlost',{cancelable:true})));
+  await expect(page.locator('#error')).toContainText('再読み込み');
+  await expect(page.locator('#rotate')).toBeDisabled();
+  await expect(page.locator('html')).toHaveAttribute('data-ready','false');
 });

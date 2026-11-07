@@ -1,50 +1,253 @@
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
-const canvas=document.querySelector('canvas');
+import { createExterior } from './model.mjs';
+import { createConduction } from './conduction.mjs';
+import { fitDistance, TapGesture } from './viewer-state.mjs';
+
+const canvas = document.querySelector('canvas');
+const $ = id => document.getElementById(id);
+function showError(message) {
+  $('error').hidden = false;
+  $('error').textContent = message;
+  document.documentElement.dataset.ready = 'false';
+  document.querySelectorAll('[data-viewer-control]').forEach(b => b.disabled = true);
+}
 try {
-const renderer=new THREE.WebGLRenderer({canvas,antialias:true,alpha:true});
-renderer.setPixelRatio(Math.min(devicePixelRatio,2)); renderer.setClearColor(0x000000,0);
-const scene=new THREE.Scene(),camera=new THREE.PerspectiveCamera(36,1,.1,100);
-camera.position.set(0,1,10.8);
-const controls=new OrbitControls(camera,canvas);controls.target.set(0,.4,0);controls.enableDamping=true;controls.minDistance=5;controls.maxDistance=16;controls.enablePan=false;
-scene.add(new THREE.HemisphereLight(0xddeaff,0x27131b,2));
-for(const [color,intensity,pos] of [[0xffd8bd,100,[4,5,6]],[0x8caeff,65,[-4,2,-3]]]){const l=new THREE.PointLight(color,intensity);l.position.set(...pos);scene.add(l);}
-const heart=new THREE.Group();scene.add(heart);heart.rotation.z=-.13;
-const parts=new Map();
-const definitions=[
-['lv','左心室','Left ventricle','全身へ血液を送り出す心室。外形を示す概形で、内腔は未実装。',0xb84d52],
-['rv','右心室','Right ventricle','肺へ血液を送り出す心室。前面に広がる外形を簡略化して表示。',0xa75362],
-['ra','右心房','Right atrium','全身から戻る血液を受け取る心房。',0x9a596b],
-['la','左心房','Left atrium','肺から戻る血液を受け取る心房。主に背面に位置する。',0xc36a70],
-['ao','大動脈','Aorta','左心室から全身へ向かう主要な血管。弓部と枝の形を簡略化。',0xd25d55],
-['pa','肺動脈','Pulmonary artery','右心室から肺へ向かう血管。青は部位を見分けるための配色。',0x669caf],
-['vc','大静脈','Venae cavae','全身から右心房へ戻る血管。上大静脈と下大静脈を表示。',0x637fa6],
-['pv','肺静脈','Pulmonary veins','肺から左心房へ戻る血管。背面側に簡略化して配置。',0xc67878]];
-for(const [id,name,en,desc,color] of definitions){const g=new THREE.Group();g.userData={id,name,en,desc};parts.set(id,g);heart.add(g);const b=document.createElement('button');b.className='part';b.innerHTML=`<i style="background:#${color.toString(16)}"></i>${name}<span>↗</span>`;b.onclick=()=>select(id);document.querySelector('#parts').append(b);g.userData.button=b;g.userData.color=color;}
-function mat(g){return new THREE.MeshStandardMaterial({color:g.userData.color,roughness:.48,metalness:.05});}
-function ellipsoid(id,pos,scale,tilt=0){const g=parts.get(id),geo=new THREE.SphereGeometry(1,64,48);const mesh=new THREE.Mesh(geo,mat(g));mesh.position.set(...pos);mesh.scale.set(...scale);mesh.rotation.z=tilt;g.add(mesh);return mesh;}
-ellipsoid('lv',[.4,-.55,-.08],[.87,1.45,.77],.3);
-ellipsoid('rv',[-.38,-.37,.49],[.86,1.07,.56],-.22);
-ellipsoid('ra',[-.96,.8,-.05],[.59,.75,.58],-.12);
-ellipsoid('la',[.35,.95,-.65],[.68,.58,.5]);
-function tube(id,points,r){const g=parts.get(id),curve=new THREE.CatmullRomCurve3(points.map(p=>new THREE.Vector3(...p)));const geo=new THREE.TubeGeometry(curve,64,r,20,false),mesh=new THREE.Mesh(geo,mat(g));g.add(mesh);
-// Dark inset disks make the open ends legible without external textures.
-for(const t of [0,1]){const disk=new THREE.Mesh(new THREE.CircleGeometry(r*.83,24),new THREE.MeshStandardMaterial({color:0x352730,side:THREE.DoubleSide}));disk.position.copy(curve.getPoint(t));disk.quaternion.setFromUnitVectors(new THREE.Vector3(0,0,1),curve.getTangent(t));g.add(disk);}}
-tube('ao',[[.1,.55,-.15],[.05,1.5,-.12],[.3,2.2,-.22],[.95,2.34,-.4],[1.3,1.7,-.65],[1.2,.3,-.9]],.27);
-for(const x of [.36,.71,1.02])tube('ao',[[x,2.18,-.3],[x-.08,2.65,-.35],[x-.12,2.9,-.39]],.095);
-tube('pa',[[-.38,.25,.6],[-.35,1.1,.65],[.06,1.7,.5],[.85,1.72,.1],[1.5,1.6,-.1]],.25);
-tube('pa',[[.03,1.65,.46],[-.6,1.8,.1],[-1.4,1.5,-.3]],.2);
-tube('vc',[[-1.04,.7,-.16],[-1.15,1.55,-.18],[-1.13,2.3,-.2]],.26);
-tube('vc',[[-1.04,.7,-.2],[-1.12,-.2,-.35],[-1.08,-1.1,-.42]],.27);
-for(const s of [-1,1])for(const y of [.65,1.13])tube('pv',[[s*.28,y,-.8],[s*.9,y,-1],[s*1.4,y+.12,-.9]],.15);
-function select(id){for(const [key,g]of parts){g.userData.button.setAttribute('aria-pressed',String(key===id));g.traverse(o=>{if(o.isMesh)o.material.emissive?.setHex(key===id?0x40201b:0);});}const d=parts.get(id).userData;document.querySelector('#name').textContent=d.name;document.querySelector('#en').textContent=d.en;document.querySelector('#description').textContent=d.desc;}
-const ray=new THREE.Raycaster();let start;canvas.addEventListener('pointerdown',e=>start=[e.clientX,e.clientY]);canvas.addEventListener('pointerup',e=>{if(!start||Math.hypot(e.clientX-start[0],e.clientY-start[1])>5)return;const r=canvas.getBoundingClientRect();ray.setFromCamera(new THREE.Vector2((e.clientX-r.left)/r.width*2-1,-(e.clientY-r.top)/r.height*2+1),camera);const hit=ray.intersectObjects(heart.children,true)[0];if(hit){let o=hit.object;while(o&&!o.userData.id)o=o.parent;if(o)select(o.userData.id);}});
-function reset(){controls.autoRotate=false;document.querySelector('#rotate').setAttribute('aria-pressed','false');camera.position.set(0,1,10.8);controls.target.set(0,.4,0);controls.update();}
-document.querySelector('#reset').onclick=reset;
-document.querySelector('#rotate').onclick=e=>{controls.autoRotate=!controls.autoRotate;controls.autoRotateSpeed=.8;e.currentTarget.setAttribute('aria-pressed',String(controls.autoRotate));};
-for(const [id,delta]of [['in',.82],['out',1.22]])document.getElementById(id).onclick=()=>{const offset=camera.position.clone().sub(controls.target);offset.multiplyScalar(delta).clampLength(5,16);camera.position.copy(controls.target).add(offset);controls.update();};
-new ResizeObserver(()=>{const r=canvas.getBoundingClientRect();renderer.setSize(r.width,r.height,false);camera.aspect=r.width/r.height;camera.updateProjectionMatrix();}).observe(canvas);
-document.addEventListener('visibilitychange',()=>{if(document.hidden){controls.autoRotate=false;document.querySelector('#rotate').setAttribute('aria-pressed','false');}});
-renderer.setAnimationLoop(()=>{controls.update();renderer.render(scene,camera);});
-select('lv');document.documentElement.dataset.ready='true';
-} catch(e){document.querySelector('#error').hidden=false;document.querySelector('#error').textContent='3D表示を開始できませんでした。WebGL対応のブラウザーで開いてください。';console.error(e);}
+  const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true });
+  renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+  renderer.setClearColor(0x000000, 0);
+  const scene = new THREE.Scene();
+  const camera = new THREE.PerspectiveCamera(36, 1, .1, 150);
+  const controls = new OrbitControls(camera, canvas);
+  // On-demand rendering avoids spending battery while the model is still.
+  controls.enableDamping = false;
+  controls.enablePan = false;
+  controls.autoRotateSpeed = .8;
+  scene.add(new THREE.HemisphereLight(0xddeaff, 0x27131b, 2));
+  for (const [color, intensity, pos] of [[0xffd8bd, 100, [4, 5, 6]], [0x8caeff, 65, [-4, 2, -3]]]) {
+    const light = new THREE.PointLight(color, intensity);
+    light.position.set(...pos);
+    scene.add(light);
+  }
+  const heart = new THREE.Group();
+  scene.add(heart);
+  heart.rotation.z = -.13;
+  const exterior = new THREE.Group(), conduction = new THREE.Group(), parts = new Map();
+  heart.add(exterior, conduction);
+  createExterior(exterior, parts);
+  createConduction(conduction, parts);
+  const bounds = new THREE.Box3().setFromObject(heart).getBoundingSphere(new THREE.Sphere());
+  controls.target.copy(bounds.center);
+  let mode = 'exterior', selected = 'lv', frame = 0, previousTime = 0, failed = false;
+  let fittedDistance = 12, userZoom = 1;
+  const gesture = new TapGesture();
+  const ray = new THREE.Raycaster();
+  ray.params.Line.threshold = .08;
+  const stageOrder = ['sa', 'atria', 'av', 'his', 'branches', 'purkinje'];
+  const labelAnchors = new Map([
+    ['sa', [-1.12, 1.25, .12]], ['av', [-.28, .44, .02]], ['his', [-.03, .1, .17]],
+    ['branches', [.25, -.5, .03]], ['purkinje', [.94, -1.12, .32]],
+  ]);
+  const labels = new Map();
+  for (const [id] of labelAnchors) {
+    const label = document.createElement('span');
+    label.className = 'model-label';
+    label.textContent = parts.get(id).userData.name;
+    $('labels').append(label);
+    labels.set(id, label);
+  }
+  function updateLabels() {
+    for (const [id, anchor] of labelAnchors) {
+      const p = heart.localToWorld(new THREE.Vector3(...anchor)).project(camera);
+      const el = labels.get(id);
+      // Show one selected label to avoid overlaps in small viewports.
+      el.hidden = mode !== 'conduction' || selected !== id || Math.abs(p.x) > 1 || Math.abs(p.y) > 1 || Math.abs(p.z) > 1;
+      el.style.left = `${(p.x + 1) * 50}%`;
+      el.style.top = `${(1 - p.y) * 50}%`;
+    }
+  }
+  function requestRender() {
+    if (!frame && !document.hidden && !failed) frame = requestAnimationFrame(render);
+  }
+  function render(time) {
+    if (controls.autoRotate) controls.update(previousTime ? Math.min((time - previousTime) / 1000, .05) : 0);
+    renderer.render(scene, camera);
+    updateLabels();
+    frame = 0;
+    previousTime = time;
+    if (controls.autoRotate) requestRender();
+  }
+  controls.addEventListener('change', () => {
+    userZoom = camera.position.distanceTo(controls.target) / fittedDistance;
+    requestRender();
+  });
+  function stopRotation() {
+    controls.autoRotate = false;
+    $('rotate').setAttribute('aria-pressed', 'false');
+    previousTime = 0;
+  }
+  function setView(view = 'front') {
+    stopRotation();
+    const direction = view === 'back' ? [0, .06, -1] : view === 'left' ? [1, .06, 0] : [0, .06, 1];
+    camera.position.copy(controls.target).add(new THREE.Vector3(...direction).normalize().multiplyScalar(fittedDistance));
+    userZoom = 1;
+    controls.update();
+    $('orientation').textContent = ({front: '前面', back: '背面', left: '身体の左側'})[view] + ' ／ 左右の名称は身体を基準';
+    requestRender();
+  }
+  function resize() {
+    const { width, height } = canvas.getBoundingClientRect();
+    if (width <= 0 || height <= 0) return;
+    const offset = camera.position.clone().sub(controls.target);
+    if (offset.length() < .1) offset.set(0, .06, 1);
+    const zoom = userZoom;
+    camera.aspect = width / height;
+    camera.updateProjectionMatrix();
+    renderer.setSize(width, height, false);
+    fittedDistance = fitDistance(bounds.radius, camera.aspect);
+    controls.minDistance = fittedDistance * .48;
+    controls.maxDistance = fittedDistance * 1.8;
+    camera.position.copy(controls.target).add(offset.normalize().multiplyScalar(fittedDistance * THREE.MathUtils.clamp(zoom, .48, 1.8)));
+    controls.update();
+    requestRender();
+  }
+  function select(id) {
+    if (!parts.has(id) || parts.get(id).userData.kind !== mode) return;
+    selected = id;
+    for (const [key, group] of parts) {
+      group.userData.button.setAttribute('aria-pressed', String(key === id));
+      group.traverse(object => {
+        if (object.isMesh) {
+          const mat = object.material;
+          if (group.userData.kind === 'conduction') {
+            mat.emissive.setHex(group.userData.color);
+            mat.emissiveIntensity = key === id ? .8 : .18;
+          } else mat.emissive.setHex(key === id ? 0x40201b : 0);
+        }
+      });
+    }
+    const data = parts.get(id).userData;
+    $('name').textContent = data.name;
+    $('en').textContent = data.en;
+    $('description').textContent = data.desc;
+    $('step-count').textContent = mode === 'conduction' ? `${stageOrder.indexOf(id) + 1} / ${stageOrder.length}` : '';
+    $('previous').disabled = stageOrder.indexOf(id) <= 0;
+    $('next').disabled = stageOrder.indexOf(id) >= stageOrder.length - 1;
+    requestRender();
+  }
+  for (const [id, group] of parts) {
+    const button = document.createElement('button');
+    button.className = 'part';
+    button.dataset.viewerControl = '';
+    const dot = document.createElement('i');
+    dot.style.backgroundColor = `#${group.userData.color.toString(16).padStart(6, '0')}`;
+    button.append(dot, document.createTextNode(group.userData.name));
+    button.onclick = () => select(id);
+    group.userData.button = button;
+    $('parts').append(button);
+  }
+  function setMode(next) {
+    mode = next;
+    stopRotation();
+    conduction.visible = mode === 'conduction';
+    for (const group of parts.values()) {
+      group.userData.button.hidden = group.userData.kind !== mode;
+      if (group.userData.kind !== 'exterior') continue;
+      group.traverse(object => {
+        if (!object.isMesh) return;
+        object.material.transparent = mode === 'conduction';
+        object.material.opacity = mode === 'conduction' ? .12 : 1;
+        object.material.depthWrite = mode !== 'conduction';
+        object.material.needsUpdate = true;
+      });
+    }
+    $('mode-exterior').setAttribute('aria-pressed', String(mode === 'exterior'));
+    $('mode-conduction').setAttribute('aria-pressed', String(mode === 'conduction'));
+    $('steps').hidden = mode !== 'conduction';
+    $('conduction-note').hidden = mode !== 'conduction';
+    $('mode-title').textContent = mode === 'conduction' ? '刺激の通り道をたどる。' : 'かたちから、心臓を知る。';
+    $('mode-number').textContent = mode === 'conduction' ? '02 / CONDUCTION' : '01 / EXTERIOR';
+    select(mode === 'conduction' ? 'sa' : 'lv');
+    setView('front');
+  }
+  $('mode-exterior').onclick = () => setMode('exterior');
+  $('mode-conduction').onclick = () => setMode('conduction');
+  $('previous').onclick = () => select(stageOrder[Math.max(0, stageOrder.indexOf(selected) - 1)]);
+  $('next').onclick = () => select(stageOrder[Math.min(stageOrder.length - 1, stageOrder.indexOf(selected) + 1)]);
+  for (const view of ['front', 'back', 'left']) $(`view-${view}`).onclick = () => setView(view);
+  $('reset').onclick = () => setView('front');
+  $('rotate').onclick = () => {
+    controls.autoRotate = !controls.autoRotate;
+    $('rotate').setAttribute('aria-pressed', String(controls.autoRotate));
+    previousTime = 0;
+    requestRender();
+  };
+  function zoom(factor) {
+    const offset = camera.position.clone().sub(controls.target).multiplyScalar(factor).clampLength(controls.minDistance, controls.maxDistance);
+    camera.position.copy(controls.target).add(offset);
+    controls.update();
+  }
+  $('in').onclick = () => zoom(.82);
+  $('out').onclick = () => zoom(1.22);
+  canvas.addEventListener('pointerdown', event => {
+    stopRotation();
+    gesture.down(event.pointerId, event.clientX, event.clientY);
+  });
+  canvas.addEventListener('pointermove', event => gesture.move(event.pointerId, event.clientX, event.clientY));
+  canvas.addEventListener('pointercancel', event => gesture.cancel(event.pointerId));
+  canvas.addEventListener('lostpointercapture', event => gesture.cancel(event.pointerId));
+  canvas.addEventListener('pointerup', event => {
+    if (!gesture.up(event.pointerId, event.clientX, event.clientY) || event.button !== 0) return;
+    const rect = canvas.getBoundingClientRect();
+    ray.setFromCamera(new THREE.Vector2((event.clientX - rect.left) / rect.width * 2 - 1, -(event.clientY - rect.top) / rect.height * 2 + 1), camera);
+    const hit = ray.intersectObjects((mode === 'conduction' ? conduction : exterior).children, true)[0];
+    if (hit) {
+      let object = hit.object;
+      while (object && !object.userData.id) object = object.parent;
+      if (object) select(object.userData.id);
+    }
+  });
+  controls.addEventListener('start', () => {
+    stopRotation();
+    $('orientation').textContent = '自由視点 ／ 左右の名称は身体を基準';
+  });
+  canvas.addEventListener('keydown', event => {
+    if (!['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', '+', '-', '=', 'Home'].includes(event.key)) return;
+    event.preventDefault();
+    stopRotation();
+    if (event.key === 'Home') return setView('front');
+    if (['+', '=', '-'].includes(event.key)) return zoom(event.key === '-' ? 1.22 : .82);
+    const offset = camera.position.clone().sub(controls.target);
+    const spherical = new THREE.Spherical().setFromVector3(offset);
+    if (event.key === 'ArrowLeft') spherical.theta -= .15;
+    if (event.key === 'ArrowRight') spherical.theta += .15;
+    if (event.key === 'ArrowUp') spherical.phi -= .15;
+    if (event.key === 'ArrowDown') spherical.phi += .15;
+    spherical.makeSafe();
+    camera.position.copy(controls.target).add(new THREE.Vector3().setFromSpherical(spherical));
+    controls.update();
+    $('orientation').textContent = '自由視点 ／ 左右の名称は身体を基準';
+  });
+  document.addEventListener('visibilitychange', () => {
+    if (document.hidden) {
+      stopRotation();
+      cancelAnimationFrame(frame);
+      frame = 0;
+    } else requestRender();
+  });
+  canvas.addEventListener('webglcontextlost', event => {
+    event.preventDefault();
+    failed = true;
+    stopRotation();
+    cancelAnimationFrame(frame);
+    frame = 0;
+    showError('3D表示が中断しました。ページを再読み込みしてください。説明と参考リンクは引き続き読めます。');
+  });
+  new ResizeObserver(resize).observe(canvas);
+  resize();
+  setMode('exterior');
+  document.documentElement.dataset.ready = 'true';
+} catch (error) {
+  showError('3D表示を開始できませんでした。WebGL対応のブラウザーで開いてください。参考リンクからMSDのモデルも確認できます。');
+  console.error(error);
+}
