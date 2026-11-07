@@ -3,7 +3,7 @@ import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { createConduction } from './conduction.mjs';
 import { createAnatomy } from './anatomy.mjs';
 import anatomyData from './data/bodyparts3d-heart.bin';
-import { createCrossSection, fitDistance, modelSphere, pickPart, selectableIn, TapGesture } from './viewer-state.mjs';
+import { createCrossSection, fitDistance, modelSphere, pickHit, removedByCut, selectableIn, TapGesture } from './viewer-state.mjs';
 
 const canvas = document.querySelector('canvas');
 const $ = id => document.getElementById(id);
@@ -13,11 +13,11 @@ function showError(message) {
   document.documentElement.dataset.ready = 'false';
   document.querySelectorAll('[data-viewer-control]').forEach(b => b.disabled = true);
 }
-// Phone layout: the model and the description go to #pinned above the scrolling <main>, and back to their
+// Phone layout: the model, the description and the two cut notices go to #pinned above the scrolling <main>, and back to their
 // places on wider screens. Moving the canvas keeps its WebGL context. See the phone rules in template.html.
 {
   const phone = matchMedia('(max-width:760px)');
-  const moved = [canvas.closest('.viewport'), document.querySelector('.detail')].map(el => {
+  const moved = [canvas.closest('.viewport'), document.querySelector('.detail'), $('cut-notice'), $('pick-note')].map(el => {
     const home = document.createComment('');
     el.before(home);
     return [el, home];
@@ -64,13 +64,15 @@ try {
   const conductionCut = new THREE.Plane(new THREE.Vector3(0, 0, -1), keepAll);
   conduction.traverse(o => { if (o.material) o.material.clippingPlanes = [conductionCut]; });
   const bounds = modelSphere(heart);
+  // World-space box of every part, for telling whether the current cut leaves anything of it.
+  const partBox = new Map([...parts].map(([id, group]) => [id, new THREE.Box3().setFromObject(group)]));
   const modeText = {
     exterior: ['01 / EXTERIOR', 'かたちから、心臓を知る。', 'lv'],
     conduction: ['02 / CONDUCTION', '刺激の通り道をたどる。', 'sa'],
     interior: ['03 / INTERIOR', '断面から、内側を見る。', 'mv'],
   };
   controls.target.copy(bounds.center);
-  let mode = 'exterior', selected = 'lv', frame = 0, previousTime = 0, failed = false, overlay = false;
+  let mode = 'exterior', selected = 'lv', frame = 0, previousTime = 0, failed = false, overlay = false, pick = null;
   const selectable = group => selectableIn(group.userData, mode, overlay);
   let fittedDistance = 12, userZoom = 1;
   const gesture = new TapGesture();
@@ -78,7 +80,7 @@ try {
   // Line.raycast divides the threshold by the line's own scale only, not its parents' scale.
   // The overlay is drawn in millimetres under a scaled group, so convert to millimetres here.
   ray.params.Line.threshold = .08 / exterior.scale.x;
-  const stageOrder = ['sa', 'atria', 'av', 'his', 'branches', 'purkinje'];
+  const stageOrder = ['sa', 'atria', 'av', 'his', 'rbb', 'lbb', 'purkinje'];
   const labels = new Map();
   for (const [id] of labelAnchors) {
     const label = document.createElement('span');
@@ -86,6 +88,17 @@ try {
     label.textContent = parts.get(id).userData.name;
     $('labels').append(label);
     labels.set(id, label);
+  }
+  // In the interior view the walls are opaque. A label whose anchor lies behind a drawn surface (a wall, a valve or the
+  // cut face) is marked "behind the wall" instead of looking like it sits on the surface. The conduction view draws
+  // the walls almost transparent, so nothing hides the anchor there.
+  const occluders = [...parts.values()].filter(group => group.userData.kind !== 'conduction');
+  function behindSurface(world) {
+    if (mode !== 'interior') return false;
+    const direction = world.clone().sub(camera.position), distance = direction.length();
+    ray.set(camera.position, direction.normalize());
+    const hit = pickHit(ray, occluders, [cutPlane], crossSection.solids);
+    return Boolean(hit) && hit.distance < distance - .04; // .04 viewer units is about 1.2 mm: the anchor sits on a cavity surface
   }
   function updateLabels() {
     for (const [id, anchor] of labelAnchors) {
@@ -95,9 +108,18 @@ try {
       // Show one selected label to avoid overlaps in small viewports, and none for a point the cut removed.
       const cutAway = mode === 'interior' && cutPlane.distanceToPoint(world) < 0;
       el.hidden = !conduction.visible || cutAway || selected !== id || Math.abs(p.x) > 1 || Math.abs(p.y) > 1 || Math.abs(p.z) > 1;
+      el.classList.toggle('behind', !el.hidden && behindSurface(world));
       el.style.left = `${(p.x + 1) * 50}%`;
       el.style.top = `${(1 - p.y) * 50}%`;
     }
+    // The ring where the cut face was clicked.
+    const mark = $('pick-mark');
+    if (pick) {
+      const p = pick.point.clone().project(camera);
+      mark.hidden = Math.abs(p.x) > 1 || Math.abs(p.y) > 1 || Math.abs(p.z) > 1;
+      mark.style.left = `${(p.x + 1) * 50}%`;
+      mark.style.top = `${(1 - p.y) * 50}%`;
+    } else mark.hidden = true;
   }
   function requestRender() {
     if (!frame && !document.hidden && !failed) frame = requestAnimationFrame(render);
@@ -144,9 +166,26 @@ try {
     controls.update();
     requestRender();
   }
-  function select(id) {
+  // Parts the current cut leaves nothing of stay selectable (their description is still readable), but are marked.
+  const cutRemoved = id => mode === 'interior' && removedByCut(partBox.get(id), cutPlane);
+  function updateCutNotice() {
+    $('cut-notice').hidden = !cutRemoved(selected);
+    $('pick-note').hidden = !pick;
+    for (const [id, group] of parts) {
+      const gone = cutRemoved(id);
+      group.userData.button.classList.toggle('cut-out', gone);
+      if (gone) group.userData.button.setAttribute('aria-description', '現在の断面では見えません');
+      else group.userData.button.removeAttribute('aria-description');
+    }
+  }
+  const dim = hex => new THREE.Color(hex).multiplyScalar(.55);
+  // from: the pick result when the part was chosen by clicking the model. A click on the cut face is remembered
+  // as a point, drawn as a ring, because the cut face has one colour for every chamber.
+  function select(id, from = null) {
     if (!parts.has(id) || !selectable(parts.get(id))) return;
     selected = id;
+    pick = from?.onCut ? { point: from.point.clone() } : null;
+    crossSection.setRegion(mode === 'interior' ? id : null);
     for (const [key, group] of parts) {
       group.userData.button.setAttribute('aria-pressed', String(key === id));
       group.traverse(object => {
@@ -156,6 +195,12 @@ try {
             mat.emissive.setHex(group.userData.color);
             mat.emissiveIntensity = key === id ? .8 : .18;
           } else mat.emissive.setHex(key === id ? 0x40201b : 0);
+        } else if (object.isLine) {
+          // The dashed line has no emissive: a selected one turns bright and nearly solid, the others dim and sparse.
+          const mat = object.material, on = key === id;
+          mat.color.set(on ? 0xfff4d6 : dim(group.userData.color));
+          mat.dashSize = on ? 4 : 2.7;
+          mat.gapSize = on ? 1 : 2.4;
         }
       });
     }
@@ -168,6 +213,7 @@ try {
     $('step-count').textContent = mode === 'conduction' ? `${stageOrder.indexOf(id) + 1} / ${stageOrder.length}` : '';
     $('previous').disabled = stageOrder.indexOf(id) <= 0;
     $('next').disabled = stageOrder.indexOf(id) >= stageOrder.length - 1;
+    updateCutNotice();
     requestRender();
   }
   for (const [id, group] of parts) {
@@ -176,7 +222,12 @@ try {
     button.dataset.viewerControl = '';
     const dot = document.createElement('i');
     dot.style.backgroundColor = `#${group.userData.color.toString(16).padStart(6, '0')}`;
-    button.append(dot, document.createTextNode(group.userData.name));
+    // The tag is hidden from the accessible name; the button gets aria-description instead when the cut removes the part.
+    const tag = document.createElement('em');
+    tag.className = 'cut-tag';
+    tag.textContent = '断面で消えた';
+    tag.setAttribute('aria-hidden', 'true');
+    button.append(dot, document.createTextNode(group.userData.name), tag);
     button.onclick = () => select(id);
     group.userData.button = button;
     $('parts').append(button);
@@ -189,6 +240,7 @@ try {
     for (const group of parts.values()) group.userData.button.hidden = !selectable(group);
     $('conduction-note').hidden = !conduction.visible;
     $('interior-conduction').setAttribute('aria-pressed', String(overlay));
+    updateCutNotice();
   }
   function setMode(next) {
     mode = next;
@@ -221,11 +273,20 @@ try {
   $('mode-conduction').onclick = () => setMode('conduction');
   $('mode-interior').onclick = () => setMode('interior');
   // The slider runs from front (left) to back (right); the plane keeps everything behind it.
-  $('cut-depth').oninput = event => {
-    cutPlane.constant = -Number(event.target.value);
+  function applyDepth() {
+    cutPlane.constant = -Number($('cut-depth').value);
+    pick = null; // the ring marked a point on the previous plane
     crossSection.update();
     showConduction();
     requestRender();
+  }
+  $('cut-depth').oninput = applyDepth;
+  // The cut keeps z <= -depth, so a part is left while depth <= -(its smallest z). Go a little inside that.
+  $('cut-restore').onclick = () => {
+    const slider = $('cut-depth'), step = Number(slider.step);
+    const target = Math.floor((-partBox.get(selected).min.z - .1) / step + 1e-9) * step;
+    slider.value = Math.max(Number(slider.min), target).toFixed(2);
+    applyDepth();
   };
   $('interior-conduction').onclick = () => {
     overlay = !overlay;
@@ -266,8 +327,8 @@ try {
     ray.setFromCamera(new THREE.Vector2((event.clientX - rect.left) / rect.width * 2 - 1, -(event.clientY - rect.top) / rect.height * 2 + 1), camera);
     // Outside the conduction view, unselectable vessels stay in the targets so they still block clicks.
     const targets = mode === 'conduction' ? conduction.children : [...parts.values()].filter(g => g.userData.kind !== 'conduction' || conduction.visible);
-    const id = pickPart(ray, targets, mode === 'interior' ? [cutPlane] : [], mode === 'interior' ? crossSection.solids : []);
-    if (id) select(id);
+    const hit = pickHit(ray, targets, mode === 'interior' ? [cutPlane] : [], mode === 'interior' ? crossSection.solids : []);
+    if (hit) select(hit.id, hit);
   });
   controls.addEventListener('start', () => {
     stopRotation();

@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import * as THREE from 'three';
-import { createCrossSection, fitDistance, modelSphere, pickPart, selectableIn, TapGesture, wallIds } from '../src/viewer-state.mjs';
+import { createCrossSection, fitDistance, modelSphere, pickHit, pickPart, removedByCut, selectableIn, TapGesture, wallIds } from '../src/viewer-state.mjs';
 import { createConduction, conductionDefinitions } from '../src/conduction.mjs';
 import { createAnatomy, decodeAnatomy, anatomyDefinitions, anatomyFormat, interiorDefinitions } from '../src/anatomy.mjs';
 import { readFileSync, mkdtempSync, writeFileSync } from 'node:fs';
@@ -159,7 +159,7 @@ test('a click on the drawn cut face of the wall picks that chamber, not the valv
   assert.ok(faces > 300, `${faces} pixels on the cut face`);
   assert.ok(flipped > 50, `only ${flipped} pixels differ from the old pick, so the case the report describes is not covered`);
 });
-test('a click on the cut face names the exact chamber that contains that point, from several viewpoints and planes', () => {
+test('regression: a click on the cut face names the chamber a three-ray reference also names, at 90% or better (not exact, and not anatomical truth)', () => {
   // The expected chamber is found without pickPart. The chamber walls are shells that stay open at the valve
   // openings, so one ray can escape and give a wrong "inside". Only points are used where three different rays
   // all find the point inside exactly one wall mesh and outside all the others; that mesh is the chamber.
@@ -191,7 +191,7 @@ test('a click on the cut face names the exact chamber that contains that point, 
     }
   }
   for (const id of wallIds) assert.ok((covered.get(id) || 0) >= 5, `${id}: only ${covered.get(id) || 0} checked points`);
-  // Not exact: at about 5% of these points a left-ventricle or right-ventricle point is answered as the left atrium,
+  // The reference is one way of deciding, not the true chamber. Not exact: at about 5% of these points a left-ventricle or right-ventricle point is answered as the left atrium,
   // where the shells overlap (Issue #9). Swapping the chambers' ids gives well under half, so the bound still catches that.
   const total = [...covered.values()].reduce((a, b) => a + b, 0);
   assert.ok(wrong.length <= total * .1, `${wrong.length} of ${total} points name the wrong chamber: ${wrong.slice(0, 8)}`);
@@ -271,7 +271,7 @@ test('BodyParts3D heart wall has a plausible size and coronary vessels lie on it
   }
   assert.ok(near / samples > .9, `${near}/${samples} coronary samples within 5 mm of the wall`);
 });
-test('conduction overlay sits on the matching heart walls', () => {
+test('regression only, not anatomical validation: conduction overlay sits on the matching heart walls', () => {
   // Regression check of the generator, not of anatomy: the wall is split by the nearest cavity and
   // the paths are snapped to cavities, so this catches swapped or misplaced cavities only.
   const walls = anatomy.parts.filter(p => ['lv', 'rv', 'ra', 'la', 'vc'].includes(p.id));
@@ -349,4 +349,74 @@ test('the cross-section slider reaches both ends of the four chambers', () => {
   for (const id of wallIds) parts.get(id).traverse(o => { if (o.isMesh) box.expandByObject(o); });
   // The plane sits at z = -value, so the slider must cover -z for every z of the wall, to within one step (0.05).
   assert.ok(min <= -box.max.z + .05 && max >= -box.min.z - .05, `slider ${min}..${max}, chambers z ${box.min.z.toFixed(3)}..${box.max.z.toFixed(3)}`);
+});
+
+test('the right and left bundle branches are separate parts with their own colours, and the label anchors follow them', () => {
+  const ids = conductionDefinitions.map(d => d[0]);
+  assert.deepEqual(ids, ['sa', 'atria', 'av', 'his', 'rbb', 'lbb', 'purkinje']);
+  const colors = ['rbb', 'lbb', 'purkinje'].map(id => parts.get(id).userData.color);
+  assert.equal(new Set(colors).size, 3, 'the two branches and the Purkinje lines must not share a colour');
+  // paths.branches is [left, right] in the generated data (the regression test above checks the walls they lie on).
+  const { branches } = meta.conduction.paths;
+  for (const [id, line] of [['lbb', branches[0]], ['rbb', branches[1]]]) {
+    const box = new THREE.Box3().setFromObject(parts.get(id)), inverse = new THREE.Matrix4().copy(conduction.matrixWorld).invert();
+    box.applyMatrix4(inverse);
+    box.expandByScalar(1);
+    for (const p of [line[0], line.at(-1)]) assert.ok(box.containsPoint(new THREE.Vector3(...p)), `${id} does not contain the end ${p}`);
+    assert.equal(parts.get(id).children.length, 1, `${id} is one path`);
+  }
+});
+
+test('removedByCut agrees with a vertex-by-vertex check for every part at several cut depths', () => {
+  const root = new THREE.Group(), ext = new THREE.Group(), map = new Map(), cond = new THREE.Group();
+  root.add(ext); createAnatomy(ext, map, bundle, .033); ext.add(cond); createConduction(cond, map, meta.conduction);
+  root.updateMatrixWorld(true);
+  let gone = 0, kept = 0;
+  for (const depth of [-1.8, -.6, 0, .3, .9, 1.5, 1.8]) {
+    const plane = new THREE.Plane(new THREE.Vector3(0, 0, -1), -depth);
+    for (const [id, group] of map) {
+      const box = new THREE.Box3().setFromObject(group);
+      let anyKept = false;
+      group.traverse(o => {
+        const p = o.geometry?.attributes.position;
+        for (let i = 0; p && i < p.count; i++) if (plane.distanceToPoint(o.localToWorld(new THREE.Vector3().fromBufferAttribute(p, i))) >= 0) anyKept = true;
+      });
+      assert.equal(removedByCut(box, plane), !anyKept, `${id} at depth ${depth}`);
+      anyKept ? kept++ : gone++;
+    }
+  }
+  assert.ok(gone > 10 && kept > 10, `${gone} removed / ${kept} kept: the check must cover both`);
+  // README: at slider 0.9 the whole conduction system is cut away; at 0 the AV node and the His bundle are not.
+  const at = (depth, id) => removedByCut(new THREE.Box3().setFromObject(map.get(id)), new THREE.Plane(new THREE.Vector3(0, 0, -1), -depth));
+  for (const [id] of conductionDefinitions) assert.equal(at(.9, id), true, `${id} at 0.9`);
+  assert.equal(at(0, 'av'), false);
+  assert.equal(at(0, 'his'), false);
+});
+
+test('a conduction label can sit behind an opaque wall in the interior view (the His bundle at depth 0, seen from the front)', () => {
+  const root = new THREE.Group(), ext = new THREE.Group(), map = new Map(), cond = new THREE.Group();
+  root.add(ext); createAnatomy(ext, map, bundle, .033);
+  const plane = new THREE.Plane(new THREE.Vector3(0, 0, -1), 0), section = createCrossSection(ext, map, plane, 0xc98478);
+  section.setEnabled(true);
+  ext.add(cond); const anchors = createConduction(cond, map, meta.conduction);
+  root.updateMatrixWorld(true);
+  const camera = new THREE.PerspectiveCamera(36, 1, .1, 150);
+  camera.position.set(0, .06, 1).normalize().multiplyScalar(fitDistance(bounds.radius, 1)).add(bounds.center);
+  camera.lookAt(bounds.center); camera.updateMatrixWorld();
+  const occluders = [...map.values()].filter(g => g.userData.kind !== 'conduction');
+  const behind = new Map();
+  for (const [id, anchor] of anchors) {
+    const world = cond.localToWorld(new THREE.Vector3(...anchor));
+    if (plane.distanceToPoint(world) < 0) continue; // cut away: no label at all
+    const direction = world.clone().sub(camera.position), distance = direction.length();
+    const ray = new THREE.Raycaster(camera.position, direction.normalize());
+    const hit = pickHit(ray, occluders, [plane], section.solids);
+    behind.set(id, Boolean(hit) && hit.distance < distance - .04);
+  }
+  // Measured on 2026-11-07 with this scene: His behind the cut face of the left ventricle, the AV node behind the
+  // tricuspid valve; the SA node and the atrial line in view.
+  assert.equal(behind.get('his'), true, 'the report: the ray to the His label meets the left ventricle first');
+  assert.equal(behind.get('av'), true);
+  assert.equal(behind.get('sa'), false);
+  assert.equal(behind.get('atria'), false);
 });

@@ -8,8 +8,9 @@ export const conductionDefinitions = [
   ['atria', '心房への広がり', 'Atrial activation', '刺激が左右の心房の心筋へ広がります。破線は伝わる方向の概念図で、独立した一本の神経や血管ではありません。', 0xe6bc86],
   ['av', '房室結節', 'Atrioventricular node', '右心房の中隔側、冠静脈洞の入口と三尖弁の間に位置し、刺激の伝わりをいったん遅くします。心房から心室へ血液が入る時間を確保します。', 0xffbc64],
   ['his', 'ヒス束', 'Bundle of His', '房室結節に続く刺激の通り道。心室中隔の上部へ進み、右脚と左脚に分かれます。', 0xffdf91],
-  ['branches', '右脚・左脚', 'Bundle branches', '心室中隔の右側・左側を通って、それぞれの心室へ刺激を伝えます。右脚は前乳頭筋の付け根へ向かいます。画面の左右ではなく、身体の左右を基準に呼びます。', 0x87e5d4],
-  ['purkinje', 'プルキンエ線維', 'Purkinje fibers', '心内膜の下に広がる特殊な心筋細胞のネットワーク。刺激を心室の心筋へ伝えます。枝の本数・太さ・位置は大きく簡略化しています。', 0x87e5d4],
+  ['rbb', '右脚', 'Right bundle branch', '心室中隔の右心室側を通り、右心室の前乳頭筋の付け根へ向かう通り道。ここでは1本の線に簡略化しています。身体の右側を基準に呼びます（画面の右ではありません）。', 0x7fb2ff],
+  ['lbb', '左脚', 'Left bundle branch', '心室中隔の左心室側を通り、心尖へ向かう通り道。実際の左脚は幅の広い板状で前・中隔・後ろの3つの束に分かれますが、ここでは1本の線に簡略化しています（Stephensonら2017の記述）。身体の左側を基準に呼びます。', 0x4fdcc4],
+  ['purkinje', 'プルキンエ線維', 'Purkinje fibers', '心内膜の下に広がる特殊な心筋細胞のネットワーク。刺激を心室の心筋へ伝えます。左心室2本・右心室2本の線に大きく簡略化しており、本数・太さ・位置は実際と異なります。脚（青緑・青）とは別の色（薄紫）で表します。', 0xd6b3ff],
 ];
 
 export function createConduction(parent, parts, data) {
@@ -44,12 +45,14 @@ export function createConduction(parent, parts, data) {
   node('av', nodes.av, 2.9);
   for (const p of paths.atria) path('atria', p, 0, true);
   for (const p of paths.his) path('his', p, 1.5);
-  for (const p of paths.branches) path('branches', p, 1.15);
+  // paths.branches is [left, right] in the generated data; each gets its own part so it can be selected and shown alone.
+  path('lbb', paths.branches[0], 1.15);
+  path('rbb', paths.branches[1], 1.15);
   for (const p of paths.purkinje) path('purkinje', p, .75);
   // Label positions in the same millimetre frame.
   const middle = p => p[Math.floor(p.length / 2)];
   return new Map([
     ['sa', nodes.sa], ['atria', middle(paths.atria[0])], ['av', nodes.av], ['his', middle(paths.his[0])],
-    ['branches', middle(paths.branches[0])], ['purkinje', middle(paths.purkinje[0])],
+    ['rbb', middle(paths.branches[1])], ['lbb', middle(paths.branches[0])], ['purkinje', middle(paths.purkinje[0])],
   ]);
 }
