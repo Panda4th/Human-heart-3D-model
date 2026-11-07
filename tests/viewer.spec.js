@@ -92,6 +92,35 @@ for (const width of [1440,390,320]) test(`offline model and interactions at widt
   const interiorBox = await c.boundingBox();
   await page.mouse.click(interiorBox.x + interiorBox.width*.5, interiorBox.y + interiorBox.height*.6);
   await expect(page.locator('#name')).toHaveText(/^(左心室|右心室|右心房|左心房|僧帽弁|三尖弁|大動脈弁|肺動脈弁|乳頭筋)$/);
+  // The conduction overlay is cut by the same plane. Every conduction point lies in front of the cut at
+  // slider 0.9, so there the overlay must add nothing; unclipped, the nodes would float in front of the cut.
+  await page.getByRole('button',{name:'大動脈弁',exact:true}).click();
+  const overlayOffAt0 = await c.screenshot();
+  await page.locator('#cut-depth').fill('0.9');
+  const overlayOffBehind = await c.screenshot();
+  await page.locator('#interior-conduction').click();
+  await expect(page.locator('#interior-conduction')).toHaveAttribute('aria-pressed','true');
+  await expect(page.locator('.part:visible')).toHaveCount(15);
+  await expect(page.locator('#conduction-note')).toBeVisible();
+  expect((await c.screenshot()).equals(overlayOffBehind)).toBe(true);
+  await page.locator('#cut-depth').fill('0');
+  expect((await c.screenshot()).equals(overlayOffAt0)).toBe(false);
+  await page.getByRole('button',{name:'洞房結節',exact:true}).click();
+  await expect(page.locator('#labels .model-label:visible')).toHaveText('洞房結節');
+  const saAnchor = await page.locator('.model-label').filter({hasText:'洞房結節'}).evaluate(el => ({x:parseFloat(el.style.left)/100,y:parseFloat(el.style.top)/100}));
+  await page.getByRole('button',{name:'大動脈弁',exact:true}).click();
+  await c.scrollIntoViewIfNeeded();
+  const overlayBox = await c.boundingBox();
+  await page.mouse.click(overlayBox.x + overlayBox.width*saAnchor.x, overlayBox.y + overlayBox.height*saAnchor.y);
+  await expect(page.locator('#name')).toHaveText('洞房結節');
+  await page.locator('#cut-depth').fill('0.9');
+  await expect(page.locator('#labels .model-label:visible')).toHaveCount(0);
+  await page.locator('#cut-depth').fill('0');
+  await page.screenshot({path:testInfo.outputPath('interior-conduction.png'),fullPage:true});
+  await page.locator('#interior-conduction').click();
+  await expect(page.locator('#name')).toHaveText('僧帽弁');
+  await expect(page.locator('.part:visible')).toHaveCount(9);
+  await expect(page.locator('#conduction-note')).toBeHidden();
   await page.screenshot({path:testInfo.outputPath('interior.png'),fullPage:true});
   expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
   await page.locator('#mode-exterior').click();

@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import * as THREE from 'three';
-import { createCrossSection, fitDistance, modelSphere, pickPart, TapGesture } from '../src/viewer-state.mjs';
+import { createCrossSection, fitDistance, modelSphere, pickPart, selectableIn, TapGesture } from '../src/viewer-state.mjs';
 import { createConduction, conductionDefinitions } from '../src/conduction.mjs';
 import { createAnatomy, decodeAnatomy, anatomyDefinitions, anatomyFormat, interiorDefinitions } from '../src/anatomy.mjs';
 import { readFileSync } from 'node:fs';
@@ -81,6 +81,17 @@ test('valves and papillary muscles sit inside the heart wall and only the interi
   }
   for (const id of ['lv', 'rv', 'ra', 'la']) assert.deepEqual(parts.get(id).userData.modes, ['exterior', 'interior']);
   assert.deepEqual(parts.get('ao').userData.modes, ['exterior']);
+});
+test('the conduction overlay makes conduction selectable only on the cross-section', () => {
+  const sa = parts.get('sa').userData, mv = parts.get('mv').userData, ao = parts.get('ao').userData;
+  for (const overlay of [false, true]) {
+    assert.equal(selectableIn(sa, 'conduction', overlay), true);
+    assert.equal(selectableIn(sa, 'exterior', overlay), false);
+    assert.equal(selectableIn(mv, 'interior', overlay), true);
+    assert.equal(selectableIn(ao, 'interior', overlay), false);
+  }
+  assert.equal(selectableIn(sa, 'interior', false), false);
+  assert.equal(selectableIn(sa, 'interior', true), true);
 });
 test('in the cross-section, a click on a valve picks the valve, not the removed front wall', () => {
   // Separate copy of the scene, built as in src/main.js with the interior view enabled.

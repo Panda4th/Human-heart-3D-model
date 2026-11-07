@@ -3,7 +3,7 @@ import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { createConduction } from './conduction.mjs';
 import { createAnatomy } from './anatomy.mjs';
 import anatomyData from './data/bodyparts3d-heart.bin';
-import { createCrossSection, fitDistance, modelSphere, pickPart, TapGesture } from './viewer-state.mjs';
+import { createCrossSection, fitDistance, modelSphere, pickPart, selectableIn, TapGesture } from './viewer-state.mjs';
 
 const canvas = document.querySelector('canvas');
 const $ = id => document.getElementById(id);
@@ -42,6 +42,12 @@ try {
   const crossSection = createCrossSection(exterior, parts, cutPlane, 0xc98478);
   exterior.add(conduction);
   const labelAnchors = createConduction(conduction, parts, meta.conduction);
+  // The overlay on the cross-section is cut by the same plane. Its materials keep one clipping plane in
+  // every mode so that showing it never recompiles shaders; outside the interior view the plane is
+  // moved far enough to keep everything. The bounds are taken before the plane can clip anything.
+  const keepAll = 1e3;
+  const conductionCut = new THREE.Plane(new THREE.Vector3(0, 0, -1), keepAll);
+  conduction.traverse(o => { if (o.material) o.material.clippingPlanes = [conductionCut]; });
   const bounds = modelSphere(heart);
   const modeText = {
     exterior: ['01 / EXTERIOR', 'かたちから、心臓を知る。', 'lv'],
@@ -49,7 +55,8 @@ try {
     interior: ['03 / INTERIOR', '断面から、内側を見る。', 'mv'],
   };
   controls.target.copy(bounds.center);
-  let mode = 'exterior', selected = 'lv', frame = 0, previousTime = 0, failed = false;
+  let mode = 'exterior', selected = 'lv', frame = 0, previousTime = 0, failed = false, overlay = false;
+  const selectable = group => selectableIn(group.userData, mode, overlay);
   let fittedDistance = 12, userZoom = 1;
   const gesture = new TapGesture();
   const ray = new THREE.Raycaster();
@@ -67,10 +74,12 @@ try {
   }
   function updateLabels() {
     for (const [id, anchor] of labelAnchors) {
-      const p = conduction.localToWorld(new THREE.Vector3(...anchor)).project(camera);
+      const world = conduction.localToWorld(new THREE.Vector3(...anchor));
+      const p = world.clone().project(camera);
       const el = labels.get(id);
-      // Show one selected label to avoid overlaps in small viewports.
-      el.hidden = mode !== 'conduction' || selected !== id || Math.abs(p.x) > 1 || Math.abs(p.y) > 1 || Math.abs(p.z) > 1;
+      // Show one selected label to avoid overlaps in small viewports, and none for a point the cut removed.
+      const cutAway = mode === 'interior' && cutPlane.distanceToPoint(world) < 0;
+      el.hidden = !conduction.visible || cutAway || selected !== id || Math.abs(p.x) > 1 || Math.abs(p.y) > 1 || Math.abs(p.z) > 1;
       el.style.left = `${(p.x + 1) * 50}%`;
       el.style.top = `${(1 - p.y) * 50}%`;
     }
@@ -121,7 +130,7 @@ try {
     requestRender();
   }
   function select(id) {
-    if (!parts.has(id) || !parts.get(id).userData.modes.includes(mode)) return;
+    if (!parts.has(id) || !selectable(parts.get(id))) return;
     selected = id;
     for (const [key, group] of parts) {
       group.userData.button.setAttribute('aria-pressed', String(key === id));
@@ -155,15 +164,23 @@ try {
     group.userData.button = button;
     $('parts').append(button);
   }
+  // Conduction is shown in its own view, and on the cross-section when the overlay is on.
+  function showConduction() {
+    const interior = mode === 'interior';
+    conduction.visible = mode === 'conduction' || (interior && overlay);
+    conductionCut.constant = interior ? cutPlane.constant : keepAll;
+    for (const group of parts.values()) group.userData.button.hidden = !selectable(group);
+    $('conduction-note').hidden = !conduction.visible;
+    $('interior-conduction').setAttribute('aria-pressed', String(overlay));
+  }
   function setMode(next) {
     mode = next;
     stopRotation();
     const interior = mode === 'interior';
-    conduction.visible = mode === 'conduction';
     crossSection.setEnabled(interior);
+    showConduction();
     const conductionView = mode === 'conduction';
     for (const group of parts.values()) {
-      group.userData.button.hidden = !group.userData.modes.includes(mode);
       if (group.userData.kind !== 'exterior') continue;
       group.traverse(object => {
         if (!object.isMesh || object.userData.crossSection || object.material.transparent === conductionView) return;
@@ -175,9 +192,9 @@ try {
     }
     for (const m of Object.keys(modeText)) $(`mode-${m}`).setAttribute('aria-pressed', String(mode === m));
     $('steps').hidden = mode !== 'conduction';
-    $('conduction-note').hidden = mode !== 'conduction';
     $('interior-note').hidden = !interior;
     $('cut').hidden = !interior;
+    $('interior-overlay').hidden = !interior;
     $('mode-number').textContent = modeText[mode][0];
     $('mode-title').textContent = modeText[mode][1];
     select(modeText[mode][2]);
@@ -189,7 +206,15 @@ try {
   // The slider runs from front (left) to back (right); the plane keeps everything behind it.
   $('cut-depth').oninput = event => {
     cutPlane.constant = -Number(event.target.value);
+    showConduction();
     requestRender();
+  };
+  $('interior-conduction').onclick = () => {
+    overlay = !overlay;
+    showConduction();
+    // Turning the overlay off must not leave a hidden conduction part selected.
+    if (!selectable(parts.get(selected))) select(modeText.interior[2]);
+    else requestRender();
   };
     $('previous').onclick = () => select(stageOrder[Math.max(0, stageOrder.indexOf(selected) - 1)]);
   $('next').onclick = () => select(stageOrder[Math.min(stageOrder.length - 1, stageOrder.indexOf(selected) + 1)]);
@@ -219,7 +244,8 @@ try {
     if (!gesture.up(event.pointerId, event.clientX, event.clientY) || event.button !== 0) return;
     const rect = canvas.getBoundingClientRect();
     ray.setFromCamera(new THREE.Vector2((event.clientX - rect.left) / rect.width * 2 - 1, -(event.clientY - rect.top) / rect.height * 2 + 1), camera);
-    const targets = mode === 'conduction' ? conduction.children : [...parts.values()].filter(g => g.userData.kind !== 'conduction');
+    // Outside the conduction view, unselectable vessels stay in the targets so they still block clicks.
+    const targets = mode === 'conduction' ? conduction.children : [...parts.values()].filter(g => g.userData.kind !== 'conduction' || conduction.visible);
     const id = pickPart(ray, targets, mode === 'interior' ? [cutPlane] : []);
     if (id) select(id);
   });
