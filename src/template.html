@@ -21,6 +21,7 @@ canvas:focus-visible{outline:2px solid #f0bb90;outline-offset:-4px}
 .model-label{position:absolute;transform:translate(-50%,calc(-100% - 15px));padding:5px 10px;background:#121e29e8;border:1px solid #d0aa70;border-radius:6px;color:#ffe0a3;font-size:12px;white-space:nowrap}
 .axis{text-align:center;color:#acbec1;font-size:11px;margin:12px 16px}
 .tools{display:flex;justify-content:center;flex-wrap:wrap;gap:7px;padding:0 12px 20px}
+#cut{display:flex;align-items:center;justify-content:center;gap:10px;margin:0 16px 12px;font-size:12px;color:#acbec1}#cut[hidden]{display:none}#cut input{width:min(260px,52vw);accent-color:#d39c86}
 button{font:inherit;color:inherit;background:#1b2a31;border:1px solid #ffffff30;border-radius:8px;min-height:44px;padding:10px 13px;cursor:pointer}
 button:hover{background:#30434b}button:focus-visible,a:focus-visible,summary:focus-visible{outline:2px solid #f0bb90;outline-offset:3px}
 button[aria-pressed=true]{border-color:#dca27f;background:#3a3330}button:disabled{opacity:.45;cursor:default}
@@ -41,7 +42,7 @@ footer{padding:18px 4%;border-top:1px solid #ffffff15;color:#a6b9be;font-size:11
 </style>
 </head>
 <body>
-<header><div class="brand">心臓のアトリエ<small>HUMAN HEART / FORM & SIGNAL</small></div><span class="badge">試作 · v0.3</span></header>
+<header><div class="brand">心臓のアトリエ<small>HUMAN HEART / FORM & SIGNAL</small></div><span class="badge">試作 · v0.4</span></header>
 <main>
 <section class="stage" aria-label="心臓の3Dモデル">
   <div class="stage-heading">
@@ -49,6 +50,7 @@ footer{padding:18px 4%;border-top:1px solid #ffffff15;color:#a6b9be;font-size:11
     <nav class="modes" aria-label="観察モード">
       <button id="mode-exterior" data-viewer-control aria-pressed="true">外観</button>
       <button id="mode-conduction" data-viewer-control aria-pressed="false">刺激伝導系</button>
+      <button id="mode-interior" data-viewer-control aria-pressed="false">内部（断面）</button>
     </nav>
   </div>
   <div class="viewport">
@@ -59,6 +61,7 @@ footer{padding:18px 4%;border-top:1px solid #ffffff15;color:#a6b9be;font-size:11
   <nav class="views" aria-label="定位置の視点">
     <button id="view-front" data-viewer-control>前面</button><button id="view-back" data-viewer-control>背面</button><button id="view-left" data-viewer-control>身体の左側</button>
   </nav>
+  <label id="cut" hidden><span>前寄り</span><input id="cut-depth" type="range" min="-1.5" max="1.5" step="0.05" value="-0.6" autocomplete="off" data-viewer-control aria-label="断面の位置（前から後ろ）"><span>後ろ寄り</span></label>
   <p id="orientation" class="axis">前面 ／ 左右の名称は身体を基準</p>
   <nav class="tools" aria-label="表示操作">
     <button id="out" data-viewer-control aria-label="縮小">−</button><button id="in" data-viewer-control aria-label="拡大">＋</button>
@@ -71,8 +74,9 @@ footer{padding:18px 4%;border-top:1px solid #ffffff15;color:#a6b9be;font-size:11
   <div id="steps" hidden><button id="previous" data-viewer-control>← 前へ</button><span id="step-count" aria-live="polite"></span><button id="next" data-viewer-control>次へ →</button></div>
   <div class="detail" aria-live="polite"><h3 id="name">心臓を観察する</h3><small id="en">Heart study</small><p id="description">部位を選ぶと、名前と役割を表示します。</p></div>
   <p class="note" id="conduction-note" hidden>電気刺激の経路を示す模式図です。神経や血管ではなく、主に特殊な心筋細胞による仕組みです。破線は心房への広がりを表します。元データに刺激伝導系の形状はないため、上大静脈、冠静脈洞、三尖弁、大動脈弁、乳頭筋、内腔の位置から配置を推定しました。太さは誇張しており、断面の再現や伝導速度のシミュレーションではありません。</p>
+  <p class="note" id="interior-note" hidden>心臓を前後方向の平面で切り、切った面より前を取り除いて表示しています。断面は心臓に固定されていて、回転すると切り口を斜めから見られます。切り口の色は識別用です。弁と乳頭筋はBodyParts3D 4.0の形状で、弁の開き具合は元データの1時点のもので、拍動による変化は表しません。弁から乳頭筋へ伸びる糸状の部分は腱索とみられますが、元データでは弁尖と同じ部品です。心室中隔と心室の心筋は個別の形状がないため、区別して選べません。左心室の後ろの乳頭筋は元データにありません。この表示で選べるのは心房・心室・弁・乳頭筋で、血管は外観で選べます。切り口は前面から見たときに見え、背面からは見えません。</p>
   <p class="note" id="anatomy-note">BodyParts3D（© ライフサイエンス統合データベースセンター、<a href="https://creativecommons.org/licenses/by/4.0/deed.ja" target="_blank" rel="noopener noreferrer">CC BY 4.0</a>）の成人男性1体の心臓と周囲の血管を、面数を減らして表示しています。心室・心房の色分けは、各内腔に最も近い壁を自動で割り当てた推定で、実際の境界とは一致しません。血管は心臓の近くで切っています。</p>
-  <p class="note">ドラッグで回転、スクロール／ピンチで拡大縮小。キーボードでも操作できます。<br>内腔と弁の表示は未実装。色は識別用です。医療用途ではありません。</p>
+  <p class="note">ドラッグで回転、スクロール／ピンチで拡大縮小。キーボードでも操作できます。<br>血流と拍動は未実装。色は識別用です。医療用途ではありません。</p>
   <div class="reference"><a id="msd-reference" href="https://www.msdmanuals.com/ja-jp/home/multimedia/3dmodel/心臓の刺激伝導系" target="_blank" rel="noopener noreferrer">MSDの参考3Dモデルを開く ↗</a><p>BioDigital提供。別タブで開きます（要ネット接続）。本モデルの刺激伝導系は独自に作成した模式図です。</p></div>
   <p class="note">説明の参考：<a href="https://www.nhlbi.nih.gov/health/heart/anatomy" target="_blank" rel="noopener noreferrer">NHLBI：心臓の構造</a> ／ <a href="https://www.nhlbi.nih.gov/health/heart/heart-beats" target="_blank" rel="noopener noreferrer">拍動の仕組み</a> ／ <a href="https://www.medlineplus.gov/ency/anatomyvideos/000021.htm" target="_blank" rel="noopener noreferrer">MedlinePlus：刺激伝導系</a></p>
 </aside>

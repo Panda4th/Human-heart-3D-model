@@ -2,11 +2,14 @@ import * as THREE from 'three';
 
 // Decode the bundle written by scripts/prepare-bodyparts3d.mjs.
 // Kept free of WebGL so Node tests can check the data.
+// Format 3 added the valves and papillary muscles; bump both sides when the layout or parts change.
+export const anatomyFormat = 3;
 export function decodeAnatomy(bytes) {
   const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
   if (new TextDecoder().decode(bytes.subarray(0, 4)) !== 'BP3D') throw new Error('Not a BodyParts3D heart bundle');
   const jsonLength = view.getUint32(4, true);
   const meta = JSON.parse(new TextDecoder().decode(bytes.subarray(8, 8 + jsonLength)));
+  if (meta.format !== anatomyFormat) throw new Error(`Heart bundle format ${meta.format}, expected ${anatomyFormat}`);
   const body = bytes.byteOffset + 8 + jsonLength;
   const parts = meta.parts.map(p => {
     const raw = new Int16Array(bytes.buffer.slice(body + p.positionOffset, body + p.positionOffset + p.vertices * 6));
@@ -32,12 +35,26 @@ export const anatomyDefinitions = [
   ['cv', '冠静脈', 'Cardiac veins', '心臓の筋肉から血液を回収する静脈。冠静脈洞へ集まります。', 0x7a8fc4],
 ];
 
+// Shown only in the interior (cross-section) view. From BodyParts3D 4.0, whose leaflet meshes
+// include thread-like strands that look like chordae tendineae; they are not separated.
+export const interiorDefinitions = [
+  ['mv', '僧帽弁', 'Mitral valve', '左心房と左心室の間の弁。前尖と後尖の2枚の弁尖からなり、左心室が縮むときに血液が左心房へ戻るのを防ぎます。乳頭筋へ伸びる糸状の部分は腱索とみられますが、元データでは弁尖と同じ部品のため区別していません。', 0xead2b0],
+  ['tv', '三尖弁', 'Tricuspid valve', '右心房と右心室の間の弁。前尖・後尖・中隔尖の3枚の弁尖からなり、右心室が縮むときに血液が右心房へ戻るのを防ぎます。糸状の部分は腱索とみられますが、弁尖と区別していません。', 0xd8c39d],
+  ['aov', '大動脈弁', 'Aortic valve', '左心室と大動脈の間の弁。半月形の3枚の弁尖からなり、左心室が緩むときに大動脈から血液が戻るのを防ぎます。', 0xf3e1c4],
+  ['pov', '肺動脈弁', 'Pulmonary valve', '右心室と肺動脈の間の弁。半月形の3枚の弁尖からなり、右心室が緩むときに肺動脈から血液が戻るのを防ぎます。', 0xbfd6d0],
+  ['pm', '乳頭筋', 'Papillary muscles', '心室の内壁から突き出た筋肉。腱索を介して僧帽弁と三尖弁の弁尖を支え、心室が縮むときに弁尖が心房側へ反り返るのを防ぎます。元データにあるのは右心室の3つと、左心室の外側乳頭筋（前外側の頭を含む）だけです。左心室にはふつう前と後ろの2つがありますが、後ろの乳頭筋は元データにないため表示していません。', 0xd27a6c],
+];
+const chambers = ['lv', 'rv', 'ra', 'la'];
+
 export function createAnatomy(parent, parts, bytes, scale) {
   const { meta, parts: meshes } = decodeAnatomy(bytes);
   const byId = new Map(meshes.map(m => [m.id, m]));
-  for (const [id, name, en, desc, color] of anatomyDefinitions) {
+  const definitions = [...anatomyDefinitions.map(d => [...d, 'exterior']), ...interiorDefinitions.map(d => [...d, 'interior'])];
+  for (const [id, name, en, desc, color, kind] of definitions) {
     const group = new THREE.Group();
-    group.userData = { id, name, en, desc, color, kind: 'exterior' };
+    // modes lists the view modes in which this part can be selected.
+    const modes = kind === 'interior' ? ['interior'] : chambers.includes(id) ? ['exterior', 'interior'] : ['exterior'];
+    group.userData = { id, name, en, desc, color, kind, modes };
     const mesh = byId.get(id);
     const geometry = new THREE.BufferGeometry();
     geometry.setAttribute('position', new THREE.BufferAttribute(mesh.positions, 3));
@@ -49,7 +66,7 @@ export function createAnatomy(parent, parts, bytes, scale) {
   }
   // Centre on the heart wall and convert millimetres to viewer units.
   const wall = new THREE.Box3();
-  for (const id of ['lv', 'rv', 'ra', 'la']) wall.expandByObject(parts.get(id));
+  for (const id of chambers) wall.expandByObject(parts.get(id));
   const center = wall.getCenter(new THREE.Vector3());
   parent.scale.setScalar(scale);
   parent.position.copy(center).multiplyScalar(-scale);

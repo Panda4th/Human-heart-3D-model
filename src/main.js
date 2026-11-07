@@ -3,7 +3,7 @@ import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { createConduction } from './conduction.mjs';
 import { createAnatomy } from './anatomy.mjs';
 import anatomyData from './data/bodyparts3d-heart.bin';
-import { fitDistance, modelSphere, TapGesture } from './viewer-state.mjs';
+import { createCrossSection, fitDistance, modelSphere, pickPart, TapGesture } from './viewer-state.mjs';
 
 const canvas = document.querySelector('canvas');
 const $ = id => document.getElementById(id);
@@ -17,6 +17,7 @@ try {
   const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true });
   renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
   renderer.setClearColor(0x000000, 0);
+  renderer.localClippingEnabled = true;
   const scene = new THREE.Scene();
   const camera = new THREE.PerspectiveCamera(36, 1, .1, 150);
   const controls = new OrbitControls(camera, canvas);
@@ -35,9 +36,18 @@ try {
   scene.add(heart);
   heart.add(exterior);
   const meta = createAnatomy(exterior, parts, anatomyData, .033);
+  // Interior view: a front-to-back cut fixed to the heart. Points with z > constant are removed.
+  // Read the slider so a value restored by the browser matches the drawn cut.
+  const cutPlane = new THREE.Plane(new THREE.Vector3(0, 0, -1), -Number($('cut-depth').value));
+  const crossSection = createCrossSection(exterior, parts, cutPlane, 0xc98478);
   exterior.add(conduction);
   const labelAnchors = createConduction(conduction, parts, meta.conduction);
   const bounds = modelSphere(heart);
+  const modeText = {
+    exterior: ['01 / EXTERIOR', 'かたちから、心臓を知る。', 'lv'],
+    conduction: ['02 / CONDUCTION', '刺激の通り道をたどる。', 'sa'],
+    interior: ['03 / INTERIOR', '断面から、内側を見る。', 'mv'],
+  };
   controls.target.copy(bounds.center);
   let mode = 'exterior', selected = 'lv', frame = 0, previousTime = 0, failed = false;
   let fittedDistance = 12, userZoom = 1;
@@ -111,7 +121,7 @@ try {
     requestRender();
   }
   function select(id) {
-    if (!parts.has(id) || parts.get(id).userData.kind !== mode) return;
+    if (!parts.has(id) || !parts.get(id).userData.modes.includes(mode)) return;
     selected = id;
     for (const [key, group] of parts) {
       group.userData.button.setAttribute('aria-pressed', String(key === id));
@@ -148,28 +158,39 @@ try {
   function setMode(next) {
     mode = next;
     stopRotation();
+    const interior = mode === 'interior';
     conduction.visible = mode === 'conduction';
+    crossSection.setEnabled(interior);
+    const conductionView = mode === 'conduction';
     for (const group of parts.values()) {
-      group.userData.button.hidden = group.userData.kind !== mode;
+      group.userData.button.hidden = !group.userData.modes.includes(mode);
       if (group.userData.kind !== 'exterior') continue;
       group.traverse(object => {
-        if (!object.isMesh) return;
-        object.material.transparent = mode === 'conduction';
-        object.material.opacity = mode === 'conduction' ? .12 : 1;
-        object.material.depthWrite = mode !== 'conduction';
+        if (!object.isMesh || object.userData.crossSection || object.material.transparent === conductionView) return;
+        object.material.transparent = conductionView;
+        object.material.opacity = conductionView ? .12 : 1;
+        object.material.depthWrite = !conductionView;
         object.material.needsUpdate = true;
       });
     }
-    for (const m of ['exterior', 'conduction']) $(`mode-${m}`).setAttribute('aria-pressed', String(mode === m));
+    for (const m of Object.keys(modeText)) $(`mode-${m}`).setAttribute('aria-pressed', String(mode === m));
     $('steps').hidden = mode !== 'conduction';
     $('conduction-note').hidden = mode !== 'conduction';
-    $('mode-title').textContent = ({exterior: 'かたちから、心臓を知る。', conduction: '刺激の通り道をたどる。'})[mode];
-    $('mode-number').textContent = ({exterior: '01 / EXTERIOR', conduction: '02 / CONDUCTION'})[mode];
-    select(({exterior: 'lv', conduction: 'sa'})[mode]);
+    $('interior-note').hidden = !interior;
+    $('cut').hidden = !interior;
+    $('mode-number').textContent = modeText[mode][0];
+    $('mode-title').textContent = modeText[mode][1];
+    select(modeText[mode][2]);
     setView('front');
   }
   $('mode-exterior').onclick = () => setMode('exterior');
   $('mode-conduction').onclick = () => setMode('conduction');
+  $('mode-interior').onclick = () => setMode('interior');
+  // The slider runs from front (left) to back (right); the plane keeps everything behind it.
+  $('cut-depth').oninput = event => {
+    cutPlane.constant = -Number(event.target.value);
+    requestRender();
+  };
     $('previous').onclick = () => select(stageOrder[Math.max(0, stageOrder.indexOf(selected) - 1)]);
   $('next').onclick = () => select(stageOrder[Math.min(stageOrder.length - 1, stageOrder.indexOf(selected) + 1)]);
   for (const view of ['front', 'back', 'left']) $(`view-${view}`).onclick = () => setView(view);
@@ -198,13 +219,9 @@ try {
     if (!gesture.up(event.pointerId, event.clientX, event.clientY) || event.button !== 0) return;
     const rect = canvas.getBoundingClientRect();
     ray.setFromCamera(new THREE.Vector2((event.clientX - rect.left) / rect.width * 2 - 1, -(event.clientY - rect.top) / rect.height * 2 + 1), camera);
-    const targets = mode === 'conduction' ? conduction.children : [...parts.values()].filter(g => g.userData.kind === 'exterior');
-    const hit = ray.intersectObjects(targets, true)[0];
-    if (hit) {
-      let object = hit.object;
-      while (object && !object.userData.id) object = object.parent;
-      if (object) select(object.userData.id);
-    }
+    const targets = mode === 'conduction' ? conduction.children : [...parts.values()].filter(g => g.userData.kind !== 'conduction');
+    const id = pickPart(ray, targets, mode === 'interior' ? [cutPlane] : []);
+    if (id) select(id);
   });
   controls.addEventListener('start', () => {
     stopRotation();
