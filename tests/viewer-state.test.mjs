@@ -1,9 +1,9 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import * as THREE from 'three';
-import { fitDistance, modelSphere, TapGesture } from '../src/viewer-state.mjs';
+import { firstUnclippedHit, fitDistance, modelSphere, TapGesture } from '../src/viewer-state.mjs';
 import { createConduction, conductionDefinitions } from '../src/conduction.mjs';
-import { createAnatomy, decodeAnatomy, anatomyDefinitions } from '../src/anatomy.mjs';
+import { createAnatomy, decodeAnatomy, anatomyDefinitions, interiorDefinitions } from '../src/anatomy.mjs';
 import { readFileSync } from 'node:fs';
 
 test('tap selects, but drag out-and-back, pinch, cancel and mismatched pointer do not', () => {
@@ -26,7 +26,7 @@ createConduction(conduction, parts, meta.conduction);
 const bounds = modelSphere(heart);
 
 test('model geometry is finite and each selectable group has geometry', () => {
-  assert.equal(parts.size, anatomyDefinitions.length + conductionDefinitions.length);
+  assert.equal(parts.size, anatomyDefinitions.length + interiorDefinitions.length + conductionDefinitions.length);
   for (const group of parts.values()) {
     assert.ok(group.children.length > 0);
     group.traverse(o => {
@@ -64,12 +64,29 @@ test('standalone HTML includes license and has no external runtime resources', (
 
 const anatomy = decodeAnatomy(bundle);
 test('BodyParts3D bundle has every defined part with valid geometry', () => {
-  assert.deepEqual(anatomy.parts.map(p => p.id), anatomyDefinitions.map(d => d[0]));
+  assert.deepEqual(anatomy.parts.map(p => p.id), [...anatomyDefinitions, ...interiorDefinitions].map(d => d[0]));
   for (const p of anatomy.parts) {
     assert.ok(p.indices.length > 0 && p.indices.length % 3 === 0, p.id);
     assert.ok(p.positions.every(Number.isFinite), p.id);
     assert.ok(p.indices.every(i => i < p.positions.length / 3), p.id);
   }
+});
+test('valves and papillary muscles sit inside the heart wall and only the interior view selects them', () => {
+  const wall = new THREE.Box3();
+  for (const id of ['lv', 'rv', 'ra', 'la']) wall.expandByObject(parts.get(id));
+  for (const [id] of interiorDefinitions) {
+    const group = parts.get(id), box = new THREE.Box3().setFromObject(group);
+    assert.ok(wall.containsBox(box), `${id} outside the heart wall`);
+    assert.deepEqual(group.userData.modes, ['interior']);
+  }
+  for (const id of ['lv', 'rv', 'ra', 'la']) assert.deepEqual(parts.get(id).userData.modes, ['exterior', 'interior']);
+  assert.deepEqual(parts.get('ao').userData.modes, ['exterior']);
+});
+test('clicks ignore hits on the side removed by the cross-section', () => {
+  const plane = new THREE.Plane(new THREE.Vector3(0, 0, -1), .5); // keeps z <= 0.5
+  const hits = [{ point: new THREE.Vector3(0, 0, 1), id: 'removed' }, { point: new THREE.Vector3(0, 0, .2), id: 'kept' }];
+  assert.equal(firstUnclippedHit(hits, [plane]).id, 'kept');
+  assert.equal(firstUnclippedHit(hits.slice(0, 1), [plane]), undefined);
 });
 test('BodyParts3D heart wall has a plausible size and coronary vessels lie on it', () => {
   const wall = anatomy.parts.filter(p => ['lv', 'rv', 'ra', 'la'].includes(p.id)).flatMap(p => [...p.positions]);

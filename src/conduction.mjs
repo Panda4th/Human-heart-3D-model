@@ -15,7 +15,7 @@ export const conductionDefinitions = [
 export function createConduction(parent, parts, data) {
   for (const [id, name, en, desc, color] of conductionDefinitions) {
     const group = new THREE.Group();
-    group.userData = { id, name, en, desc, color, kind: 'conduction' };
+    group.userData = { id, name, en, desc, color, kind: 'conduction', modes: ['conduction'] };
     parts.set(id, group);
     parent.add(group);
   }

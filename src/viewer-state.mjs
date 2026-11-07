@@ -19,6 +19,11 @@ export function fitDistance(radius, aspect, verticalFovDegrees = 36) {
   return radius / Math.sin(Math.min(vertical, horizontal)) * 1.15;
 }
 
+// Raycasting ignores clipping planes; skip hits on parts the cross-section has removed.
+export function firstUnclippedHit(hits, planes) {
+  return hits.find(hit => planes.every(plane => plane.distanceToPoint(hit.point) >= 0));
+}
+
 export class TapGesture {
   pointers = new Set();
   candidate = null;

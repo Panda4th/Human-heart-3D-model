@@ -147,6 +147,13 @@ const parts = {
   pv: part(['FJ2925', 'FJ2933', 'FJ2944', 'FJ2950', 'FJ2955', 'FJ3020', 'FJ3040']),
   ca: part(v4ByName(coronaryArtery), [], .4),
   cv: part(v4ByName(cardiacVein), [], .4),
+  // Interior view: 4.0 valve leaflets and papillary muscles. Leaflet meshes include strands that
+  // look like chordae tendineae; 4.0 has no separate chordae mesh.
+  mv: part(['FJ2420', 'FJ2432'], [], .3),
+  tv: part(['FJ2421', 'FJ2433', 'FJ2436'], [], .3),
+  aov: part(['FJ2426', 'FJ2431', 'FJ2435']),
+  pov: part(['FJ2417', 'FJ2427', 'FJ2434']),
+  pm: part(['FJ2418', 'FJ2429', 'FJ2419', 'FJ2430', 'FJ2437']),
 };
 
 // Anchor points for the explanatory conduction overlay. BodyParts3D has no conduction-system
