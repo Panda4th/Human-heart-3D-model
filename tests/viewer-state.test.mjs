@@ -4,6 +4,7 @@ import * as THREE from 'three';
 import { fitDistance, TapGesture } from '../src/viewer-state.mjs';
 import { createExterior } from '../src/model.mjs';
 import { createConduction } from '../src/conduction.mjs';
+import { decodeAnatomy, anatomyDefinitions } from '../src/anatomy.mjs';
 import { readFileSync } from 'node:fs';
 
 test('tap selects, but drag out-and-back, pinch, cancel and mismatched pointer do not', () => {
@@ -52,4 +53,31 @@ test('standalone HTML includes license and has no external runtime resources', (
   assert.doesNotMatch(html, /<(?:script|iframe|img)\b[^>]*\bsrc\s*=/i);
   assert.doesNotMatch(html, /<link\b[^>]*\bhref\s*=/i);
   assert.ok(!html.includes('/* APP */'));
+});
+
+const anatomy = decodeAnatomy(readFileSync(new URL('../src/data/bodyparts3d-heart.bin', import.meta.url)));
+test('BodyParts3D bundle has every defined part with valid geometry', () => {
+  assert.deepEqual(anatomy.parts.map(p => p.id), anatomyDefinitions.map(d => d[0]));
+  for (const p of anatomy.parts) {
+    assert.ok(p.indices.length > 0 && p.indices.length % 3 === 0, p.id);
+    assert.ok(p.positions.every(Number.isFinite), p.id);
+    assert.ok(p.indices.every(i => i < p.positions.length / 3), p.id);
+  }
+});
+test('BodyParts3D heart wall has a plausible size and coronary vessels lie on it', () => {
+  const wall = anatomy.parts.filter(p => ['lv', 'rv', 'ra', 'la'].includes(p.id)).flatMap(p => [...p.positions]);
+  for (const axis of [0, 1, 2]) {
+    const values = wall.filter((_, i) => i % 3 === axis);
+    const size = Math.max(...values) - Math.min(...values);
+    assert.ok(size > 80 && size < 150, `wall size ${size} mm on axis ${axis}`);
+  }
+  // 3.0 and 4.0 meshes are offset by 10 mm; a missing correction leaves vessels off the surface.
+  const coronary = anatomy.parts.find(p => p.id === 'ca').positions;
+  let near = 0, samples = 0;
+  for (let i = 0; i < coronary.length; i += 30) {
+    let best = Infinity;
+    for (let j = 0; j < wall.length; j += 3) best = Math.min(best, (wall[j] - coronary[i]) ** 2 + (wall[j + 1] - coronary[i + 1]) ** 2 + (wall[j + 2] - coronary[i + 2]) ** 2);
+    samples++; if (best < 25) near++;
+  }
+  assert.ok(near / samples > .9, `${near}/${samples} coronary samples within 5 mm of the wall`);
 });

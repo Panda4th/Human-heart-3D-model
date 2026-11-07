@@ -23,7 +23,8 @@
   },
   "devDependencies": {
     "@playwright/test": "^1.65.0",
-    "esbuild": "^0.28.2"
+    "esbuild": "^0.28.2",
+    "meshoptimizer": "1.3.0"
   },
   "private": true
 }
