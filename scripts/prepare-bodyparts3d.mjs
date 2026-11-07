@@ -141,7 +141,7 @@ const part = (ids, planes = [], ratio = .5) => simplify(weld(clip(merge(ids.map(
 const X = 0, Y = 1;
 const parts = {
   ...Object.fromEntries(Object.entries(chambers).map(([id, indices]) => [id, compact({ positions: wall.positions, indices })])),
-  ao: part(['FMA3736', 'FMA3768', 'FMA3784', 'FJ3479', 'FJ3483'], [[Y, 1175, 1], [Y, 1355, -1], [X, 45, -1]]),
+  ao: part(['FMA3736', 'FMA3768', 'FMA3784', 'FJ3417', 'FJ3479', 'FJ3483'], [[Y, 1175, 1], [Y, 1355, -1], [X, 45, -1]]),
   pa: part(['FJ2966', 'FJ2924', 'FJ3019'], [[X, -45, 1], [X, 70, -1]]),
   vc: part(['FMA4720', 'FMA10951'], [[Y, 1165, 1]]),
   pv: part(['FJ2925', 'FJ2933', 'FJ2944', 'FJ2950', 'FJ2955', 'FJ3020', 'FJ3040']),
