@@ -177,6 +177,16 @@ for (const width of [1440,390,320]) test(`offline model and interactions at widt
         && atModel===document.querySelector('canvas') && document.querySelector('.detail').contains(atNote)
         && document.scrollingElement.scrollHeight<=innerHeight && document.querySelector('main').scrollTop>0;
     }),{message:'model and description stay fixed; the part list scrolls in its own box below them'}).toBe(true);
+    // The model stayed black on the user's iPhone when the canvas sat inside the scrolling box under
+    // position:fixed (7535baf). Keep the canvas out of any scrolling box and any fixed element.
+    expect(await page.evaluate(()=>{
+      const bad=[];
+      for (let el=document.querySelector('canvas').parentElement; el && el!==document.body; el=el.parentElement) {
+        const s=getComputedStyle(el);
+        if (s.position==='fixed' || /auto|scroll/.test(s.overflowY)) bad.push(el.tagName+'.'+el.className);
+      }
+      return bad;
+    })).toEqual([]);
     await page.screenshot({path:testInfo.outputPath('interior-scrolled.png')});
     await page.locator('main').evaluate(m=>{m.scrollTop=0;});
   }

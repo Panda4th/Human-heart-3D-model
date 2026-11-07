@@ -13,6 +13,21 @@ function showError(message) {
   document.documentElement.dataset.ready = 'false';
   document.querySelectorAll('[data-viewer-control]').forEach(b => b.disabled = true);
 }
+// Phone layout: the model and the description go to #pinned above the scrolling <main>, and back to their
+// places on wider screens. Moving the canvas keeps its WebGL context. See the phone rules in template.html.
+{
+  const phone = matchMedia('(max-width:760px)');
+  const moved = [canvas.closest('.viewport'), document.querySelector('.detail')].map(el => {
+    const home = document.createComment('');
+    el.before(home);
+    return [el, home];
+  });
+  const place = () => {
+    for (const [el, home] of moved) phone.matches ? $('pinned').append(el) : home.after(el);
+  };
+  phone.addEventListener('change', place);
+  place();
+}
 try {
   const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true, stencil: true });
   renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
