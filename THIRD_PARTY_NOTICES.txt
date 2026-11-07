@@ -22,7 +22,7 @@ THE SOFTWARE.
 
 ------------------------------------------------------------------------
 
-BodyParts3D (heart and nearby vessels in the "実形状（試作）" mode)
+BodyParts3D (heart and nearby vessels shown in the viewer)
 
 BodyParts3D, © The Database Center for Life Science licensed under CC Attribution 4.0 International
 https://dbarchive.biosciencedbc.jp/en/bodyparts3d/desc.html
@@ -35,4 +35,6 @@ Changes made by this project: selected the heart wall from version 3.0 and the c
 cavities, pulmonary vessels, coronary arteries, cardiac veins and arch branches from
 version 4.0; moved the 4.0 meshes up by 10 mm to meet the 3.0 heart wall; cut vessels
 near the heart; reduced polygon counts; split the heart wall into chambers by the
-nearest cavity; converted coordinates to the viewer's axes.
+nearest cavity; converted coordinates to the viewer's axes; derived the positions of the
+explanatory conduction-system overlay from the 4.0 cavities, valves, papillary muscles,
+superior vena cava and coronary sinus (BodyParts3D itself has no conduction-system meshes).

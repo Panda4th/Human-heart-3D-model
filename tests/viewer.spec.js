@@ -17,7 +17,8 @@ for (const width of [1440,390,320]) test(`offline model and interactions at widt
   await page.goto(url);
   await expect(page.locator('html')).toHaveAttribute('data-ready','true');
   await expect(page.locator('#error')).toBeHidden();
-  await expect(page.locator('.part:visible')).toHaveCount(8);
+  await expect(page.locator('.part:visible')).toHaveCount(10);
+  await expect(page.locator('#anatomy-note')).toBeVisible();
   await page.getByRole('button',{name:'大動脈',exact:true}).click();
   await expect(page.locator('#name')).toHaveText('大動脈');
   const c=page.locator('canvas');
@@ -62,6 +63,11 @@ for (const width of [1440,390,320]) test(`offline model and interactions at widt
   const pickBox = await c.boundingBox();
   await page.mouse.click(pickBox.x + pickBox.width*anchor.x, pickBox.y + pickBox.height*anchor.y);
   await expect(page.locator('#name')).toHaveText('洞房結節');
+  // The dashed atrial line is 1 px wide; a click slightly beside it must still select it.
+  const lineAnchor = await page.locator('.model-label').filter({hasText:'心房への広がり'}).evaluate(el => ({x:parseFloat(el.style.left)/100,y:parseFloat(el.style.top)/100}));
+  await page.mouse.click(pickBox.x + pickBox.width*lineAnchor.x + 1.5, pickBox.y + pickBox.height*lineAnchor.y);
+  await expect(page.locator('#name')).toHaveText('心房への広がり');
+  await page.getByRole('button',{name:'洞房結節',exact:true}).click();
   for(const name of ['心房への広がり','房室結節','ヒス束','右脚・左脚','プルキンエ線維']) {
     await page.locator('#next').click(); await expect(page.locator('#name')).toHaveText(name);
   }
@@ -72,11 +78,10 @@ for (const width of [1440,390,320]) test(`offline model and interactions at widt
   await page.getByRole('button',{name:'房室結節',exact:true}).click();
   await page.screenshot({path:testInfo.outputPath('conduction.png'),fullPage:true});
   await expect(page.locator('#labels .model-label:visible')).toHaveText('房室結節');
-  await page.locator('#mode-anatomy').click();
+  await page.locator('#mode-exterior').click();
+  await expect(page.locator('#conduction-note')).toBeHidden();
   await expect(page.locator('.part:visible')).toHaveCount(10);
   await expect(page.locator('#name')).toHaveText('左心室');
-  await expect(page.locator('#anatomy-note')).toBeVisible();
-  await expect(page.locator('#schematic-note')).toBeHidden();
   await page.getByRole('button',{name:'冠動脈',exact:true}).click();
   await expect(page.locator('#name')).toHaveText('冠動脈');
   await c.scrollIntoViewIfNeeded();
@@ -84,12 +89,7 @@ for (const width of [1440,390,320]) test(`offline model and interactions at widt
   await page.mouse.click(anatomyBox.x + anatomyBox.width*.5, anatomyBox.y + anatomyBox.height*.55);
   await expect(page.locator('#name')).toHaveText(/^(左心室|右心室|右心房|左心房|冠動脈|冠静脈)$/);
   await page.locator('#view-back').click();
-  await page.screenshot({path:testInfo.outputPath('anatomy.png'),fullPage:true});
-  await page.locator('#mode-exterior').click();
-  await expect(page.locator('#anatomy-note')).toBeHidden();
-  await expect(page.locator('#conduction-note')).toBeHidden();
-  await expect(page.locator('.part:visible')).toHaveCount(8);
-  await expect(page.locator('#name')).toHaveText('左心室');
+  await page.screenshot({path:testInfo.outputPath('exterior-back.png'),fullPage:true});
   await page.waitForTimeout(100);
   const frames=await page.evaluate(()=>window.renderRequests);
   await page.waitForTimeout(250);

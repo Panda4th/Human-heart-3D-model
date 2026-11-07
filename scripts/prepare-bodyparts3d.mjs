@@ -149,6 +149,68 @@ const parts = {
   cv: part(v4ByName(cardiacVein), [], .4),
 };
 
+// Anchor points for the explanatory conduction overlay. BodyParts3D has no conduction-system
+// meshes, so positions are derived from nearby structures in the usual textbook relation:
+// SA node at the SVC-right atrium junction, AV node between the coronary sinus ostium and the
+// septal tricuspid leaflet hinge, His bundle to the septal crest below the non-coronary aortic cusp,
+// bundle branches on each side of the ventricular septum, Purkinje fibres on the cavity walls.
+const pts = id => { const p = load(id).positions, out = []; for (let i = 0; i < p.length; i += 3) out.push(p.slice(i, i + 3)); return out; };
+const d2 = (a, b) => (a[0] - b[0]) ** 2 + (a[1] - b[1]) ** 2 + (a[2] - b[2]) ** 2;
+const nearest = (set, q) => set.reduce((best, p) => d2(p, q) < d2(best, q) ? p : best);
+const mean = set => [0, 1, 2].map(k => set.reduce((s, p) => s + p[k], 0) / set.length);
+const lerp = (a, b, t) => a.map((v, k) => v + (b[k] - v) * t);
+const extreme = (set, score) => set.reduce((best, p) => score(p) > score(best) ? p : best);
+const cav = Object.fromEntries(Object.entries(cavities).map(([id, file]) => [id, pts(file)]));
+// Follow a polyline over a surface: sample it and snap each sample to the nearest surface vertex.
+const along = (surface, via, samples = 7) => {
+  const out = [];
+  for (let s = 0; s + 1 < via.length; s++) for (let i = 0; i < samples; i++) out.push(nearest(surface, lerp(via[s], via[s + 1], i / samples)));
+  out.push(nearest(surface, via.at(-1)));
+  let line = out.filter((p, i) => i === 0 || d2(p, out[i - 1]) > 4);
+  // Snapping zigzags between neighbouring vertices; smooth it while keeping both ends.
+  for (let pass = 0; pass < 4; pass++) line = line.map((p, i) => i === 0 || i === line.length - 1 ? p : lerp(p, mean([line[i - 1], line[i + 1]]), .6));
+  return line;
+};
+const svc = pts('FJ3645'), svcBottom = Math.min(...svc.map(p => p[1]));
+// OpenStax A&P 2e 19.2: SA node in the superior and posterior walls of the RA near the SVC orifice.
+const sa = extreme(svc.filter(p => p[1] < svcBottom + 6), p => -p[2]);
+const sinus = pts('FJ2655'), sinusRight = Math.min(...sinus.map(p => p[0]));
+const sinusOstium = mean(sinus.filter(p => p[0] < sinusRight + 5));
+// Septal tricuspid leaflet hinge: the part of the leaflet touching the RA cavity.
+const septalLeaflet = pts('FJ2436');
+const septalHinge = mean(septalLeaflet.filter(p => d2(nearest(cav.ra, p), p) < 4 ** 2));
+// The RA cavity mesh has no vertex there (tricuspid orifice), so keep the midpoint itself.
+const av = lerp(sinusOstium, septalHinge, .5);
+const septumLV = cav.lv.filter(p => d2(nearest(cav.rv, p), p) < 15 ** 2);
+const septumRV = cav.rv.filter(p => d2(nearest(cav.lv, p), p) < 15 ** 2);
+const nonCoronaryCusp = extreme(pts('FJ2431'), p => -p[1]);
+const bifurcation = nearest(septumLV, [nonCoronaryCusp[0], nonCoronaryCusp[1] - 12, nonCoronaryCusp[2]]);
+const mitral = mean([...pts('FJ2420'), ...pts('FJ2432')]);
+const lvApex = extreme(cav.lv, p => d2(p, mitral));
+const rvModerator = extreme(pts('FJ2419'), p => -p[1]); // base of the anterior papillary muscle
+const laAppendage = extreme(pts('FJ2438'), p => p[0] + p[1] * .5);
+const lvLateral = mean(pts('FJ2429')), lvAnterior = mean(pts('FJ2418'));
+const tricuspidAnterior = mean(pts('FJ2421')), pulmonary = mean([...pts('FJ2417'), ...pts('FJ2427'), ...pts('FJ2434')]);
+const atrialWall = [...pts('FJ2439'), ...pts('FJ2438')];
+const round = set => set.map(p => p.map(v => Math.round(v * 10) / 10));
+const conduction = {
+  nodes: { sa: round([sa])[0], av: round([av])[0] },
+  paths: {
+    atria: [round(along(cav.ra, [sa, lerp(sa, av, .5), av])), round(along(atrialWall, [sa, lerp(sa, laAppendage, .5), laAppendage]))],
+    his: [round(along(septumLV, [av, bifurcation], 4).map((p, i) => i === 0 ? av : p))],
+    branches: [
+      round(along(septumLV, [bifurcation, lerp(bifurcation, lvApex, .5), lvApex])),
+      round([bifurcation, ...along(septumRV, [bifurcation, lerp(bifurcation, rvModerator, .5)]), nearest(cav.rv, rvModerator)]),
+    ],
+    purkinje: [
+      round(along(cav.lv, [lvApex, lvLateral, lerp(lvLateral, mitral, .6)])),
+      round(along(cav.lv, [lvApex, lvAnterior, lerp(lvAnterior, mitral, .6)])),
+      round(along(cav.rv, [rvModerator, tricuspidAnterior])),
+      round(along(cav.rv, [rvModerator, lerp(rvModerator, pulmonary, .7)])),
+    ],
+  },
+};
+
 // Binary layout: "BP3D", uint32 JSON length, JSON, then per part Int16 positions (0.01 mm steps
 // around the heart centre) and Uint16 indices, each 4-byte aligned.
 const min = [Infinity, Infinity, Infinity], max = [-Infinity, -Infinity, -Infinity];
@@ -156,7 +218,7 @@ for (const mesh of Object.values(parts)) mesh.positions.forEach((v, i) => {
   min[i % 3] = Math.min(min[i % 3], v); max[i % 3] = Math.max(max[i % 3], v);
 });
 const center = [0, 1, 2].map(k => Math.round((min[k] + max[k]) / 2 * 100) / 100);
-const step = .01, chunks = [], meta = { format: 1, unit: 'mm', step, center, parts: [] };
+const step = .01, chunks = [], meta = { format: 2, unit: 'mm', step, center, parts: [], conduction };
 let offset = 0;
 for (const [id, mesh] of Object.entries(parts)) {
   const count = mesh.positions.length / 3;
