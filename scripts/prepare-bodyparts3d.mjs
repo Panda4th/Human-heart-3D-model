@@ -296,14 +296,22 @@ const lvLateral = mean(pts('FJ2429')), lvAnterior = mean(pts('FJ2418'));
 const tricuspidAnterior = mean(pts('FJ2421')), pulmonary = mean([...pts('FJ2417'), ...pts('FJ2427'), ...pts('FJ2434')]);
 const atrialWall = [...pts('FJ2439'), ...pts('FJ2438')];
 const round = set => set.map(p => p.map(v => Math.round(v * 10) / 10));
+// Keep schematic paths attached to the nodes that define them. Snapping is useful on a
+// chamber surface, but the His segment crosses the septum and is not an LV-surface path.
+const anchored = (line, start, end) => line.map((p, i) => i === 0 ? start : i === line.length - 1 ? end : p);
+const rightEnd = nearest(cav.rv, rvModerator);
+const rightSeptal = along(septumRV, [bifurcation, lerp(bifurcation, rvModerator, .5)]);
+// The papillary-muscle base is outside the septal candidate patch. Continue over
+// the RV endocardium rather than snapping its distal route back onto the septum.
+const rightDistal = along(cav.rv, [rightSeptal.at(-1), rightEnd]);
 const conduction = {
   nodes: { sa: round([sa])[0], av: round([av])[0] },
   paths: {
-    atria: [round(along(cav.ra, [sa, lerp(sa, av, .5), av])), round(along(atrialWall, [sa, lerp(sa, laAppendage, .5), laAppendage]))],
-    his: [round(along(septumLV, [av, bifurcation], 4).map((p, i) => i === 0 ? av : p))],
+    atria: [round(anchored(along(cav.ra, [sa, lerp(sa, av, .5), av]), sa, av)), round(anchored(along(atrialWall, [sa, lerp(sa, laAppendage, .5), laAppendage]), sa, laAppendage))],
+    his: [round([av, bifurcation])],
     branches: [
       round(along(septumLV, [bifurcation, lerp(bifurcation, lvApex, .5), lvApex])),
-      round([bifurcation, ...along(septumRV, [bifurcation, lerp(bifurcation, rvModerator, .5)]), nearest(cav.rv, rvModerator)]),
+      round(anchored([bifurcation, ...rightSeptal, ...rightDistal.slice(1)], bifurcation, rightEnd)),
     ],
     purkinje: [
       round(along(cav.lv, [lvApex, lvLateral, lerp(lvLateral, mitral, .6)])),
