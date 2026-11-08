@@ -193,7 +193,11 @@ test('moved by the heartbeat displacement together with the cavities and vessels
   createAnatomy(exterior, parts, new Uint8Array(bytes), .033);
   const beat = createBeat(exterior, parts);
   const moveMesh = m => { const positions = []; for (let i = 0; i < m.positions.length; i += 3) positions.push(...beat.displace([m.positions[i], m.positions[i + 1], m.positions[i + 2]])); return { positions, indices: m.indices }; };
-  const states = { 'atrial systole at its peak': { atria: 1, ventricles: 0 }, 'ventricular systole at its peak': { atria: 0, ventricles: 1 } };
+  // The peaks, and the halfway states the particles pass through (the displacement is not linear in position, so the peaks do not cover them).
+  const states = {
+    'atrial systole at its peak': { atria: 1, ventricles: 0 }, 'ventricular systole at its peak': { atria: 0, ventricles: 1 },
+    'atrial systole, half way': { atria: .5, ventricles: 0 }, 'ventricular systole, half way': { atria: 0, ventricles: .5 },
+  };
   for (const [name, state] of Object.entries(states)) {
     beat.set(state);
     const movedCavities = Object.fromEntries(cavityIds.map(id => [id, makeSolid(moveMesh(mesh('cav' + id)))]));

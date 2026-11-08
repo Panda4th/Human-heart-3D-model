@@ -39,6 +39,20 @@ export function phaseAt(ms) {
   return t < cycle.atrialSystole ? 0 : t < cycle.atrialSystole + cycle.ventricularSystole ? 1 : 2;
 }
 
+// Which valves are open at time ms. OpenStax 19.3 gives the order (atrioventricular valves open in atrial systole and
+// again once the ventricle has relaxed; semilunar valves open only after isovolumic contraction and close at the end of
+// ventricular systole) but no length for the two isovolumic periods, in which all four valves are closed. The lengths
+// below are chosen for display, not taken from the source; the blood-flow particles follow these windows.
+export const isovolumic = { contraction: 50, relaxation: 80 };
+export function valvesAt(ms) {
+  const t = ((ms % period) + period) % period;
+  const atrial = cycle.atrialSystole, systole = atrial + cycle.ventricularSystole;
+  return {
+    atrioventricular: t < atrial || t >= systole + isovolumic.relaxation,
+    arterial: t >= atrial + isovolumic.contraction && t < systole,
+  };
+}
+
 // Peak pull toward each chamber's centre, as a fraction of the distance, before the fall-off below. Chosen for
 // display, not measured: the walls move a few millimetres.
 export const amplitude = { atria: .15, ventricles: .25 };

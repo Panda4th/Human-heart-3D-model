@@ -5,7 +5,7 @@ import { readFileSync } from 'node:fs';
 import { createAnatomy } from '../src/anatomy.mjs';
 import { createConduction } from '../src/conduction.mjs';
 import { createCrossSection } from '../src/viewer-state.mjs';
-import { contraction, createBeat, cycle, period, phaseAt, phases } from '../src/heartbeat.mjs';
+import { contraction, createBeat, cycle, isovolumic, period, phaseAt, phases, valvesAt } from '../src/heartbeat.mjs';
 
 // Same structure as src/main.js: the beat is created after the cross-section and the conduction overlay.
 const heart = new THREE.Group(), exterior = new THREE.Group(), conduction = new THREE.Group(), parts = new Map();
@@ -41,6 +41,19 @@ test('the cycle follows OpenStax 19.3: atria, then ventricles, then ventricular 
     assert.ok(s.atria >= 0 && s.atria <= 1 && s.ventricles >= 0 && s.ventricles <= 1);
     assert.ok(Math.abs(contraction(t + 1).ventricles - s.ventricles) < .02, 'no jumps between frames');
   }
+});
+
+test('the valves follow OpenStax 19.3: atrioventricular open in atrial systole and late diastole, arterial only in the ejection', () => {
+  // The source gives the order, not the length of the two isovolumic periods; 50 and 80 ms are display values (heartbeat.mjs).
+  assert.deepEqual(isovolumic, { contraction: 50, relaxation: 80 });
+  const open = ms => { const v = valvesAt(ms); return `${v.atrioventricular ? 'AV' : '--'}/${v.arterial ? 'SL' : '--'}`; };
+  assert.deepEqual([0, 99, 100, 149, 150, 369, 370, 449, 450, 799, 800, -1].map(open),
+    ['AV/--', 'AV/--', '--/--', '--/--', '--/SL', '--/SL', '--/--', '--/--', 'AV/--', 'AV/--', 'AV/--', 'AV/--']);
+  for (let t = 0; t < period; t++) { const v = valvesAt(t); assert.ok(!(v.atrioventricular && v.arterial), `both open at ${t} ms`); }
+  // Atrial systole: atrioventricular valves open, arterial valves closed (the phase text says the same).
+  assert.equal(valvesAt(50).atrioventricular, true);
+  assert.equal(valvesAt(50).arterial, false);
+  assert.equal(valvesAt(1600 + 200).arterial, true, 'periodic');
 });
 
 test('each phase contracts its own chambers more than the others, by a few millimetres', () => {

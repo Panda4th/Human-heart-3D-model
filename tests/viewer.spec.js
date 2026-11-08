@@ -574,3 +574,72 @@ test('with reduced motion the beat plays once and returns to rest', async ({ bro
   expect((await stableShot(c)).equals(rest)).toBe(true);
   await context.close();
 });
+
+// The blood-flow view draws particles (blue on the right-heart routes, red on the left-heart routes) inside walls drawn at
+// opacity 0.12. A lit particle is not a pure colour, so these rules were found by measuring (Chromium/SwiftShader, at rest,
+// pixels counted at 1440 px width / 390 px width): the red rule (red - green > 120, red > 170, blue < 110) matched 0 / 0 in the
+// exterior view and 322 / 97 in the flow view; the blue rule (blue - red > 90, blue > 140) matched 207 / 38 in the exterior view
+// (the pulmonary arteries and veins are bluish) and 729 / 218 in the flow view.
+const particlePixels = (page, png) => page.evaluate(async b64 => {
+  const image = new Image(); image.src = 'data:image/png;base64,' + b64; await image.decode();
+  const canvas = document.createElement('canvas'); canvas.width = image.width; canvas.height = image.height;
+  const context = canvas.getContext('2d'); context.drawImage(image, 0, 0);
+  const { data } = context.getImageData(0, 0, image.width, image.height);
+  let blue = 0, red = 0;
+  for (let i = 0; i < data.length; i += 4) {
+    if (data[i + 2] - data[i] > 90 && data[i + 2] > 140) blue++;
+    if (data[i] - data[i + 1] > 120 && data[i] > 170 && data[i + 2] < 110) red++;
+  }
+  return { blue, red };
+}, png.toString('base64'));
+for (const width of [1440, 390]) test(`flow view: particles appear, move with the beat, stop when it stops and leave with the mode at width ${width}`, async ({ browser }) => {
+  const mobile = width < 700;
+  const context = await browser.newContext({ viewport: { width, height: 900 }, hasTouch: mobile, isMobile: mobile });
+  const page = await context.newPage(), errors = [];
+  page.on('pageerror', e => errors.push(e.message));
+  await page.addInitScript(() => {
+    window.renderRequests = 0;
+    const original = window.requestAnimationFrame.bind(window);
+    window.requestAnimationFrame = cb => { window.renderRequests++; return original(cb); };
+  });
+  await page.goto(url);
+  await expect(page.locator('html')).toHaveAttribute('data-ready', 'true');
+  await page.addStyleTag({ content: '#beat-phase{visibility:hidden}' });
+  const c = page.locator('canvas');
+  await c.scrollIntoViewIfNeeded();
+  const exterior = await particlePixels(page, await stableShot(c));
+  expect(exterior.red).toBe(0);
+  await page.locator('#mode-flow').click();
+  await expect(page.locator('#mode-flow')).toHaveAttribute('aria-pressed', 'true');
+  await expect(page.locator('#mode-number')).toHaveText('04 / FLOW');
+  await expect(page.locator('#flow-note')).toBeVisible();
+  await expect(page.locator('#conduction-note')).toBeHidden();
+  await expect(page.locator('.part:visible')).toHaveCount(10);
+  await page.getByRole('button', { name: '右心室', exact: true }).click();
+  await expect(page.locator('#name')).toHaveText('右心室');
+  await c.scrollIntoViewIfNeeded();
+  const rest = await stableShot(c), restPixels = await particlePixels(page, rest);
+  expect(restPixels.red).toBeGreaterThan(40);
+  expect(restPixels.blue).toBeGreaterThan(2 * exterior.blue + 50);
+  // While the beat runs the picture keeps changing; the clock decides the phase, so a pause between two pictures is enough.
+  await page.locator('#beat-play').click();
+  const first = await c.screenshot();
+  await page.waitForTimeout(700);
+  expect((await c.screenshot()).equals(first)).toBe(false);
+  await page.locator('#beat-play').click();
+  const stopped = await stableShot(c);
+  expect(stopped.equals(rest)).toBe(false);
+  const frames = await page.evaluate(() => window.renderRequests);
+  await page.waitForTimeout(250);
+  expect(await page.evaluate(() => window.renderRequests)).toBe(frames);
+  // Back in the exterior view the particles are gone and the walls are opaque again.
+  await page.locator('#mode-exterior').click();
+  await expect(page.locator('#flow-note')).toBeHidden();
+  await settle(page);
+  const after = await particlePixels(page, await stableShot(c));
+  expect(after.red).toBe(0);
+  expect(after.blue).toBeLessThan(restPixels.blue / 2);
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+  expect(errors).toEqual([]);
+  await context.close();
+});

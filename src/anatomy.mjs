@@ -54,7 +54,8 @@ export function createAnatomy(parent, parts, bytes, scale) {
   for (const [id, name, en, desc, color, kind] of definitions) {
     const group = new THREE.Group();
     // modes lists the view modes in which this part can be selected.
-    const modes = kind === 'interior' ? ['interior'] : chambers.includes(id) ? ['exterior', 'interior'] : ['exterior'];
+    // The blood-flow view draws the exterior walls almost transparent, so the exterior parts can be selected there too.
+    const modes = kind === 'interior' ? ['interior'] : chambers.includes(id) ? ['exterior', 'interior', 'flow'] : ['exterior', 'flow'];
     group.userData = { id, name, en, desc, color, kind, modes };
     const mesh = byId.get(id);
     const geometry = new THREE.BufferGeometry();
