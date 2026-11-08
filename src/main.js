@@ -68,13 +68,23 @@ try {
   const conductionCut = new THREE.Plane(new THREE.Vector3(0, 0, -1), keepAll);
   conduction.traverse(o => { if (o.material) o.material.clippingPlanes = [conductionCut]; });
   const bounds = modelSphere(heart);
-  // World-space box of every part, for telling whether the current cut leaves anything of it.
-  const partBox = new Map([...parts].map(([id, group]) => [id, new THREE.Box3().setFromObject(group)]));
+  // World-space box of every part, for telling whether the current cut leaves anything of it. The beat moves the walls by a few
+  // millimetres, so the box is the union over the rest shape and the most contracted atria and ventricles (every point moves
+  // linearly with the two contraction amounts, so these three shapes bound every state the beat reaches): a part counts as
+  // removed only when no moment of the beat leaves any of it, and "move to where it shows" goes far enough for all of them.
+  const partBox = new Map([...parts].map(([id, group]) => [id, new THREE.Box3().setFromObject(group, true)]));
+  for (const state of [{ atria: 1, ventricles: 0 }, { atria: 0, ventricles: 1 }]) {
+    beat.set(state);
+    for (const [id, group] of parts) partBox.get(id).union(new THREE.Box3().setFromObject(group, true));
+  }
+  beat.set({ atria: 0, ventricles: 0 });
   // Blood-flow particles (flow.mjs) travel along meta.flow.routes. Their instance matrices are written in the millimetre frame
   // every frame, after the beat has moved the walls, through the same displacement (beat.displace), so they stay inside.
   // The mesh is a helper: createBeat must not deform its sphere geometry, and it is not a part (no clicking, no cut).
   const flow = createFlow(meta.flow);
-  const dots = new THREE.InstancedMesh(new THREE.SphereGeometry(1.5, 12, 8), new THREE.MeshStandardMaterial({ roughness: .45, metalness: 0 }), flow.count);
+  // On the cross-section the particles are cut by the same plane as the conduction overlay; the plane keeps everything elsewhere.
+  const flowCut = new THREE.Plane(new THREE.Vector3(0, 0, -1), keepAll);
+  const dots = new THREE.InstancedMesh(new THREE.SphereGeometry(1.5, 12, 8), new THREE.MeshStandardMaterial({ roughness: .45, metalness: 0, clippingPlanes: [flowCut] }), flow.count);
   const dotColors = { right: new THREE.Color(0x4a9bff), left: new THREE.Color(0xff5a4f) };
   for (let k = 0; k < flow.count; k++) dots.setColorAt(k, dotColors[flow.side(k)]);
   dots.userData.helper = true;
@@ -124,7 +134,7 @@ try {
     flow: ['04 / FLOW', '血のめぐりを、追う。', 'lv'],
   };
   controls.target.copy(bounds.center);
-  let mode = 'exterior', selected = 'lv', frame = 0, previousTime = 0, failed = false, overlay = false, pick = null;
+  let mode = 'exterior', selected = 'lv', frame = 0, previousTime = 0, failed = false, overlay = false, flowOverlay = false, pick = null;
   // beatTime is the time within the heartbeat in real milliseconds; it advances only while beating.
   let beating = false, realSpeed = false, beatTime = 0, shownPhase = -1;
   // With the system setting "reduce motion" the beat plays once per press and stops at rest, instead of looping.
@@ -210,7 +220,6 @@ try {
       if (done) {
         beating = false;
         beatTime = 0;
-        $('beat-play').setAttribute('aria-pressed', 'false');
         $('beat-play').textContent = playLabel();
       }
       beat.set(contraction(beatTime));
@@ -333,6 +342,15 @@ try {
     $('interior-conduction').setAttribute('aria-pressed', String(overlay));
     updateCutNotice();
   }
+  // Particles are shown in the flow view, and on the cross-section when their overlay is on (the leaflets of the source data stay).
+  function showFlowOverlay() {
+    const interior = mode === 'interior';
+    dots.visible = mode === 'flow' || (interior && flowOverlay);
+    flowCut.constant = interior ? cutPlane.constant : keepAll;
+    flowStale = true;
+    $('interior-flow').setAttribute('aria-pressed', String(flowOverlay));
+    $('flow-overlay-note').hidden = !(interior && flowOverlay);
+  }
   function setMode(next) {
     mode = next;
     stopRotation();
@@ -341,11 +359,10 @@ try {
     showConduction();
     // The walls are almost transparent where something inside them is shown: the conduction system and the blood.
     const conductionView = mode === 'conduction' || mode === 'flow';
-    dots.visible = mode === 'flow';
+    showFlowOverlay();
     shownPhase = -1;
     if (!$('beat-phase').hidden) showPhase();
     for (const { mesh } of leaflets) mesh.visible = mode === 'flow';
-    flowStale = true;
     for (const group of parts.values()) {
       if (group.userData.kind !== 'exterior') continue;
       group.traverse(object => {
@@ -377,6 +394,7 @@ try {
     pick = null; // the ring marked a point on the previous plane
     crossSection.update();
     showConduction();
+    showFlowOverlay();
     requestRender();
   }
   $('cut-depth').oninput = applyDepth;
@@ -394,6 +412,11 @@ try {
     if (!selectable(parts.get(selected))) select(modeText.interior[2]);
     else requestRender();
   };
+  $('interior-flow').onclick = () => {
+    flowOverlay = !flowOverlay;
+    showFlowOverlay();
+    requestRender();
+  };
     $('previous').onclick = () => select(stageOrder[Math.max(0, stageOrder.indexOf(selected) - 1)]);
   $('next').onclick = () => select(stageOrder[Math.min(stageOrder.length - 1, stageOrder.indexOf(selected) + 1)]);
   for (const view of ['front', 'back', 'left']) $(`view-${view}`).onclick = () => setView(view);
@@ -409,7 +432,6 @@ try {
   // Stopping keeps the current shape and phase, so a moment of the beat can be looked at.
   $('beat-play').onclick = () => {
     beating = !beating;
-    $('beat-play').setAttribute('aria-pressed', String(beating));
     $('beat-play').textContent = beating ? '拍動を止める' : playLabel();
     previousTime = 0;
     showPhase();
