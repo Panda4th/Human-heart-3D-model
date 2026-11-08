@@ -1,0 +1,220 @@
+{
+  "schema": 1,
+  "unit": "mm",
+  "axes": [
+    "patient left",
+    "superior",
+    "anterior"
+  ],
+  "inputs": {
+    "v3Sha256": "2125f6d761b14ead4ee64f71713f56f3f0f29982693ff20aac63474470cb92f4",
+    "v4Sha256": "9fbc713fffeee924a5a657d9813d84d7eb957bded63adb854931dd5e3eb61c97",
+    "matchRecorded": true
+  },
+  "interpretation": "Algorithm sensitivity only; no anatomical validation. No bundle is written.",
+  "pointRoles": {
+    "av": "Valve-derived proxy, not an observed compact-node distal boundary",
+    "bifurcation": "Shared model branch point on LV cavity, not an observed RBB origin",
+    "nearestRV": "Nearest RV septal candidate, not an observed RBB origin"
+  },
+  "nominal": {
+    "hingeRange": 4,
+    "septumRange": 15,
+    "start": [
+      -2.7209,
+      1245.3,
+      124.093
+    ],
+    "end": [
+      15.4684,
+      1240.82,
+      122.125
+    ],
+    "delta": [
+      18.1893,
+      -4.48,
+      -1.968
+    ],
+    "length": 18.835977768355963
+  },
+  "displayed": {
+    "start": [
+      -2.7,
+      1245.3,
+      124.1
+    ],
+    "end": [
+      15.5,
+      1240.8,
+      122.1
+    ],
+    "delta": [
+      18.2,
+      -4.5,
+      -2
+    ],
+    "length": 18.854442447338503
+  },
+  "hingeSweep": [
+    {
+      "hingeRange": 3,
+      "start": [
+        -3.4037,
+        1245.85,
+        125.054
+      ],
+      "end": [
+        15.4684,
+        1240.82,
+        122.125
+      ],
+      "delta": [
+        18.8721,
+        -5.03,
+        -2.929
+      ],
+      "length": 19.749350730958216
+    },
+    {
+      "hingeRange": 4,
+      "start": [
+        -2.7209,
+        1245.3,
+        124.093
+      ],
+      "end": [
+        15.4684,
+        1240.82,
+        122.125
+      ],
+      "delta": [
+        18.1893,
+        -4.48,
+        -1.968
+      ],
+      "length": 18.835977768355963
+    },
+    {
+      "hingeRange": 5,
+      "start": [
+        -1.3043,
+        1243.52,
+        121.634
+      ],
+      "end": [
+        15.4684,
+        1240.82,
+        122.125
+      ],
+      "delta": [
+        16.7727,
+        -2.7,
+        0.491
+      ],
+      "length": 16.995701673729165
+    },
+    {
+      "hingeRange": 6,
+      "start": [
+        -0.9638,
+        1242.94,
+        121.237
+      ],
+      "end": [
+        15.4684,
+        1240.82,
+        122.125
+      ],
+      "delta": [
+        16.4322,
+        -2.12,
+        0.888
+      ],
+      "length": 16.592188897174616
+    }
+  ],
+  "septumSweep": [
+    {
+      "septumRange": 10,
+      "start": [
+        -2.7209,
+        1245.3,
+        124.093
+      ],
+      "end": [
+        15.4684,
+        1240.82,
+        122.125
+      ],
+      "delta": [
+        18.1893,
+        -4.48,
+        -1.968
+      ],
+      "length": 18.835977768355963
+    },
+    {
+      "septumRange": 15,
+      "start": [
+        -2.7209,
+        1245.3,
+        124.093
+      ],
+      "end": [
+        15.4684,
+        1240.82,
+        122.125
+      ],
+      "delta": [
+        18.1893,
+        -4.48,
+        -1.968
+      ],
+      "length": 18.835977768355963
+    },
+    {
+      "septumRange": 20,
+      "start": [
+        -2.7209,
+        1245.3,
+        124.093
+      ],
+      "end": [
+        15.4684,
+        1240.82,
+        122.125
+      ],
+      "delta": [
+        18.1893,
+        -4.48,
+        -1.968
+      ],
+      "length": 18.835977768355963
+    }
+  ],
+  "endpointCounterexample": {
+    "warning": "Changing the measurement endpoint is NOT a proposed anatomical correction.",
+    "start": [
+      -2.7209,
+      1245.3,
+      124.093
+    ],
+    "end": [
+      12.5435,
+      1236.91,
+      129.005
+    ],
+    "delta": [
+      15.2644,
+      -8.39,
+      4.912
+    ],
+    "length": 18.09756202807433
+  },
+  "missingObservedBoundaries": [
+    "compact-node distal end",
+    "penetrating/branching bundle junction",
+    "RBB origin",
+    "membranous septum"
+  ]
+}

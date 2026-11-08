@@ -1,5 +1,6 @@
 // Convert BodyParts3D OBJ files into the compact mesh bundle embedded in index.html.
 // Usage: node scripts/prepare-bodyparts3d.mjs <BodyParts3D_3.0_obj_99.zip> <partof_BP3D_4.0_obj_99.zip>
+// Add --inspect-landmarks for a read-only JSON sensitivity report (no bundle is written).
 // Downloads (free, no registration): https://dbarchive.biosciencedbc.jp/en/bodyparts3d/download.html
 // and https://dbarchive.biosciencedbc.jp/data/bodyparts3d/20110915/
 import { readFileSync, writeFileSync, mkdirSync } from 'node:fs';
@@ -18,8 +19,10 @@ const expectedSha256 = {
   [v3Path]: '2125f6d761b14ead4ee64f71713f56f3f0f29982693ff20aac63474470cb92f4', // BodyParts3D_3.0_obj_99.zip
   [v4Path]: '9fbc713fffeee924a5a657d9813d84d7eb957bded63adb854931dd5e3eb61c97', // partof_BP3D_4.0_obj_99.zip
 };
+const inputSha256 = {};
 for (const [path, expected] of Object.entries(expectedSha256)) {
   const actual = createHash('sha256').update(readFileSync(path)).digest('hex');
+  inputSha256[path] = actual;
   if (actual !== expected && process.env.ALLOW_UNVERIFIED_INPUT !== '1') throw new Error(`${path}: SHA-256 ${actual} does not match the recorded ${expected}`);
 }
 
@@ -269,7 +272,8 @@ const svc = pts('FJ3645'), svcBottom = Math.min(...svc.map(p => p[1]));
 const sa = extreme(svc.filter(p => p[1] < svcBottom + 6), p => -p[2]);
 // Septal tricuspid leaflet hinge: the part of the leaflet touching the RA cavity.
 const septalLeaflet = pts('FJ2436');
-const septalHinge = septalLeaflet.filter(p => d2(nearest(cav.ra, p), p) < 4 ** 2);
+const hingeWithin = mm => septalLeaflet.filter(p => d2(nearest(cav.ra, p), p) < mm ** 2);
+const septalHinge = hingeWithin(4);
 // Aortic cusps. The data names them anterior, left posterior and right posterior. The coronary trunks show which is
 // which: the right coronary trunk (FJ2723) starts nearest the anterior cusp, the left (FJ2737) nearest the left
 // posterior cusp, so the right posterior cusp is the non-coronary cusp (measured 2026-11-07, see README).
@@ -279,15 +283,53 @@ const nonCoronary = pts('FJ2431'), rightCoronary = pts('FJ2435');
 // central fibrous body by the aortic root. The tendon and the central fibrous body are not in the data, so the apex is
 // taken as the hinge point nearest the non-coronary cusp. (Until 2026-11-07 the node sat midway between the sinus
 // ostium and the hinge's centre, a third of the way from the ostium to this apex.)
-const av = septalHinge.reduce((best, p) => d2(nearest(nonCoronary, p), p) < d2(nearest(nonCoronary, best), best) ? p : best);
+const avFromHinge = hinge => {
+  if (!hinge.length) throw new Error('No septal leaflet vertices within the hinge candidate range');
+  return hinge.reduce((best, p) => d2(nearest(nonCoronary, p), p) < d2(nearest(nonCoronary, best), best) ? p : best);
+};
+const av = avFromHinge(septalHinge);
 const septumLV = cav.lv.filter(p => d2(nearest(cav.rv, p), p) < 15 ** 2);
 const septumRV = cav.rv.filter(p => d2(nearest(cav.lv, p), p) < 15 ** 2);
 // Branching bundle: on the crest of the septum beneath the non-coronary and right coronary cusps (Stephenson 2017,
 // Chen et al. 2025). Taken as the septal point of the LV cavity closest to both cusps' lowest points. No distance is
 // set; the distances it gives are measured afterwards, so their agreement with the papers is built in, not a check.
+// This is a shared schematic junction, not an identified RBB origin. Kawashima/Sato 2021
+// distinguish the LBB take-off along the branching bundle from its distal continuation into RBB.
 const nadir = set => extreme(set, p => -p[1]);
 const [nccNadir, rccNadir] = [nadir(nonCoronary), nadir(rightCoronary)];
-const bifurcation = septumLV.reduce((best, p) => Math.sqrt(d2(p, nccNadir)) + Math.sqrt(d2(p, rccNadir)) < Math.sqrt(d2(best, nccNadir)) + Math.sqrt(d2(best, rccNadir)) ? p : best);
+const bifurcationFromSeptum = septum => {
+  if (!septum.length) throw new Error('No LV vertices within the septal candidate range');
+  return septum.reduce((best, p) => Math.sqrt(d2(p, nccNadir)) + Math.sqrt(d2(p, rccNadir)) < Math.sqrt(d2(best, nccNadir)) + Math.sqrt(d2(best, rccNadir)) ? p : best);
+};
+const bifurcation = bifurcationFromSeptum(septumLV);
+if (process.argv.includes('--inspect-landmarks')) {
+  const rounded = p => p.map(v => Math.round(v * 10000) / 10000);
+  const delta = (a, b) => rounded(b.map((v, k) => v - a[k]));
+  const axis = (a, b) => ({ start: rounded(a), end: rounded(b), delta: delta(a, b), length: Math.sqrt(d2(a, b)) });
+  const nearestRV = nearest(septumRV, bifurcation);
+  console.log(JSON.stringify({
+    schema: 1,
+    unit: 'mm',
+    axes: ['patient left', 'superior', 'anterior'],
+    inputs: { v3Sha256: inputSha256[v3Path], v4Sha256: inputSha256[v4Path], matchRecorded: Object.keys(expectedSha256).every(path => expectedSha256[path] === inputSha256[path]) },
+    interpretation: 'Algorithm sensitivity only; no anatomical validation. No bundle is written.',
+    pointRoles: {
+      av: 'Valve-derived proxy, not an observed compact-node distal boundary',
+      bifurcation: 'Shared model branch point on LV cavity, not an observed RBB origin',
+      nearestRV: 'Nearest RV septal candidate, not an observed RBB origin',
+    },
+    nominal: { hingeRange: 4, septumRange: 15, ...axis(av, bifurcation) },
+    displayed: axis(av.map(v => Math.round(v * 10) / 10), bifurcation.map(v => Math.round(v * 10) / 10)),
+    hingeSweep: [3, 4, 5, 6].map(mm => ({ hingeRange: mm, ...axis(avFromHinge(hingeWithin(mm)), bifurcation) })),
+    septumSweep: [10, 15, 20].map(mm => ({ septumRange: mm, ...axis(av, bifurcationFromSeptum(cav.lv.filter(p => d2(nearest(cav.rv, p), p) < mm ** 2))) })),
+    endpointCounterexample: {
+      warning: 'Changing the measurement endpoint is NOT a proposed anatomical correction.',
+      ...axis(av, nearestRV),
+    },
+    missingObservedBoundaries: ['compact-node distal end', 'penetrating/branching bundle junction', 'RBB origin', 'membranous septum'],
+  }, null, 2));
+  process.exit(0);
+}
 const mitral = mean([...pts('FJ2420'), ...pts('FJ2432')]);
 const lvApex = extreme(cav.lv, p => d2(p, mitral));
 const rvModerator = extreme(pts('FJ2419'), p => -p[1]); // base of the anterior papillary muscle
