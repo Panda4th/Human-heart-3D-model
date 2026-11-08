@@ -439,3 +439,34 @@ test('regression of the Koch-apex rule (not anatomical validation): the AV node 
   assert.ok(nearestTo(bifurcation, 'aov') < 8, `branching point ${nearestTo(bifurcation, 'aov').toFixed(1)} mm from the aortic valve`);
   assert.deepEqual(paths.his[0][0], nodes.av, 'the His bundle starts at the AV node');
 });
+
+test('schematic conduction paths share their junctions and have no unsampled long right-branch tail', () => {
+  const { nodes, paths } = anatomy.meta.conduction;
+  for (const atrial of paths.atria) assert.deepEqual(atrial[0], nodes.sa, 'both atrial routes start at the sinus node');
+  assert.deepEqual(paths.atria[0].at(-1), nodes.av, 'atrial route meets the AV node');
+  assert.deepEqual(paths.his[0][0], nodes.av, 'His bundle starts at the AV node');
+  for (const branch of paths.branches) assert.deepEqual(branch[0], paths.his[0].at(-1), 'both branches meet His');
+  for (const [i, fibre] of paths.purkinje.entries()) assert.deepEqual(fibre[0], paths.branches[i < 2 ? 0 : 1].at(-1), 'fibres meet their branch');
+  const right = paths.branches[1];
+  const gaps = right.slice(1).map((p, i) => Math.hypot(...p.map((v, k) => v - right[i][k])));
+  assert.ok(Math.max(...gaps) < 12, `unsampled right-branch interval: ${Math.max(...gaps)} mm`);
+});
+
+test('His schematic crosses directly between its anchors; sinus node is elongated caudally', () => {
+  const root = new THREE.Group(), map = new Map();
+  createConduction(root, map, anatomy.meta.conduction);
+  const curve = map.get('his').children[0].geometry.parameters.path;
+  const start = curve.getPoint(0), end = curve.getPoint(1), axis = end.clone().sub(start);
+  let previous = -Infinity;
+  for (const point of curve.getPoints(100)) {
+    const t = point.clone().sub(start).dot(axis) / axis.lengthSq();
+    assert.ok(t >= previous - 1e-6 && t >= -1e-6 && t <= 1 + 1e-6, 'no return or overshoot');
+    assert.ok(point.distanceTo(start.clone().addScaledVector(axis, t)) < .01, 'no LV-surface detour');
+    previous = t;
+  }
+  root.updateMatrixWorld(true);
+  const box = new THREE.Box3().setFromObject(map.get('sa')), size = box.getSize(new THREE.Vector3());
+  assert.ok(size.y > size.x * 3 && size.y > size.z * 3, 'elongated instead of spherical');
+  assert.ok(box.containsPoint(new THREE.Vector3(...anatomy.meta.conduction.nodes.sa)), 'head anchor remains inside the node');
+  assert.ok(box.getCenter(new THREE.Vector3()).y < anatomy.meta.conduction.nodes.sa[1], 'body extends caudally');
+});
