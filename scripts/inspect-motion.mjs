@@ -236,11 +236,13 @@ async function reducedBeat(mode,speed,disablePlay=false) {
     assert.ok(trace.length>0,'no reduced-motion progress');
     assert.equal(trace[0].from,0,'one beat must start at zero');
     for(let i=0;i<trace.length;i++){
-      assert.ok(trace[i].to>trace[i].from,'one-beat clock did not advance');
+      // The first render after pressing play intentionally has delta=0 (previousTime is reset).
+      assert.ok(trace[i].to>=trace[i].from,'one-beat clock moved backwards');
       assert.ok(trace[i].to<=period,'one-beat clock advanced beyond the period');
       if(i)assert.equal(trace[i].from,trace[i-1].to,'one-beat progress is discontinuous');
     }
     const maxAdvance=Math.max(...trace.map(t=>t.to));
+    assert.ok(trace.some(t=>t.to>t.from),'one-beat clock never advanced');
     assert.equal(maxAdvance,period,'one beat did not reach the period');
     assert.equal(state.beating,false,'single beat did not stop');
     assert.equal(state.beatTime,0,'single beat did not return to rest');
