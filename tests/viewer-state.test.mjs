@@ -393,10 +393,10 @@ test('removedByCut agrees with a vertex-by-vertex check for every part at severa
   assert.equal(at(0, 'his'), false);
 });
 
-test('a conduction label can sit behind an opaque wall in the interior view (the His bundle at depth 0, seen from the front)', () => {
+test('a conduction label can sit behind an opaque wall in the interior view (the His bundle at slider -0.3, seen from the front)', () => {
   const root = new THREE.Group(), ext = new THREE.Group(), map = new Map(), cond = new THREE.Group();
   root.add(ext); createAnatomy(ext, map, bundle, .033);
-  const plane = new THREE.Plane(new THREE.Vector3(0, 0, -1), 0), section = createCrossSection(ext, map, plane, 0xc98478);
+  const plane = new THREE.Plane(new THREE.Vector3(0, 0, -1), .3), section = createCrossSection(ext, map, plane, 0xc98478); // slider -0.3
   section.setEnabled(true);
   ext.add(cond); const anchors = createConduction(cond, map, meta.conduction);
   root.updateMatrixWorld(true);
@@ -413,10 +413,29 @@ test('a conduction label can sit behind an opaque wall in the interior view (the
     const hit = pickHit(ray, occluders, [plane], section.solids);
     behind.set(id, Boolean(hit) && hit.distance < distance - .04);
   }
-  // Measured on 2026-11-07 with this scene: His behind the cut face of the left ventricle, the AV node behind the
-  // tricuspid valve; the SA node and the atrial line in view.
-  assert.equal(behind.get('his'), true, 'the report: the ray to the His label meets the left ventricle first');
+  // Measured on 2026-11-07 with this scene (positions from the Koch-apex rule): His behind the cut face of the left
+  // ventricle, the AV node behind the cut face of the right ventricle, the SA node behind the right atrium; the Purkinje
+  // label in view. (With the earlier positions the report's case was the His bundle at slider 0.)
+  assert.equal(behind.get('his'), true, 'the ray to the His label meets the left ventricle first');
   assert.equal(behind.get('av'), true);
-  assert.equal(behind.get('sa'), false);
-  assert.equal(behind.get('atria'), false);
+  assert.equal(behind.get('sa'), true);
+  assert.equal(behind.get('purkinje'), false);
+});
+
+test('regression of the Koch-apex rule (not anatomical validation): the AV node sits on the tricuspid valve next to the aortic root, the branching point under the aortic valve', () => {
+  // Measured on 2026-11-07 from the bundle: AV node 0.0 mm from the tricuspid valve and 10.3 mm from the aortic valve,
+  // branching point 4.6 mm from the aortic valve. With the earlier rule (midpoint towards the coronary sinus, 12 mm below
+  // the cusp) the values were 19.7 and 12.2 mm, which these bounds reject. The rule picks points near the valves, so
+  // these numbers follow from the rule and do not confirm the anatomy.
+  const nearestTo = (q, id) => {
+    const p = anatomy.parts.find(x => x.id === id).positions;
+    let best = Infinity;
+    for (let i = 0; i < p.length; i += 3) best = Math.min(best, Math.hypot(p[i] - q[0], p[i + 1] - q[1], p[i + 2] - q[2]));
+    return best;
+  };
+  const { nodes, paths } = anatomy.meta.conduction, bifurcation = paths.his[0].at(-1);
+  assert.ok(nearestTo(nodes.av, 'tv') < 2, `AV node ${nearestTo(nodes.av, 'tv').toFixed(1)} mm from the tricuspid valve`);
+  assert.ok(nearestTo(nodes.av, 'aov') < 14, `AV node ${nearestTo(nodes.av, 'aov').toFixed(1)} mm from the aortic valve`);
+  assert.ok(nearestTo(bifurcation, 'aov') < 8, `branching point ${nearestTo(bifurcation, 'aov').toFixed(1)} mm from the aortic valve`);
+  assert.deepEqual(paths.his[0][0], nodes.av, 'the His bundle starts at the AV node');
 });
