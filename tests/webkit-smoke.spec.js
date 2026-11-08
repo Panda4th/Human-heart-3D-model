@@ -17,6 +17,8 @@ test('WebKit engine: single HTML starts, switches modes and selects parts',async
   await expect(page.locator('.part:visible')).toHaveCount(8);
   await page.getByRole('button',{name:'ヒス束（分岐区間）',exact:true}).click();
   await expect(page.locator('#name')).toHaveText('ヒス束（分岐区間）');
+  await page.getByRole('button',{name:'左脚',exact:true}).click();
+  await expect(page.locator('#description')).toContainText('幅のある面');
   await page.locator('#mode-interior').click();
   await expect(page.locator('.part:visible')).toHaveCount(9);
   await page.locator('#cut-depth').fill('0');

@@ -376,7 +376,7 @@ for (const width of [1440, 390]) test(`His intervals select independently at wid
   await context.close();
 });
 
-for (const width of [1440, 390]) test(`the two bundle branches are selected and drawn separately at width ${width}`, async ({ browser }) => {
+for (const width of [1440, 390]) test(`the two bundle branches are selected and drawn separately at width ${width}`, async ({ browser }, testInfo) => {
   const mobile = width < 700;
   const context = await browser.newContext({ viewport: { width, height: 900 }, hasTouch: mobile, isMobile: mobile });
   const page = await context.newPage();
@@ -395,6 +395,13 @@ for (const width of [1440, 390]) test(`the two bundle branches are selected and 
   await expect(page.locator('#labels .model-label:visible')).toHaveText('左脚');
   await settle(page);
   expect((await stableShot(c)).equals(right)).toBe(false);
+  await expect(page.locator('#description')).toContainText('幅のある面');
+  await expect(page.locator('#description')).toContainText('全員共通の3本');
+  await page.screenshot({path:testInfo.outputPath('left-bundle-front.png'),fullPage:!mobile});
+  await page.locator('#view-left').click();
+  await settle(page); await stableShot(c);
+  await page.screenshot({path:testInfo.outputPath('left-bundle-side.png'),fullPage:!mobile});
+  await page.locator('#view-front').click(); await settle(page);
   // The label of each branch sits on its own path: clicking at the anchor picks that branch.
   await clickAnchor(page, '左脚');
   await expect(page.locator('#name')).toHaveText('左脚');
