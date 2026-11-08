@@ -1,6 +1,9 @@
 // Reproducible visual inspection. Builds a temporary instrumented page; index.html is untouched.
 // Run from the repository root: node scripts/inspect-motion.mjs <output-directory>
-import { build } from 'esbuild';
+import assert from 'node:assert/strict';
+import { createHash } from 'node:crypto';
+import { buildStandalone } from './build-standalone.mjs';
+import { period, contraction } from '../src/heartbeat.mjs';
 import { chromium } from '@playwright/test';
 import { readFile, writeFile, mkdir, rename } from 'node:fs/promises';
 import { resolve } from 'node:path';
@@ -12,6 +15,12 @@ await mkdir(out, { recursive: true });
 const hook = `
   // Inspection hooks exist only in the temporary page built by inspect-motion.mjs.
   const originals = new Map(), distances = new Map();
+  let progress = null;
+  const advanceForInspection = flow.advance;
+  flow.advance = (from, to) => {
+    if(progress) progress.push({from,to});
+    return advanceForInspection(from,to);
+  };
   exterior.traverse(o => {
     if (o.isMesh && !o.userData.helper && o.geometry.attributes.normal && !originals.has(o.geometry))
       originals.set(o.geometry, o.geometry.attributes.normal.array.slice());
@@ -49,18 +58,27 @@ const hook = `
       return { normalMs, geometries: originals.size };
     },
     state: () => ({beating, beatTime, realSpeed, mode, flowOverlay}),
+    beginProgress: () => { progress=[]; },
+    progress: () => progress,
   };
 `;
-const source = (await readFile('src/main.js', 'utf8')).replace("  document.documentElement.dataset.ready = 'true';", hook + "  document.documentElement.dataset.ready = 'true';");
-const bundle = await build({ stdin: { contents: source, resolveDir: resolve('src'), loader: 'js' }, bundle: true, write: false, format: 'iife', loader: { '.bin': 'binary' } });
-const template = await readFile('src/template.html', 'utf8');
-const notices = await readFile('THIRD_PARTY_NOTICES.txt','utf8');
-const escapeHtml = s => s.replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('>','&gt;');
-const html = template.replace('/* APP */', () => bundle.outputFiles[0].text.replaceAll('</script', '<\\/script')).replace('<!-- LICENSE -->',()=>escapeHtml(notices));
+const readyMarker = "  document.documentElement.dataset.ready = 'true';";
+function inject(source) {
+  assert.equal(source.split(readyMarker).length-1,1,'inspection ready marker must match exactly once');
+  return source.replace(readyMarker,hook+readyMarker);
+}
+assert.throws(() => inject('marker removed'), /must match exactly once/);
+const production = await buildStandalone();
+assert.equal(production,await readFile('index.html','utf8'),'uninstrumented shared build differs from distributable');
+assert.equal(await buildStandalone({transformSource:s=>s}),production,'identity transform changes distributable');
+const html = await buildStandalone({transformSource:inject});
 const pagePath = resolve(out, 'inspection.html');
 await writeFile(pagePath, html);
 const browser = await chromium.launch({ ...(process.env.CHROMIUM_PATH?{executablePath:process.env.CHROMIUM_PATH}:{}), args: ['--no-sandbox', '--use-angle=swiftshader', '--enable-unsafe-swiftshader'] });
-const report = { viewport: {width:1200,height:900}, renderer:'Chromium / SwiftShader', errors:[], snapshots:[], comparisons:[], playback:[] };
+const report = { viewport: {width:1200,height:900}, renderer:'Chromium / SwiftShader',
+  indexHtmlSha256:createHash('sha256').update(production).digest('hex'), buildEquivalence:true,
+  pixelMetric:'Per-pixel max absolute RGB channel difference, 0..255; alpha ignored. Percentiles use nearest rank. Nonzero statistics exclude equal pixels; no pass/fail threshold.',
+  errors:[], snapshots:[], interiorSnapshots:[], comparisons:[], playback:[], negativeControls:[] };
 async function open(width=1200, reducedMotion='no-preference',video=false) {
   const context = await browser.newContext({viewport:{width,height:900},reducedMotion,...(video?{recordVideo:{dir:resolve(out,'videos'),size:{width,height:900}}}:{})});
   await context.setOffline(true);
@@ -71,7 +89,22 @@ async function open(width=1200, reducedMotion='no-preference',video=false) {
   return {context,page};
 }
 async function shot(page, filename) {
-  await page.locator('canvas').screenshot({path:resolve(out,filename)});
+  return page.locator('canvas').screenshot({path:resolve(out,filename)});
+}
+async function pixelMetrics(page,a,b) {
+  return page.evaluate(async ([first,second]) => {
+    const decode=async s=>{const i=new Image();i.src='data:image/png;base64,'+s;await i.decode();return i;};
+    const [a,b]=await Promise.all([decode(first),decode(second)]);
+    if(a.width!==b.width||a.height!==b.height)throw new Error('comparison dimensions differ');
+    const c=document.createElement('canvas');c.width=a.width;c.height=a.height;
+    const g=c.getContext('2d');g.drawImage(a,0,0);const x=g.getImageData(0,0,c.width,c.height).data;
+    g.clearRect(0,0,c.width,c.height);g.drawImage(b,0,0);const y=g.getImageData(0,0,c.width,c.height).data;
+    const hist=Array(256).fill(0);let sum=0;
+    for(let i=0;i<x.length;i+=4){const d=Math.max(Math.abs(x[i]-y[i]),Math.abs(x[i+1]-y[i+1]),Math.abs(x[i+2]-y[i+2]));hist[d]++;sum+=d;}
+    const stats=(start,n)=>{const q=p=>{const rank=Math.max(1,Math.ceil(p*n));let count=0;for(let i=start;i<256;i++){count+=hist[i];if(count>=rank)return i;}return 0;};return {pixels:n,median:n?q(.5):0,p99:n?q(.99):0,max:n?q(1):0};};
+    const count=c.width*c.height,changed=count-hist[0];
+    return {...stats(0,count),width:c.width,height:c.height,mean:sum/count,changedPixels:changed,changedFraction:changed/count,nonzero:stats(1,changed)};
+  },[a.toString('base64'),b.toString('base64')]);
 }
 // Close-ups from each named direction at the six transition/flow times used in the earlier inspection.
 if (!playbackOnly) for (const view of ['front','back','left']) {
@@ -95,10 +128,13 @@ if (!playbackOnly) for (const depth of ['0.1','0.5']) {
   await page.locator('#mode-interior').click();
   await page.locator('#interior-flow').click();
   await page.locator('#cut-depth').fill(depth);
-  await page.evaluate(() => inspection.at(260));
-  for (const valve of ['tricuspid','mitral','aortic','pulmonary']) {
-    await page.evaluate(v => inspection.focus(v,'front'),valve);
-    await shot(page,'interior-'+valve+'-'+depth+'.png');
+  for(const time of [30,260,470,600]) {
+    await page.evaluate(t => inspection.at(t),time);
+    for (const valve of ['tricuspid','mitral','aortic','pulmonary']) {
+      await page.evaluate(v => inspection.focus(v,'front'),valve);
+      const filename='interior-'+valve+'-'+depth+'-'+time+'.png';
+      await shot(page,filename); report.interiorSnapshots.push({filename,valve,depth:Number(depth),time});
+    }
   }
   await context.close();
 }
@@ -107,7 +143,7 @@ if (!playbackOnly) for (const mode of ['exterior','interior','conduction']) {
   const {context,page} = await open();
   await page.locator('#mode-'+mode).click();
   if (mode==='conduction') await page.getByRole('button',{name:'心房への広がり',exact:true}).click();
-  for (const time of [50,260]) {
+  for (const time of [50,260,370]) {
     await page.evaluate(t => inspection.at(t),time);
     for (const view of ['front','back','left']) {
       await page.locator('#view-'+view).click();
@@ -115,10 +151,17 @@ if (!playbackOnly) for (const mode of ['exterior','interior','conduction']) {
       await page.locator('#in').click();
       await page.evaluate(() => inspection.compare(false,false));
       const prefix = 'compare-'+mode+'-'+view+'-'+time;
-      await shot(page,prefix+'-rest.png');
-      const cost = await page.evaluate(() => inspection.compare(true,true));
-      await shot(page,prefix+'-recomputed.png');
-      report.comparisons.push({mode,view,time,prefix,...cost});
+      const rest=await shot(page,prefix+'-rest.png');
+      const cost = await page.evaluate(() => inspection.compare(true,false));
+      const normal=await shot(page,prefix+'-normals.png');
+      const normals=await pixelMetrics(page,rest,normal);
+      let dashes=null;
+      if(mode==='conduction') {
+        await page.evaluate(() => inspection.compare(false,true));
+        const dash=await shot(page,prefix+'-dashes.png');
+        dashes=await pixelMetrics(page,rest,dash);
+      }
+      report.comparisons.push({mode,view,time,prefix,contraction:contraction(time),...cost,normals,dashes});
     }
   }
   await context.close();
@@ -167,20 +210,55 @@ for (const mode of ['flow','interior','conduction']) {
   }
  }
 }
-// Reduce motion must finish in both flow representations, with no continued motion after the single beat.
-for (const mode of ['flow','interior']) {
+// Observe the actual advance calls, including the terminal 800 ms step before the UI clock resets.
+// A no-op button must fail rather than passing immediately in the initial resting state.
+async function reducedBeat(mode,speed,disablePlay=false) {
   const {context,page} = await open(390,'reduce');
-  await page.locator('#mode-'+mode).click();
-  if (mode==='interior') await page.locator('#interior-flow').click();
-  await page.locator('#beat-speed').click();
-  await page.locator('#beat-play').click();
-  await page.waitForFunction(() => !inspection.state().beating);
-  const state = await page.evaluate(() => inspection.state());
-  if(state.beatTime!==0) throw new Error('single beat failed to return to rest');
-  await shot(page,'reduced-'+mode+'.png');
-  report.playback.push({mode,reducedMotion:true,state});
-  await context.close();
+  try {
+    await page.locator('#mode-'+mode).click();
+    if(mode==='interior') await page.locator('#interior-flow').click();
+    if(speed==='real') await page.locator('#beat-speed').click();
+    if(disablePlay) await page.evaluate(()=>{document.getElementById('beat-play').onclick=()=>{};});
+    const started=await page.evaluate(()=>{
+      inspection.beginProgress();
+      document.getElementById('beat-play').click();
+      return inspection.state();
+    });
+    assert.equal(started.beating,true,'reduced-motion play did not start');
+    const samples=[],start=Date.now();
+    do {
+      samples.push({wallMs:Date.now()-start,...await page.evaluate(()=>inspection.state())});
+      if(!samples.at(-1).beating)break;
+      await page.waitForTimeout(50);
+    } while(Date.now()-start<90000);
+    const state=await page.evaluate(()=>inspection.state());
+    const trace=await page.evaluate(()=>inspection.progress());
+    assert.ok(trace.length>0,'no reduced-motion progress');
+    assert.equal(trace[0].from,0,'one beat must start at zero');
+    for(let i=0;i<trace.length;i++){
+      assert.ok(trace[i].to>trace[i].from,'one-beat clock did not advance');
+      assert.ok(trace[i].to<=period,'one-beat clock advanced beyond the period');
+      if(i)assert.equal(trace[i].from,trace[i-1].to,'one-beat progress is discontinuous');
+    }
+    const maxAdvance=Math.max(...trace.map(t=>t.to));
+    assert.equal(maxAdvance,period,'one beat did not reach the period');
+    assert.equal(state.beating,false,'single beat did not stop');
+    assert.equal(state.beatTime,0,'single beat did not return to rest');
+    await page.waitForTimeout(300);
+    const after=await page.evaluate(()=>({state:inspection.state(),trace:inspection.progress()}));
+    assert.deepEqual(after.state,state,'state changed after single beat');
+    assert.equal(after.trace.length,trace.length,'flow advanced after single beat');
+    await shot(page,'reduced-'+mode+'-'+speed+'.png');
+    return {mode,speed,reducedMotion:true,started,samples,trace,maxAdvance,expectedPeriod:period,state,after:after.state};
+  } finally { await context.close(); }
+}
+await assert.rejects(()=>reducedBeat('flow','real',true),/play did not start/);
+report.negativeControls.push({case:'no-op reduced-motion play handler',rejected:true});
+for(const mode of ['flow','interior']) for(const speed of ['slow','real']) {
+  report.playback.push(await reducedBeat(mode,speed));
+  await writeFile(resolve(out,'report.json'),JSON.stringify(report,null,2));
 }
 await writeFile(resolve(out,'report.json'),JSON.stringify(report,null,2));
 await browser.close();
+assert.deepEqual(report.errors,[],'inspection page errors');
 console.log('saved',out);

@@ -1,9 +1,12 @@
 name: Motion inspection
 on:
-  push:
-    branches: [codex/complete-motion-review-20261108]
+  pull_request:
     paths:
       - scripts/inspect-motion.mjs
+      - scripts/build*.mjs
+      - src/**
+      - package-lock.json
+      - THIRD_PARTY_NOTICES.txt
       - .github/workflows/motion-inspection.yml
   workflow_dispatch:
     inputs:
@@ -20,18 +23,35 @@ jobs:
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 2
+      - name: Decide whether rendered evidence needs regeneration
+        id: capture
+        env:
+          RUN_ALL: ${{ github.event_name == 'workflow_dispatch' || github.event.action == 'opened' || github.event.action == 'reopened' }}
+        run: |
+          if [ "$RUN_ALL" = "true" ] || ! git diff --quiet HEAD^ HEAD -- scripts/inspect-motion.mjs 'scripts/build*.mjs' src/ package-lock.json THIRD_PARTY_NOTICES.txt .github/workflows/motion-inspection.yml; then
+            echo "run=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "Only documentation/evidence changed since the preceding commit; keep its rendered capture results."
+          fi
       - uses: actions/setup-node@v4
+        if: steps.capture.outputs.run == 'true'
         with:
           node-version: 22
           cache: npm
       - run: npm ci
+        if: steps.capture.outputs.run == 'true'
       - run: npx playwright install --with-deps chromium
-      - run: node scripts/inspect-motion.mjs motion-inspection '${{ inputs.scope || 'playback-only' }}'
-      - name: Inspection must not change the distributable
-        run: git diff --exit-code -- index.html src/
+        if: steps.capture.outputs.run == 'true'
+      # The script asserts that a build without hooks and an identity source transform both
+      # reproduce index.html byte-for-byte before building the instrumented page.
+      - run: node scripts/inspect-motion.mjs motion-inspection '${{ inputs.scope || 'full' }}'
+        if: steps.capture.outputs.run == 'true'
       - uses: actions/upload-artifact@v4
-        if: always()
+        if: always() && steps.capture.outputs.run == 'true'
         with:
           name: motion-inspection
           path: motion-inspection/
-          retention-days: 14
+          retention-days: 90
