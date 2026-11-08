@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { createConduction } from './conduction.mjs';
 import { createAnatomy } from './anatomy.mjs';
-import { contraction, createBeat, phaseAt, phases, slowFactor } from './heartbeat.mjs';
+import { contraction, createBeat, period, phaseAt, phases, slowFactor } from './heartbeat.mjs';
 import anatomyData from './data/bodyparts3d-heart.bin';
 import { createCrossSection, fitDistance, modelSphere, pickHit, removedByCut, selectableIn, TapGesture } from './viewer-state.mjs';
 
@@ -78,6 +78,11 @@ try {
   let mode = 'exterior', selected = 'lv', frame = 0, previousTime = 0, failed = false, overlay = false, pick = null;
   // beatTime is the time within the heartbeat in real milliseconds; it advances only while beating.
   let beating = false, realSpeed = false, beatTime = 0, shownPhase = -1;
+  // With the system setting "reduce motion" the beat plays once per press and stops at rest, instead of looping.
+  const reduceMotion = matchMedia('(prefers-reduced-motion: reduce)');
+  const playLabel = () => reduceMotion.matches ? '拍動を1回再生' : '拍動を再生';
+  $('beat-play').textContent = playLabel();
+  reduceMotion.addEventListener('change', () => { if (!beating) $('beat-play').textContent = playLabel(); });
   const selectable = group => selectableIn(group.userData, mode, overlay);
   let fittedDistance = 12, userZoom = 1;
   const gesture = new TapGesture();
@@ -146,6 +151,12 @@ try {
     // The beat keeps to the clock on a slow device too; a long pause (previousTime reset to 0) does not jump ahead.
     if (beating) {
       beatTime += Math.min(elapsed, .25) * 1000 / (realSpeed ? 1 : slowFactor);
+      if (reduceMotion.matches && beatTime >= period) {
+        beating = false;
+        beatTime = 0;
+        $('beat-play').setAttribute('aria-pressed', 'false');
+        $('beat-play').textContent = playLabel();
+      }
       beat.set(contraction(beatTime));
       showPhase();
     }
@@ -334,7 +345,7 @@ try {
   $('beat-play').onclick = () => {
     beating = !beating;
     $('beat-play').setAttribute('aria-pressed', String(beating));
-    $('beat-play').textContent = beating ? '拍動を止める' : '拍動を再生';
+    $('beat-play').textContent = beating ? '拍動を止める' : playLabel();
     previousTime = 0;
     showPhase();
     requestRender();

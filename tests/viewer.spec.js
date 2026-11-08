@@ -505,11 +505,11 @@ for (const width of [1440, 390]) test(`heartbeat plays, shows its phase and stop
   await expect(page.locator('#beat-note')).toBeVisible();
   await expect(page.locator('#beat-phase-name')).toHaveText(/^(心房の収縮|心室の収縮|心室の弛緩)（約/);
   await expect(page.locator('#beat-phase-valves')).toBeVisible({ visible: !mobile });
-  const before = await page.evaluate(() => window.renderRequests);
-  // At the slow speed the ventricles are most contracted 1.85 s into the beat. SwiftShader draws this page at about
-  // 5 frames a second at 1440 px, so only a few frames are required.
-  await page.waitForTimeout(1850);
-  expect(await page.evaluate(() => window.renderRequests)).toBeGreaterThan(before + 3);
+  // The beat must keep advancing: watch the phase name for 3 s (a full slow cycle is 4 s, and the atrial phase alone is
+  // 0.5 s). This does not depend on how many frames a slow machine draws; the clock decides the phase.
+  const seen = new Set();
+  for (let i = 0; i < 15; i++) { seen.add(await page.locator('#beat-phase-name').textContent()); await page.waitForTimeout(200); }
+  expect(seen.size).toBeGreaterThanOrEqual(2);
   await page.locator('#beat-play').click();
   await expect(page.locator('#beat-play')).toHaveAttribute('aria-pressed', 'false');
   await expect(page.locator('#beat-phase')).toBeVisible();
@@ -522,5 +522,55 @@ for (const width of [1440, 390]) test(`heartbeat plays, shows its phase and stop
   await expect(page.locator('#beat-speed')).toHaveAttribute('aria-pressed', 'true');
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
   expect(errors).toEqual([]);
+  await context.close();
+});
+
+// The picture, not only the numbers, shows the beat: the model's outline and the cut face shrink while the ventricles
+// contract, and the cut face is drawn from the deformed shape. Measured in Chromium/SwiftShader on main + this change at
+// 1440 px: about 1.9 s into the slow beat the outline had 5.0% fewer model pixels and the cut face 8.1% fewer than at
+// rest, and a relaxed state (3.2 s) matched rest exactly. The page keeps its phase box over the canvas, so it is hidden here.
+test('the outline and the cut face shrink in the picture while the ventricles contract', async ({ browser }) => {
+  const context = await browser.newContext({ viewport: { width: 1440, height: 900 } });
+  const page = await context.newPage();
+  await page.goto(url);
+  await expect(page.locator('html')).toHaveAttribute('data-ready', 'true');
+  await page.addStyleTag({ content: '#beat-phase{visibility:hidden}' });
+  const c = page.locator('canvas');
+  await c.scrollIntoViewIfNeeded();
+  const measure = async () => {
+    const png = await stableShot(c, 80);
+    return { model: await modelPixels(page, png), cap: await countColor(page, png, [201, 132, 120], 8) };
+  };
+  const exteriorRest = await measure();
+  await page.locator('#mode-interior').click();
+  const interiorRest = await measure();
+  expect(interiorRest.cap).toBeGreaterThan(5000);
+  await page.locator('#beat-play').click();
+  // 1.5 s of the slow beat is 300 ms of the real cycle: the ventricles are about three quarters contracted.
+  await page.waitForTimeout(1500);
+  await page.locator('#beat-play').click();
+  const interiorBeat = await measure();
+  expect(interiorBeat.cap).toBeLessThan(interiorRest.cap * .97);
+  expect(interiorBeat.model).toBeLessThan(interiorRest.model * .98);
+  await context.close();
+  expect(exteriorRest.model).toBeGreaterThan(30000);
+});
+
+// The system setting "reduce motion": one beat per press, then rest, instead of a loop (README, beat section).
+test('with reduced motion the beat plays once and returns to rest', async ({ browser }) => {
+  const context = await browser.newContext({ viewport: { width: 1440, height: 900 }, reducedMotion: 'reduce' });
+  const page = await context.newPage();
+  await page.goto(url);
+  await expect(page.locator('html')).toHaveAttribute('data-ready', 'true');
+  await page.addStyleTag({ content: '#beat-phase{visibility:hidden}' });
+  await expect(page.locator('#beat-play')).toHaveText('拍動を1回再生');
+  const c = page.locator('canvas');
+  await c.scrollIntoViewIfNeeded();
+  const rest = await stableShot(c);
+  await page.locator('#beat-play').click();
+  await expect(page.locator('#beat-play')).toHaveText('拍動を止める');
+  await expect(page.locator('#beat-play')).toHaveAttribute('aria-pressed', 'false', { timeout: 15000 });
+  await expect(page.locator('#beat-play')).toHaveText('拍動を1回再生');
+  expect((await stableShot(c)).equals(rest)).toBe(true);
   await context.close();
 });
