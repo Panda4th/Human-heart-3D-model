@@ -2,8 +2,8 @@ import * as THREE from 'three';
 
 // Decode the bundle written by scripts/prepare-bodyparts3d.mjs.
 // Kept free of WebGL so Node tests can check the data.
-// Format 4 separates proximal/branching His intervals and left/right take-off proxies.
-export const anatomyFormat = 4;
+// Format 5 adds the schematic left-bundle sheet and three directional paths.
+export const anatomyFormat = 5;
 export function decodeAnatomy(bytes) {
   const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
   if (new TextDecoder().decode(bytes.subarray(0, 4)) !== 'BP3D') throw new Error('Not a BodyParts3D heart bundle');

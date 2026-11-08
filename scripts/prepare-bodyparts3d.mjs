@@ -352,20 +352,66 @@ const rightSeptal = along(septumRV, [bifurcation, lerp(bifurcation, rvModerator,
 // The papillary-muscle base is outside the septal candidate patch. Continue over
 // the RV endocardium rather than snapping its distal route back onto the septum.
 const rightDistal = along(cav.rv, [rightSeptal.at(-1), rightEnd]);
+// Explanatory LBB sheet and three directional routes. Widths are display parameters,
+// not measured fascicular dimensions. Stay on the LV side of the septal candidate patch.
+const leftCentral = along(septumLV, [bifurcation, lerp(bifurcation, lvApex, .5), lvApex]);
+const leftLateralNetwork = along(cav.lv, [lvApex, lvLateral, lerp(lvLateral, mitral, .6)]);
+const leftAnteriorNetwork = along(cav.lv, [lvApex, lvAnterior, lerp(lvAnterior, mitral, .6)]);
+const fanGuide = leftCentral.slice(0, 4);
+const down = fanGuide.at(-1).map((v, k) => v - fanGuide[0][k]);
+const downLength = Math.hypot(...down);
+const tangent = down.map(v => v / downLength);
+// Derive the transverse direction from the nearby surface rather than a body axis
+// that may point through the surface and collapse the sheet when snapped.
+const localOffsets = septumLV.filter(p => d2(p, bifurcation) < downLength ** 2).map(p => p.map((v, k) => v - bifurcation[k]));
+const transverse = localOffsets.map(v => {
+  const projection = v.reduce((sum, x, k) => sum + x * tangent[k], 0);
+  return v.map((x, k) => x - projection * tangent[k]);
+});
+const side = extreme(transverse, v => v.reduce((sum, x) => sum + x * x, 0));
+const sideLength = Math.hypot(...side);
+const across = side.map(v => v / sideLength * (side[2] < 0 ? -1 : 1));
+// Limit the patch to the ventricular side of the existing basal proxy (not an aortic leaflet).
+const fanSurface = septumLV.filter(p => p[1] <= bifurcation[1] + .01);
+const fanRows = fanGuide.map((center, row) => [-1, -.5, 0, .5, 1].map(t =>
+  nearest(fanSurface, center.map((v, k) => v + across[k] * t * (4.5 + row)))));
+const fanPoints = round(fanRows.flat()), fanIndices = [];
+for (let row = 0; row < fanRows.length - 1; row++) for (let col = 0; col < 4; col++) {
+  const a = row * 5 + col, b = a + 1, c = a + 5, d = c + 1;
+  for (const tri of [[a, c, b], [b, c, d]]) {
+    const [p, q, r] = tri.map(i => fanPoints[i]);
+    const u = q.map((v, k) => v - p[k]), v = r.map((x, k) => x - p[k]);
+    const n = [u[1] * v[2] - u[2] * v[1], u[2] * v[0] - u[0] * v[2], u[0] * v[1] - u[1] * v[0]];
+    if (Math.hypot(...n) > .001) fanIndices.push(...tri); // discard collapsed grid triangles after snapping
+  }
+}
+const fanMesh = weld({ positions: fanPoints.flat(), indices: fanIndices });
+const fanSeen = new Set(), fanUnique = [];
+for (let i = 0; i < fanMesh.indices.length; i += 3) {
+  const tri = fanMesh.indices.slice(i, i + 3), key = [...tri].sort((a, b) => a - b).join(',');
+  if (!fanSeen.has(key)) { fanSeen.add(key); fanUnique.push(...tri); }
+}
+fanMesh.indices = fanUnique;
+// Join directional routes to points of the existing left Purkinje paths. The posterior
+// papillary muscle is absent from the data: do not invent it or claim a muscle attachment.
+const leftAnterior = anchored(along(cav.lv, [fanRows.at(-1)[4], nearest(leftAnteriorNetwork, lvAnterior)]).map(p => nearest(cav.lv, p)), fanRows.at(-1)[4], nearest(leftAnteriorNetwork, lvAnterior));
+const leftPosterior = anchored(along(cav.lv, [fanRows.at(-1)[0], nearest(leftLateralNetwork, lvLateral)]).map(p => nearest(cav.lv, p)), fanRows.at(-1)[0], nearest(leftLateralNetwork, lvLateral));
 const conduction = {
   nodes: { sa: round([sa])[0], av: round([av])[0] },
   junctions: { leftOrigin: round([bifurcation])[0], rightOrigin: round([rightOrigin])[0] },
+  leftBundle: { sheet: fanMesh, directions: ['anterior', 'septal', 'posterior'] },
   paths: {
     atria: [round(anchored(along(cav.ra, [sa, lerp(sa, av, .5), av]), sa, av)), round(anchored(along(atrialWall, [sa, lerp(sa, laAppendage, .5), laAppendage]), sa, laAppendage))],
     his: [round([av, bifurcation])],
     branchingHis: [round([bifurcation, rightOrigin])],
     branches: [
-      round(along(septumLV, [bifurcation, lerp(bifurcation, lvApex, .5), lvApex])),
+      round(leftCentral),
       round(anchored([...rightSeptal, ...rightDistal.slice(1)], rightOrigin, rightEnd)),
     ],
+    leftFascicles: [round(leftAnterior), round(leftCentral), round(leftPosterior)],
     purkinje: [
-      round(along(cav.lv, [lvApex, lvLateral, lerp(lvLateral, mitral, .6)])),
-      round(along(cav.lv, [lvApex, lvAnterior, lerp(lvAnterior, mitral, .6)])),
+      round(leftLateralNetwork),
+      round(leftAnteriorNetwork),
       round(along(cav.rv, [rvModerator, tricuspidAnterior])),
       round(along(cav.rv, [rvModerator, lerp(rvModerator, pulmonary, .7)])),
     ],
@@ -379,7 +425,7 @@ for (const mesh of Object.values(parts)) mesh.positions.forEach((v, i) => {
   min[i % 3] = Math.min(min[i % 3], v); max[i % 3] = Math.max(max[i % 3], v);
 });
 const center = [0, 1, 2].map(k => Math.round((min[k] + max[k]) / 2 * 100) / 100);
-const step = .01, chunks = [], meta = { format: 4, unit: 'mm', step, center, parts: [], conduction };
+const step = .01, chunks = [], meta = { format: 5, unit: 'mm', step, center, parts: [], conduction };
 let offset = 0;
 for (const [id, mesh] of Object.entries(parts)) {
   const count = mesh.positions.length / 3;

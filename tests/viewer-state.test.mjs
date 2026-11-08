@@ -291,6 +291,7 @@ test('regression only, not anatomical validation: conduction overlay sits on the
   }
   const share = (line, id) => line.filter(p => nearestWall(p).id === id).length / line.length;
   assert.ok(share(paths.branches[0], 'lv') > .8, 'left bundle branch on the left ventricle');
+  for (const line of paths.leftFascicles) assert.ok(share(line, 'lv') > .8, 'left directional route stays on the left ventricle');
   assert.ok(share(paths.branches[1], 'rv') > .7, 'right bundle branch on the right ventricle');
   for (const line of paths.purkinje.slice(0, 2)) assert.ok(share(line, 'lv') > .8);
   for (const line of paths.purkinje.slice(2)) assert.ok(share(line, 'rv') > .8);
@@ -363,7 +364,7 @@ test('the right and left bundle branches are separate parts with their own colou
     box.applyMatrix4(inverse);
     box.expandByScalar(1);
     for (const p of [line[0], line.at(-1)]) assert.ok(box.containsPoint(new THREE.Vector3(...p)), `${id} does not contain the end ${p}`);
-    assert.equal(parts.get(id).children.length, 1, `${id} is one path`);
+    assert.equal(parts.get(id).children.length, id === 'lbb' ? 4 : 1, `${id} has its expected sheet/path meshes`);
   }
 });
 
@@ -505,4 +506,44 @@ test('His intervals are separately selectable, differently coloured, and share o
     assert.equal(pickPart(ray, [...parts.values()].filter(g => g.userData.kind === 'conduction')), id, id + ' is picked at its label anchor');
   }
 
+});
+
+
+test('left bundle has a non-degenerate broad sheet and three routes connected to the existing network', () => {
+  const {leftBundle, paths, junctions} = anatomy.meta.conduction;
+  assert.deepEqual(leftBundle.directions, ['anterior','septal','posterior']);
+  assert.equal(paths.leftFascicles.length, 3);
+  const {positions, indices} = leftBundle.sheet;
+  const point = i => new THREE.Vector3(...positions.slice(i*3,i*3+3));
+  assert.ok(positions.every(Number.isFinite));
+  assert.ok(indices.every(i => Number.isInteger(i) && i >= 0 && i < positions.length/3));
+  let area = 0;
+  for(let i=0;i<indices.length;i+=3){
+    const a=point(indices[i]), b=point(indices[i+1]), c=point(indices[i+2]);
+    const twiceArea=b.sub(a).cross(c.sub(a)).length();
+    assert.ok(twiceArea>.001, 'no collapsed triangles');
+    area+=twiceArea/2;
+  }
+  assert.ok(area>60, `a broad surface, rather than a line: ${area} mm2`);
+  const graph=new Map(), edgeUses=new Map();
+  for(let i=0;i<indices.length;i+=3) for(let k=0;k<3;k++){
+    const a=indices[i+k], b=indices[i+(k+1)%3];
+    if(!graph.has(a))graph.set(a,new Set()); if(!graph.has(b))graph.set(b,new Set());
+    graph.get(a).add(b); graph.get(b).add(a);
+    const key=[a,b].sort((x,y)=>x-y).join(',');edgeUses.set(key,(edgeUses.get(key)||0)+1);
+  }
+  const seen=new Set(), pending=[indices[0]];
+  while(pending.length){const a=pending.pop();if(seen.has(a))continue;seen.add(a);pending.push(...graph.get(a));}
+  assert.equal(seen.size,graph.size,'the sheet is a single connected surface');
+  assert.ok([...edgeUses.values()].every(n=>n<=2),'no non-manifold sheet edges');
+  assert.ok([...seen].some(i=>point(i).distanceTo(new THREE.Vector3(...junctions.leftOrigin))<.01), 'sheet meets His-side proxy');
+  const [anterior,septal,posterior]=paths.leftFascicles;
+  const inNetwork=(p,line)=>line.some(q=>Math.hypot(...q.map((v,k)=>v-p[k]))<.01);
+  assert.ok(inNetwork(anterior.at(-1),paths.purkinje[1]));
+  assert.ok(inNetwork(posterior.at(-1),paths.purkinje[0]));
+  assert.deepEqual(septal.at(-1),paths.purkinje[0][0]);
+  assert.ok(anterior.at(-1)[2]>posterior.at(-1)[2]+10, 'anterior and posterior are not duplicate directions');
+  for(const line of [anterior,posterior]) assert.ok([...seen].some(i=>point(i).distanceTo(new THREE.Vector3(...line[0]))<.01), 'directional route meets the connected sheet');
+  const mesh=parts.get('lbb').children[0];
+  assert.equal(mesh.material.side,THREE.DoubleSide,'sheet is visible from either side');
 });
