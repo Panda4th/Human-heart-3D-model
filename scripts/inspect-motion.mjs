@@ -7,6 +7,7 @@ import { resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 
 const out = resolve(process.argv[2] || '../motion-inspection');
+const playbackOnly = process.argv[3] === 'playback-only';
 await mkdir(out, { recursive: true });
 const hook = `
   // Inspection hooks exist only in the temporary page built by inspect-motion.mjs.
@@ -53,7 +54,9 @@ const hook = `
 const source = (await readFile('src/main.js', 'utf8')).replace("  document.documentElement.dataset.ready = 'true';", hook + "  document.documentElement.dataset.ready = 'true';");
 const bundle = await build({ stdin: { contents: source, resolveDir: resolve('src'), loader: 'js' }, bundle: true, write: false, format: 'iife', loader: { '.bin': 'binary' } });
 const template = await readFile('src/template.html', 'utf8');
-const html = template.replace('/* APP */', () => bundle.outputFiles[0].text.replaceAll('</script', '<\\/script'));
+const notices = await readFile('THIRD_PARTY_NOTICES.txt','utf8');
+const escapeHtml = s => s.replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('>','&gt;');
+const html = template.replace('/* APP */', () => bundle.outputFiles[0].text.replaceAll('</script', '<\\/script')).replace('<!-- LICENSE -->',()=>escapeHtml(notices));
 const pagePath = resolve(out, 'inspection.html');
 await writeFile(pagePath, html);
 const browser = await chromium.launch({ ...(process.env.CHROMIUM_PATH?{executablePath:process.env.CHROMIUM_PATH}:{}), args: ['--no-sandbox', '--use-angle=swiftshader', '--enable-unsafe-swiftshader'] });
@@ -71,7 +74,7 @@ async function shot(page, filename) {
   await page.locator('canvas').screenshot({path:resolve(out,filename)});
 }
 // Close-ups from each named direction at the six transition/flow times used in the earlier inspection.
-for (const view of ['front','back','left']) {
+if (!playbackOnly) for (const view of ['front','back','left']) {
   const {context,page} = await open();
   await page.locator('#mode-flow').click();
   for (const time of [30,130,260,400,430,470]) {
@@ -87,7 +90,7 @@ for (const view of ['front','back','left']) {
   console.log('close-ups',view);
 }
 // Interior source leaflets remain unchanged, including the accepted route crossings.
-for (const depth of ['0.1','0.5']) {
+if (!playbackOnly) for (const depth of ['0.1','0.5']) {
   const {context,page} = await open();
   await page.locator('#mode-interior').click();
   await page.locator('#interior-flow').click();
@@ -100,7 +103,7 @@ for (const depth of ['0.1','0.5']) {
   await context.close();
 }
 // Compare the existing normal field/dash distances with recomputation at matched phases and views.
-for (const mode of ['exterior','interior','conduction']) {
+if (!playbackOnly) for (const mode of ['exterior','interior','conduction']) {
   const {context,page} = await open();
   await page.locator('#mode-'+mode).click();
   if (mode==='conduction') await page.getByRole('button',{name:'心房への広がり',exact:true}).click();
@@ -120,8 +123,8 @@ for (const mode of ['exterior','interior','conduction']) {
   }
   await context.close();
 }
-// Actual UI playback: sample consecutive frames over at least two full cycles per speed.
-// Frames retain real wall-clock offsets. They are not a simulated performance measurement.
+// Actual UI playback: record at least two cycles per speed without taking canvas screenshots.
+// Canvas screenshots stalled rendering and changed the recording's framing in the first run.
 for (const mode of ['flow','interior','conduction']) {
  for (const view of mode==='flow'?['front','back','left']:['front']) {
   for (const speed of ['slow','real']) {
@@ -132,17 +135,27 @@ for (const mode of ['flow','interior','conduction']) {
     if (speed==='real') await page.locator('#beat-speed').click();
     if(mode==='flow') await page.evaluate(w => inspection.focus('all',w),view);
     const states = [], start = Date.now(), folder = 'play-'+mode+'-'+view+'-'+speed;
-    await mkdir(resolve(out,folder),{recursive:true});
+    const initial = await page.evaluate(() => inspection.state());
+    if(initial.beating || initial.beatTime!==0) throw new Error('unexpected autoplay');
     await page.locator('#beat-play').click();
-    let i=0;
     do {
-      await shot(page,folder+'/'+String(i++).padStart(3,'0')+'.png');
       states.push({wallMs:Date.now()-start,...await page.evaluate(() => inspection.state())});
       await page.waitForTimeout(100);
     } while (states.at(-1).beatTime < 1600 && Date.now()-start < 25000);
     if(states.at(-1).beatTime<1600) throw new Error('two cycles not reached');
     await page.locator('#beat-play').click();
-    report.playback.push({mode,view,speed,states});
+    const stopped = await page.evaluate(() => inspection.state());
+    await page.waitForTimeout(300);
+    if((await page.evaluate(() => inspection.state())).beatTime!==stopped.beatTime) throw new Error('time advanced while stopped');
+    let rotated=false;
+    if(mode==='conduction') {
+      await page.getByRole('button',{name:'洞房結節',exact:true}).click();
+      await page.waitForTimeout(600);
+    }
+    if(mode==='flow' && view==='front' && speed==='slow') {
+      await page.locator('#rotate').click(); await page.waitForTimeout(3000); await page.locator('#rotate').click(); rotated=true;
+    }
+    report.playback.push({mode,view,speed,initial,stopped,rotated,states});
     const video = page.video();
     await context.close();
     await rename(await video.path(),resolve(out,folder+'.webm'));
