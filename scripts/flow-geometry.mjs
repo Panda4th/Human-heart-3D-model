@@ -56,32 +56,96 @@ export function nearestVertexDistance(mesh, point) {
   return Math.sqrt(best);
 }
 
-// For a point on a tube's axis: the distance to the tube's outer wall, as the smallest over `count` rays spread around the
-// axis, perpendicular to `tangent`, of the distance to the LAST wall each ray crosses. A vessel mesh made of several
-// overlapping shells has walls inside the lumen where one shell's end lies inside another, and those must not count as
-// the vessel wall, so the outermost crossing is used. Infinity when any ray crosses nothing (it leaves through an
-// opening, or the point is outside the vessel), which is how a point that is not enclosed is told apart.
-export function wallDistanceAround(solid, point, tangent, count = 12) {
-  const t = tangent.map(x => x / Math.hypot(...tangent));
-  const helper = Math.abs(t[1]) < .9 ? [0, 1, 0] : [1, 0, 0];
-  let u = [t[1] * helper[2] - t[2] * helper[1], t[2] * helper[0] - t[0] * helper[2], t[0] * helper[1] - t[1] * helper[0]];
-  u = u.map(x => x / Math.hypot(...u));
-  const w = [t[1] * u[2] - t[2] * u[1], t[2] * u[0] - t[0] * u[2], t[0] * u[1] - t[1] * u[0]];
-  let nearest = Infinity;
-  for (let k = 0; k < count; k++) {
-    const angle = 2 * Math.PI * k / count, dir = [0, 1, 2].map(i => Math.cos(angle) * u[i] + Math.sin(angle) * w[i]);
-    const hits = rayHits(solid, point, dir);
-    if (!hits.length) return Infinity;
-    nearest = Math.min(nearest, hits.at(-1));
+// A vessel mesh is several shells (the pulmonary arteries are a trunk and two branches that overlap; the pulmonary veins
+// are separate parts). Split it into connected components, and close each component's open rims with a fan of triangles so
+// that a component that was cut open at a clip plane is a closed solid. The caps exist only for this test. Whether a point is
+// in the vessel is then a question about each component on its own: inside one of them, not "some wall in every direction".
+export function makeVessel(mesh) {
+  const key = i => [0, 1, 2].map(k => Math.round(mesh.positions[i * 3 + k] * 100)).join(','), id = new Map(), vertexOf = [], position = [];
+  for (let i = 0; i < mesh.positions.length / 3; i++) {
+    if (!id.has(key(i))) { id.set(key(i), position.length); position.push(mesh.positions.slice(i * 3, i * 3 + 3)); }
+    vertexOf.push(id.get(key(i)));
   }
-  return nearest;
+  const triangles = [];
+  for (let t = 0; t < mesh.indices.length; t += 3) {
+    const tri = [0, 1, 2].map(k => vertexOf[mesh.indices[t + k]]);
+    if (tri[0] !== tri[1] && tri[1] !== tri[2] && tri[0] !== tri[2]) triangles.push(tri);
+  }
+  const root = position.map((_, i) => i), find = i => root[i] === i ? i : (root[i] = find(root[i]));
+  for (const [a, b, c] of triangles) { root[find(a)] = find(b); root[find(b)] = find(c); }
+  const uses = new Map();
+  for (const tri of triangles) for (let k = 0; k < 3; k++) {
+    const a = tri[k], b = tri[(k + 1) % 3], edge = a < b ? a + ',' + b : b + ',' + a;
+    uses.set(edge, (uses.get(edge) || 0) + 1);
+  }
+  const rim = [];
+  for (const [edge, n] of uses) if (n === 1) rim.push(edge.split(',').map(Number));
+  // Group the rim edges into loops (rim vertices that are joined by rim edges), and fan each loop to its centroid.
+  const loopOf = new Map(), loopFind = i => { while (loopOf.has(i) && loopOf.get(i) !== i) i = loopOf.get(i); return i; };
+  for (const [a, b] of rim) loopOf.set(loopFind(a), loopFind(b));
+  const loops = new Map();
+  for (const [a, b] of rim) { const r = loopFind(a); if (!loops.has(r)) loops.set(r, []); loops.get(r).push([a, b]); }
+  const capped = triangles.map(t => [...t]);
+  for (const edges of loops.values()) {
+    const vertices = [...new Set(edges.flat())], centre = [0, 1, 2].map(k => vertices.reduce((sum, v) => sum + position[v][k], 0) / vertices.length);
+    const apex = position.push(centre) - 1;
+    for (const [a, b] of edges) capped.push([a, b, apex]);
+  }
+  const groups = new Map();
+  // A cap triangle's first vertex is a rim vertex of the component it closes.
+  for (const tri of capped) { const r = find(tri[0]); if (!groups.has(r)) groups.set(r, []); groups.get(r).push(tri); }
+  const components = [...groups.values()].map(tris => {
+    const flat = [], remap = new Map(), indices = [];
+    for (const tri of tris) for (const v of tri) { if (!remap.has(v)) { remap.set(v, flat.length / 3); flat.push(...position[v]); } indices.push(remap.get(v)); }
+    return makeSolid({ positions: flat, indices });
+  });
+  return { components };
+}
+
+// The distance from a point to the nearest point of a triangle (Ericson, Real-Time Collision Detection, 5.1.5).
+function triangleDistance(p, a, b, c) {
+  const sub = (u, v) => [u[0] - v[0], u[1] - v[1], u[2] - v[2]], dot = (u, v) => u[0] * v[0] + u[1] * v[1] + u[2] * v[2];
+  const ab = sub(b, a), ac = sub(c, a), ap = sub(p, a), d1 = dot(ab, ap), d2 = dot(ac, ap);
+  const at = (...w) => Math.hypot(p[0] - (a[0] * w[0] + b[0] * w[1] + c[0] * w[2]), p[1] - (a[1] * w[0] + b[1] * w[1] + c[1] * w[2]), p[2] - (a[2] * w[0] + b[2] * w[1] + c[2] * w[2]));
+  if (d1 <= 0 && d2 <= 0) return at(1, 0, 0);
+  const bp = sub(p, b), d3 = dot(ab, bp), d4 = dot(ac, bp);
+  if (d3 >= 0 && d4 <= d3) return at(0, 1, 0);
+  const vc = d1 * d4 - d3 * d2;
+  if (vc <= 0 && d1 >= 0 && d3 <= 0) { const v = d1 / (d1 - d3); return at(1 - v, v, 0); }
+  const cp = sub(p, c), d5 = dot(ab, cp), d6 = dot(ac, cp);
+  if (d6 >= 0 && d5 <= d6) return at(0, 0, 1);
+  const vb = d5 * d2 - d1 * d6;
+  if (vb <= 0 && d2 >= 0 && d6 <= 0) { const w = d2 / (d2 - d6); return at(1 - w, 0, w); }
+  const va = d3 * d6 - d5 * d4;
+  if (va <= 0 && d4 - d3 >= 0 && d5 - d6 >= 0) { const w = (d4 - d3) / ((d4 - d3) + (d5 - d6)); return at(0, 1 - w, w); }
+  const denom = 1 / (va + vb + vc), v = vb * denom, w = vc * denom;
+  return at(1 - v - w, v, w);
+}
+
+// How far the point is inside the vessel: the largest, over the components that contain it, of the shortest distance to
+// that component's surface. -1 when no component contains it. The surface of one component can lie inside the lumen of
+// another (a branch's end inside the trunk), so a point must be judged by the component it is in, and the best one
+// counts: the true clearance to the outline of the union is at least that. Caps (see makeVessel) count as wall.
+export function vesselClearance(vessel, point) {
+  let best = -1;
+  for (const solid of vessel.components) {
+    if (!inside(solid, point)) continue;
+    let nearest = Infinity;
+    for (let t = 0; t < solid.indices.length; t += 3) {
+      const at = i => [solid.positions[solid.indices[t + i] * 3], solid.positions[solid.indices[t + i] * 3 + 1], solid.positions[solid.indices[t + i] * 3 + 2]];
+      nearest = Math.min(nearest, triangleDistance(point, at(0), at(1), at(2)));
+    }
+    best = Math.max(best, nearest);
+  }
+  return best;
 }
 
 // Checks one blood-flow route against the cavities and vessels it should run through. `curve` is the curve the viewer
 // draws through the stored points (it needs getLength, getPointAt and getTangentAt, each returning something with
 // toArray). It is sampled every millimetre and each sample is one of:
 //   - a cavity: inside one of regions.cavities (id -> solid);
-//   - the vessel: enclosed by one of regions.vessels (solids) with at least minWall mm to the outer wall;
+//   - the vessel: inside one of the components of regions.vessels (makeVessel results) with at least minWall mm to that
+//     component's surface, measured in 3D;
 //   - a gap: neither. The meshes have no wall opening where a vein or vena cava enters an atrium, and nothing around the
 //     root of a valve, so a short gap is expected there. A gap is accepted only when it is at most maxGap mm long and
 //     either lies within valveGate mm of a valve centre, or joins a vessel to a cavity.
@@ -89,11 +153,10 @@ export function wallDistanceAround(solid, point, tangent, count = 12) {
 export function checkRoute(curve, regions, expectedOrder, { minWall = 1, maxGap = 10, valveGate = 8 } = {}) {
   const n = Math.ceil(curve.getLength()), kinds = [], nearValve = [];
   for (let i = 0; i <= n; i++) {
-    const p = curve.getPointAt(i / n).toArray(), tangent = curve.getTangentAt(i / n).toArray();
+    const p = curve.getPointAt(i / n).toArray();
     const owner = Object.keys(regions.cavities).find(id => inside(regions.cavities[id], p));
     if (owner) { kinds.push(owner); nearValve.push(false); continue; }
-    // Infinity means a ray left through an opening: not enclosed.
-    const enclosed = Object.values(regions.vessels).some(solid => { const wall = wallDistanceAround(solid, p, tangent); return Number.isFinite(wall) && wall >= minWall; });
+    const enclosed = Object.values(regions.vessels).some(vessel => vesselClearance(vessel, p) >= minWall);
     kinds.push(enclosed ? 'vessel' : 'gap');
     nearValve.push(Object.values(regions.valves).some(v => Math.hypot(p[0] - v.center[0], p[1] - v.center[1], p[2] - v.center[2]) < valveGate));
   }

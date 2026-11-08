@@ -4,7 +4,7 @@ import * as THREE from 'three';
 import { readFileSync } from 'node:fs';
 import { anatomyDefinitions, createAnatomy, decodeAnatomy, interiorDefinitions } from '../src/anatomy.mjs';
 import { createBeat } from '../src/heartbeat.mjs';
-import { checkRoute, inside, makeSolid, nearestVertexDistance, rayHits, wallDistanceAround } from '../scripts/flow-geometry.mjs';
+import { checkRoute, inside, makeSolid, makeVessel, nearestVertexDistance, rayHits, vesselClearance } from '../scripts/flow-geometry.mjs';
 
 // The blood-flow routes (meta.flow) are a schematic made by scripts/prepare-bodyparts3d.mjs. These tests check what the
 // bundle can show without the BodyParts3D zips: the routes against the cavities and vessels that are in the bundle, and
@@ -14,7 +14,7 @@ const anatomy = decodeAnatomy(new Uint8Array(bytes)), { flow } = anatomy.meta;
 const mesh = id => { const p = anatomy.parts.find(part => part.id === id); return { positions: Array.from(p.positions), indices: Array.from(p.indices) }; };
 const cavityIds = ['lv', 'rv', 'ra', 'la'];
 const cavities = Object.fromEntries(cavityIds.map(id => [id, makeSolid(mesh('cav' + id))]));
-const vesselSolids = Object.fromEntries(['vc', 'pa', 'pv', 'ao'].map(id => [id, makeSolid(mesh(id))]));
+const vesselSolids = Object.fromEntries(['vc', 'pa', 'pv', 'ao'].map(id => [id, makeVessel(mesh(id))]));
 const vesselsOf = { right: ['vc', 'pa'], left: ['pv', 'ao'] }, expectedOrder = { right: ['ra', 'rv'], left: ['la', 'lv'] };
 const regionsFor = (side, valves = flow.valves) => ({ cavities, vessels: Object.fromEntries(vesselsOf[side].map(id => [id, vesselSolids[id]])), valves });
 const curveOf = points => new THREE.CatmullRomCurve3(points.map(p => new THREE.Vector3(...p)), false, 'centripetal');
@@ -37,22 +37,66 @@ test('the bundle holds six routes, four valve openings and the four cavities, wh
   for (const id of cavityIds) { const mL = volume(id); assert.ok(mL > 35 && mL < 140, `${id} holds ${mL} mL`); }
 });
 
-test('geometry helpers: inside, nearest wall and enclosure on a cube and a tube', () => {
+const geometryOf = g => ({ positions: Array.from(g.attributes.position.array), indices: Array.from(g.index.array) });
+const box = (cx, cy, cz, h) => { const g = new THREE.BoxGeometry(2 * h, 2 * h, 2 * h).translate(cx, cy, cz); return makeSolid(geometryOf(g)); };
+
+test('geometry helpers: inside and edge-grazing rays', () => {
   const cube = makeSolid({ positions: [0,0,0, 10,0,0, 10,10,0, 0,10,0, 0,0,10, 10,0,10, 10,10,10, 0,10,10], indices: [0,2,1, 0,3,2, 4,5,6, 4,6,7, 0,1,5, 0,5,4, 3,6,2, 3,7,6, 0,4,7, 0,7,3, 1,2,6, 1,6,5] });
   assert.equal(inside(cube, [5, 5, 5]), true);
   assert.equal(inside(cube, [5, 5, 12]), false);
   assert.equal(inside(cube, [-1, 5, 5]), false);
-  // A tube of radius 5 along y, open at both ends, from y = 0 to y = 40.
-  const g = new THREE.CylinderGeometry(5, 5, 40, 24, 1, true).translate(0, 20, 0);
-  const tube = makeSolid({ positions: Array.from(g.attributes.position.array), indices: Array.from(g.index.array) });
-  assert.ok(Math.abs(wallDistanceAround(tube, [0, 13, 0], [0, 1, 0]) - 5) < .1, 'on the axis: the radius (the tube has 24 flat faces)');
-  assert.ok(Math.abs(wallDistanceAround(tube, [2, 13, 0], [0, 1, 0]) - 3) < .2, 'off the axis the nearest ray is closer to the wall');
-  assert.equal(wallDistanceAround(tube, [9, 13, 0], [0, 1, 0]), Infinity, 'a point outside the tube is not enclosed');
-  assert.equal(wallDistanceAround(tube, [0, 1, 0], [1, 1, 0]), Infinity, 'a tilted cut near the open end lets rays out');
   // Two hits closer than 0.02 mm count once: a doubled face does not flip the answer.
   const doubled = makeSolid({ positions: cube.positions, indices: [...cube.indices, ...cube.indices] });
   assert.equal(inside(doubled, [5, 5, 5]), true);
   assert.equal(rayHits(cube, [4, 6, 5], [0, 0, 1]).length, 1);
+  // A ray along the seam of a 24-sided tube still hits it (the ray test tolerates exact edge hits).
+  const seam = makeSolid(geometryOf(new THREE.CylinderGeometry(5, 5, 40, 24, 1, true)));
+  assert.ok(rayHits(seam, [0, 13, 0], [1, 0, 0]).length >= 1);
+});
+
+test('vessel clearance is a 3D distance to the wall of the component the point is in', () => {
+  const closedTube = makeVessel(geometryOf(new THREE.CylinderGeometry(5, 5, 40, 96, 1, false)));
+  assert.ok(Math.abs(vesselClearance(closedTube, [0, 0, 0]) - 5) < .05, 'on the axis: the radius');
+  // Review counterexample: 0.5 mm from the wall. The old test took the distance along rays perpendicular to the path's
+  // tangent and reported 2.18 mm for this point with the tangent [1, 0, 0].
+  const nearWall = vesselClearance(closedTube, [4.5, 0, 0]);
+  assert.ok(nearWall > .4 && nearWall < .6, `${nearWall} mm, the true distance is about 0.5`);
+  assert.equal(vesselClearance(closedTube, [9, 0, 0]), -1, 'outside the tube');
+  // A tube cut open at both ends is closed for the test: near an open end the clearance is the distance to that end.
+  const openTube = makeVessel(geometryOf(new THREE.CylinderGeometry(5, 5, 40, 24, 1, true)));
+  assert.ok(vesselClearance(openTube, [0, 0, 0]) > 4.5, 'in the middle of an open tube');
+  assert.ok(vesselClearance(openTube, [0, 19, 0]) < 1.5, 'one millimetre from an open end');
+});
+
+test('a point between separate vessels is not inside any of them', () => {
+  // Review counterexample: twelve open tubes of radius 2 along y, on a circle of radius 10 in the xz plane. The centre is in
+  // none of them; the old test took the last wall along every ray and returned about 12 mm for it.
+  const positions = [], indices = [];
+  for (let k = 0; k < 12; k++) {
+    const a = k * Math.PI / 6, g = new THREE.CylinderGeometry(2, 2, 40, 24, 1, true).translate(10 * Math.cos(a), 0, 10 * Math.sin(a)), base = positions.length / 3;
+    positions.push(...g.attributes.position.array); indices.push(...Array.from(g.index.array).map(i => i + base));
+  }
+  const ring = makeVessel({ positions, indices });
+  assert.equal(ring.components.length, 12);
+  assert.equal(vesselClearance(ring, [0, 0, 0]), -1);
+  assert.ok(vesselClearance(ring, [10, 0, 0]) > 1.5, 'the axis of one of the tubes');
+  // Two chambers 14 mm apart on y and a straight line between them: nothing joins them, so the check must say so.
+  const regions = { cavities: { a: box(0, -7, 0, 2), v: box(0, 7, 0, 2) }, vessels: { ring }, valves: {} };
+  const line = new THREE.LineCurve3(new THREE.Vector3(0, -7, 0), new THREE.Vector3(0, 7, 0));
+  assert.notDeepEqual(checkRoute(line, regions, ['a', 'v']).problems, []);
+  // The same line inside one tube that joins the two chambers is accepted.
+  const joined = { cavities: regions.cavities, vessels: { tube: makeVessel(geometryOf(new THREE.CylinderGeometry(1.5, 1.5, 12, 24, 1, true))) }, valves: {} };
+  assert.deepEqual(checkRoute(line, joined, ['a', 'v']).problems, []);
+});
+
+test('where vessel shells overlap, a point is judged by the shell it is in, not by a wall inside the lumen', () => {
+  // A branch (radius 3, along x) whose end lies inside a trunk (radius 10, along y). The branch's end cap is a wall inside
+  // the trunk's lumen and must not be taken for the trunk's wall.
+  const trunk = geometryOf(new THREE.CylinderGeometry(10, 10, 40, 48, 1, false));
+  const branch = new THREE.CylinderGeometry(3, 3, 30, 24, 1, false).rotateZ(Math.PI / 2).translate(15, 0, 0), b = geometryOf(branch);
+  const vessel = makeVessel({ positions: [...trunk.positions, ...b.positions], indices: [...trunk.indices, ...b.indices.map(i => i + trunk.positions.length / 3)] });
+  assert.equal(vessel.components.length, 2);
+  assert.ok(vesselClearance(vessel, [0, 0, 0]) > 9, 'the middle of the trunk, next to the branch end');
 });
 
 test('every route stays in the cavities and the vessel; the only stretches that do not are valve roots and the atrial wall', () => {
@@ -60,8 +104,8 @@ test('every route stays in the cavities and the vessel; the only stretches that 
     const result = checkRoute(curveOf(route.points), regionsFor(route.side), expectedOrder[route.side]);
     assert.deepEqual(result.problems, [], `${route.id}: ${result.problems}`);
     assert.deepEqual(result.order, expectedOrder[route.side]);
-    assert.ok(result.longestGap <= 5, `${route.id}: longest stretch outside both is ${result.longestGap} mm (measured 5)`);
-    // Measured: one stretch of 3-4 mm at each valve crossed, and 5 mm where the right superior pulmonary vein enters the left atrium.
+    assert.ok(result.longestGap <= 6, `${route.id}: longest stretch outside both is ${result.longestGap} mm (measured 6)`);
+    // Measured: one stretch of 3-5 mm at each valve crossed, and 6 mm where the right superior pulmonary vein enters the left atrium.
     const atValve = result.gaps.filter(g => g.atValve).length, atJunction = result.gaps.filter(g => !g.atValve && g.joins).length;
     assert.ok(atValve <= 3 && atJunction <= 1, `${route.id}: ${atValve} gaps at valves, ${atJunction} at junctions`);
   }
@@ -153,7 +197,7 @@ test('moved by the heartbeat displacement together with the cavities and vessels
   for (const [name, state] of Object.entries(states)) {
     beat.set(state);
     const movedCavities = Object.fromEntries(cavityIds.map(id => [id, makeSolid(moveMesh(mesh('cav' + id)))]));
-    const vessels = Object.fromEntries(Object.entries(vesselSolids).map(([id, s]) => [id, makeSolid(moveMesh({ positions: s.positions, indices: s.indices }))]));
+    const vessels = Object.fromEntries(['vc', 'pa', 'pv', 'ao'].map(id => [id, makeVessel(moveMesh(mesh(id)))]));
     const valves = Object.fromEntries(Object.entries(flow.valves).map(([id, v]) => [id, { center: beat.displace(v.center), radius: v.radius }]));
     let atRestFailures = 0;
     for (const route of flow.routes) {

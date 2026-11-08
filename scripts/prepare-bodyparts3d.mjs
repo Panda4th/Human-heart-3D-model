@@ -8,7 +8,7 @@ import { createHash } from 'node:crypto';
 import { inflateRawSync } from 'node:zlib';
 import { MeshoptSimplifier } from 'meshoptimizer';
 import { CatmullRomCurve3, Vector3 } from 'three';
-import { checkRoute, inside, makeSolid, nearestVertexDistance } from './flow-geometry.mjs';
+import { checkRoute, inside, makeSolid, makeVessel, nearestVertexDistance } from './flow-geometry.mjs';
 
 const [v3Path, v4Path] = process.argv.slice(2);
 if (!v3Path || !v4Path) throw new Error('Usage: node scripts/prepare-bodyparts3d.mjs <v3 zip> <v4 partof zip>');
@@ -584,9 +584,9 @@ const flow = {
 };
 
 // Build-time check (checkRoute in flow-geometry.mjs, which the unit tests run too): along the curve the viewer will draw
-// through the stored points, every millimetre must be inside a cavity or the vessel; the few short stretches that are
+// through the stored points, every millimetre must be inside a cavity or inside a vessel with 1 mm to its wall; the few short stretches that are
 // not are the valve roots and the entries of veins through the atrial wall, where the meshes have no opening.
-const vesselSolids = { vc: makeSolid(parts.vc), pa: makeSolid(parts.pa), pv: makeSolid(parts.pv), ao: makeSolid(parts.ao) };
+const vesselSolids = { vc: makeVessel(parts.vc), pa: makeVessel(parts.pa), pv: makeVessel(parts.pv), ao: makeVessel(parts.ao) };
 const vesselsOf = { right: ['vc', 'pa'], left: ['pv', 'ao'] }, expectedOrder = { right: ['ra', 'rv'], left: ['la', 'lv'] };
 for (const route of flow.routes) {
   const curve = new CatmullRomCurve3(route.points.map(p => new Vector3(...p)), false, 'centripetal');
