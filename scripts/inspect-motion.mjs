@@ -141,8 +141,10 @@ for (const mode of ['flow','interior','conduction']) {
     do {
       states.push({wallMs:Date.now()-start,...await page.evaluate(() => inspection.state())});
       await page.waitForTimeout(100);
-    } while (states.at(-1).beatTime < 1600 && Date.now()-start < 25000);
-    if(states.at(-1).beatTime<1600) throw new Error('two cycles not reached');
+    } while (states.at(-1).beatTime < 1600 && Date.now()-start < 90000);
+    // Software rendering plus recording is slow on Actions. Allow more wall time, while retaining
+    // the same two-cycle criterion (1600 ms on the model clock); this does not test playback speed.
+    const completed = states.at(-1).beatTime >= 1600;
     await page.locator('#beat-play').click();
     const stopped = await page.evaluate(() => inspection.state());
     await page.waitForTimeout(300);
@@ -155,10 +157,12 @@ for (const mode of ['flow','interior','conduction']) {
     if(mode==='flow' && view==='front' && speed==='slow') {
       await page.locator('#rotate').click(); await page.waitForTimeout(3000); await page.locator('#rotate').click(); rotated=true;
     }
-    report.playback.push({mode,view,speed,initial,stopped,rotated,states});
+    report.playback.push({mode,view,speed,initial,stopped,rotated,completed,states});
     const video = page.video();
     await context.close();
     await rename(await video.path(),resolve(out,folder+'.webm'));
+    await writeFile(resolve(out,'report.json'),JSON.stringify(report,null,2));
+    if(!completed) throw new Error('two cycles not reached; states and video saved in '+folder);
     console.log('playback',mode,speed,states.length);
   }
  }
