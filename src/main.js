@@ -2,7 +2,8 @@ import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { createConduction } from './conduction.mjs';
 import { createAnatomy } from './anatomy.mjs';
-import { contraction, createBeat, period, phaseAt, phases, slowFactor } from './heartbeat.mjs';
+import { createFlow } from './flow.mjs';
+import { contraction, createBeat, phaseAt, phases, slowFactor, stepBeat } from './heartbeat.mjs';
 import anatomyData from './data/bodyparts3d-heart.bin';
 import { createCrossSection, fitDistance, modelSphere, pickHit, removedByCut, selectableIn, TapGesture } from './viewer-state.mjs';
 
@@ -69,10 +70,33 @@ try {
   const bounds = modelSphere(heart);
   // World-space box of every part, for telling whether the current cut leaves anything of it.
   const partBox = new Map([...parts].map(([id, group]) => [id, new THREE.Box3().setFromObject(group)]));
+  // Blood-flow particles (flow.mjs) travel along meta.flow.routes. Their instance matrices are written in the millimetre frame
+  // every frame, after the beat has moved the walls, through the same displacement (beat.displace), so they stay inside.
+  // The mesh is a helper: createBeat must not deform its sphere geometry, and it is not a part (no clicking, no cut).
+  const flow = createFlow(meta.flow.routes);
+  const dots = new THREE.InstancedMesh(new THREE.SphereGeometry(1.5, 12, 8), new THREE.MeshStandardMaterial({ roughness: .45, metalness: 0 }), flow.count);
+  const dotColors = { right: new THREE.Color(0x4a9bff), left: new THREE.Color(0xff5a4f) };
+  for (let k = 0; k < flow.count; k++) dots.setColorAt(k, dotColors[flow.side(k)]);
+  dots.userData.helper = true;
+  dots.frustumCulled = false;
+  dots.visible = false;
+  exterior.add(dots);
+  const dotPoint = [0, 0, 0], dotMatrix = new THREE.Matrix4();
+  let flowStale = true;
+  function drawFlow() {
+    for (let k = 0; k < flow.count; k++) {
+      const size = flow.sample(k, dotPoint), p = beat.displace(dotPoint);
+      dotMatrix.makeScale(size, size, size).setPosition(p[0], p[1], p[2]);
+      dots.setMatrixAt(k, dotMatrix);
+    }
+    dots.instanceMatrix.needsUpdate = true;
+    flowStale = false;
+  }
   const modeText = {
     exterior: ['01 / EXTERIOR', 'かたちから、心臓を知る。', 'lv'],
     conduction: ['02 / CONDUCTION', '刺激の通り道をたどる。', 'sa'],
     interior: ['03 / INTERIOR', '断面から、内側を見る。', 'mv'],
+    flow: ['04 / FLOW', '血のめぐりを、追う。', 'lv'],
   };
   controls.target.copy(bounds.center);
   let mode = 'exterior', selected = 'lv', frame = 0, previousTime = 0, failed = false, overlay = false, pick = null;
@@ -150,8 +174,13 @@ try {
     if (controls.autoRotate) controls.update(Math.min(elapsed, .05));
     // The beat keeps to the clock on a slow device too; a long pause (previousTime reset to 0) does not jump ahead.
     if (beating) {
-      beatTime += Math.min(elapsed, .25) * 1000 / (realSpeed ? 1 : slowFactor);
-      if (reduceMotion.matches && beatTime >= period) {
+      // The particles advance to the same limited time as the beat: a frame that crosses the end of a one-beat play must not
+      // move them into the next beat.
+      const { next, done } = stepBeat(beatTime, Math.min(elapsed, .25) * 1000 / (realSpeed ? 1 : slowFactor), reduceMotion.matches);
+      flow.advance(beatTime, next);
+      flowStale = true;
+      beatTime = next;
+      if (done) {
         beating = false;
         beatTime = 0;
         $('beat-play').setAttribute('aria-pressed', 'false');
@@ -160,6 +189,7 @@ try {
       beat.set(contraction(beatTime));
       showPhase();
     }
+    if (dots.visible && flowStale) drawFlow();
     renderer.render(scene, camera);
     updateLabels();
     frame = 0;
@@ -282,7 +312,10 @@ try {
     const interior = mode === 'interior';
     crossSection.setEnabled(interior);
     showConduction();
-    const conductionView = mode === 'conduction';
+    // The walls are almost transparent where something inside them is shown: the conduction system and the blood.
+    const conductionView = mode === 'conduction' || mode === 'flow';
+    dots.visible = mode === 'flow';
+    flowStale = true;
     for (const group of parts.values()) {
       if (group.userData.kind !== 'exterior') continue;
       group.traverse(object => {
@@ -295,6 +328,7 @@ try {
     }
     for (const m of Object.keys(modeText)) $(`mode-${m}`).setAttribute('aria-pressed', String(mode === m));
     $('steps').hidden = mode !== 'conduction';
+    $('flow-note').hidden = mode !== 'flow';
     $('interior-note').hidden = !interior;
     $('cut').hidden = !interior;
     $('interior-overlay').hidden = !interior;
@@ -306,6 +340,7 @@ try {
   $('mode-exterior').onclick = () => setMode('exterior');
   $('mode-conduction').onclick = () => setMode('conduction');
   $('mode-interior').onclick = () => setMode('interior');
+  $('mode-flow').onclick = () => setMode('flow');
   // The slider runs from front (left) to back (right); the plane keeps everything behind it.
   function applyDepth() {
     cutPlane.constant = -Number($('cut-depth').value);

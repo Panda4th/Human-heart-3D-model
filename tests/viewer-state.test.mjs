@@ -85,8 +85,8 @@ test('valves and papillary muscles fit within the bounding box of the four chamb
     assert.ok(wall.containsBox(box), `${id} outside the chambers' bounding box`);
     assert.deepEqual(group.userData.modes, ['interior']);
   }
-  for (const id of ['lv', 'rv', 'ra', 'la']) assert.deepEqual(parts.get(id).userData.modes, ['exterior', 'interior']);
-  assert.deepEqual(parts.get('ao').userData.modes, ['exterior']);
+  for (const id of ['lv', 'rv', 'ra', 'la']) assert.deepEqual(parts.get(id).userData.modes, ['exterior', 'interior', 'flow']);
+  assert.deepEqual(parts.get('ao').userData.modes, ['exterior', 'flow']);
 });
 test('the conduction overlay makes conduction selectable only on the cross-section', () => {
   const sa = parts.get('sa').userData, mv = parts.get('mv').userData, ao = parts.get('ao').userData;

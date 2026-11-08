@@ -26,6 +26,11 @@ test('WebKit engine: single HTML starts, switches modes and selects parts',async
   await expect(page.locator('#name')).toHaveText('三尖弁');
   // The canvas must show something other than the plain background.
   const picture=await page.locator('canvas').screenshot({path:testInfo.outputPath('webkit-interior.png')});
+  await page.locator('#mode-flow').click();
+  await expect(page.locator('.part:visible')).toHaveCount(10);
+  await page.locator('#beat-play').click();
+  await page.waitForTimeout(500);
+  await page.locator('#beat-play').click();
   await page.locator('#mode-exterior').click();
   expect((await page.locator('canvas').screenshot()).equals(picture)).toBe(false);
   expect(errors).toEqual([]);
