@@ -124,3 +124,27 @@ test('the cut-face copies share the deformed geometry, the rest shape comes back
   for (const [id, a] of rest) assert.deepEqual(meshOf(id).geometry.attributes.position.array, a, `${id} back to rest`);
   assert.deepEqual(beat.displace(anchor), anchor);
 });
+
+// src/main.js decides whether the cut leaves anything of a part from a box that is the union of the rest shape and the two
+// most contracted shapes. That is exact only if no moment of the beat reaches outside that union.
+test('the box of every part over the beat stays inside the union of the rest shape and the two contracted shapes', () => {
+  const boxOf = group => new THREE.Box3().setFromObject(group, true);
+  const union = new Map();
+  for (const state of [{ atria: 0, ventricles: 0 }, atrialPeak, ventricularPeak]) {
+    beat.set(state);
+    for (const [id, group] of parts) union.has(id) ? union.get(id).union(boxOf(group)) : union.set(id, boxOf(group));
+  }
+  let widened = 0;
+  const eps = 1e-6;
+  for (let t = 0; t < period; t += 10) {
+    beat.set(contraction(t));
+    for (const [id, group] of parts) {
+      const b = boxOf(group), u = union.get(id);
+      assert.ok(b.min.x >= u.min.x - eps && b.min.y >= u.min.y - eps && b.min.z >= u.min.z - eps
+        && b.max.x <= u.max.x + eps && b.max.y <= u.max.y + eps && b.max.z <= u.max.z + eps, `${id} at ${t} ms`);
+    }
+  }
+  beat.set({ atria: 0, ventricles: 0 });
+  for (const [id, group] of parts) if (union.get(id).min.z < boxOf(group).min.z - 1e-4) widened++;
+  assert.ok(widened > 0, 'at least one part reaches further back than at rest');
+});
