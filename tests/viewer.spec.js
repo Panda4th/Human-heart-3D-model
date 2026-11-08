@@ -480,3 +480,47 @@ for (const width of [320,390]) test(`phone blocks fill the width at ${width}px`,
   expect(widths.heading).toBe(widths.main); expect(widths.tools).toBe(widths.main); expect(widths.footer).toBe(widths.main);
   await context.close();
 });
+
+// The heartbeat runs only while playing, keeps its shape when stopped, and the cut face follows it.
+for (const width of [1440, 390]) test(`heartbeat plays, shows its phase and stops drawing when stopped at width ${width}`, async ({ browser }) => {
+  const mobile = width < 700;
+  const context = await browser.newContext({ viewport: { width, height: 900 }, hasTouch: mobile, isMobile: mobile });
+  const page = await context.newPage(), errors = [];
+  page.on('pageerror', e => errors.push(e.message));
+  await page.addInitScript(() => {
+    window.renderRequests = 0;
+    const original = window.requestAnimationFrame.bind(window);
+    window.requestAnimationFrame = cb => { window.renderRequests++; return original(cb); };
+  });
+  await page.goto(url);
+  await expect(page.locator('html')).toHaveAttribute('data-ready', 'true');
+  await expect(page.locator('#beat-phase')).toBeHidden();
+  await page.locator('#mode-interior').click();
+  const c = page.locator('canvas');
+  await c.scrollIntoViewIfNeeded();
+  const still = await stableShot(c);
+  await page.locator('#beat-play').click();
+  await expect(page.locator('#beat-play')).toHaveAttribute('aria-pressed', 'true');
+  await expect(page.locator('#beat-phase')).toBeVisible();
+  await expect(page.locator('#beat-note')).toBeVisible();
+  await expect(page.locator('#beat-phase-name')).toHaveText(/^(心房の収縮|心室の収縮|心室の弛緩)（約/);
+  await expect(page.locator('#beat-phase-valves')).toBeVisible({ visible: !mobile });
+  const before = await page.evaluate(() => window.renderRequests);
+  // At the slow speed the ventricles are most contracted 1.85 s into the beat. SwiftShader draws this page at about
+  // 5 frames a second at 1440 px, so only a few frames are required.
+  await page.waitForTimeout(1850);
+  expect(await page.evaluate(() => window.renderRequests)).toBeGreaterThan(before + 3);
+  await page.locator('#beat-play').click();
+  await expect(page.locator('#beat-play')).toHaveAttribute('aria-pressed', 'false');
+  await expect(page.locator('#beat-phase')).toBeVisible();
+  const stopped = await stableShot(c);
+  expect(stopped.equals(still)).toBe(false);
+  const frames = await page.evaluate(() => window.renderRequests);
+  await page.waitForTimeout(250);
+  expect(await page.evaluate(() => window.renderRequests)).toBe(frames);
+  await page.locator('#beat-speed').click();
+  await expect(page.locator('#beat-speed')).toHaveAttribute('aria-pressed', 'true');
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+  expect(errors).toEqual([]);
+  await context.close();
+});
