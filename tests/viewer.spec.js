@@ -109,7 +109,7 @@ for (const width of [1440,390,320]) test(`offline model and interactions at widt
   await expect(page.locator('#rotate')).toHaveAttribute('aria-pressed','false');
   await page.screenshot({path:testInfo.outputPath('exterior.png'),fullPage:!mobile});
   await page.locator('#mode-conduction').click();
-  await expect(page.locator('.part:visible')).toHaveCount(7);
+  await expect(page.locator('.part:visible')).toHaveCount(8);
   await expect(page.locator('#name')).toHaveText('洞房結節');
   await expect(page.locator('#previous')).toBeDisabled();
   await c.screenshot();
@@ -121,7 +121,7 @@ for (const width of [1440,390,320]) test(`offline model and interactions at widt
   await clickAnchor(page,'心房への広がり',1.5);
   await expect(page.locator('#name')).toHaveText('心房への広がり');
   await page.getByRole('button',{name:'洞房結節',exact:true}).click();
-  for(const name of ['心房への広がり','房室結節','ヒス束','右脚','左脚','プルキンエ線維']) {
+  for(const name of ['心房への広がり','房室結節','ヒス束（近位区間）','ヒス束（分岐区間）','右脚','左脚','プルキンエ線維']) {
     await page.locator('#next').click(); await expect(page.locator('#name')).toHaveText(name);
   }
   await expect(page.locator('#next')).toBeDisabled();
@@ -293,7 +293,7 @@ for (const width of [1440, 390]) test(`cut view: removed parts, hidden labels, t
   // (the same cases as the unit test).
   await page.locator('#cut-depth').fill('-0.3');
   await part('ヒス束').click();
-  await expect(page.locator('#labels .model-label:visible')).toHaveText('ヒス束');
+  await expect(page.locator('#labels .model-label:visible')).toHaveText('ヒス束（近位区間）');
   await expect(page.locator('#labels .model-label.behind:visible')).toHaveCount(1);
   await part('プルキンエ線維').click();
   await expect(page.locator('#labels .model-label:visible')).toHaveText('プルキンエ線維');
@@ -352,6 +352,30 @@ for (const width of [1440, 390]) test(`cut view: removed parts, hidden labels, t
   expect(errors).toEqual([]);
   await context.close();
 });
+for (const width of [1440, 390]) test(`His intervals select independently at width ${width}`, async ({browser}, testInfo) => {
+  const context = await browser.newContext({viewport:{width,height:900},hasTouch:width<700,isMobile:width<700});
+  const page = await context.newPage();
+  await page.goto(url);
+  await expect(page.locator('html')).toHaveAttribute('data-ready','true');
+  await page.locator('#mode-conduction').click();
+  const c = page.locator('canvas');
+  for (const name of ['ヒス束（近位区間）','ヒス束（分岐区間）']) {
+    await page.getByRole('button',{name,exact:true}).click();
+    await expect(page.locator('#name')).toHaveText(name);
+    await expect(page.locator('#labels .model-label:visible')).toHaveText(name);
+    await clickAnchor(page,name);
+    await expect(page.locator('#name')).toHaveText(name);
+  }
+  await page.screenshot({path:testInfo.outputPath('his-branching.png'),fullPage:width>=700});
+  await page.locator('#mode-interior').click();
+  await expect(page.getByRole('button',{name:'ヒス束（分岐区間）',exact:true})).toBeHidden();
+  await page.locator('#interior-conduction').click();
+  await page.locator('#cut-depth').fill('-0.6');
+  await page.getByRole('button',{name:'ヒス束（分岐区間）',exact:true}).click();
+  await expect(page.locator('#name')).toHaveText('ヒス束（分岐区間）');
+  await context.close();
+});
+
 for (const width of [1440, 390]) test(`the two bundle branches are selected and drawn separately at width ${width}`, async ({ browser }) => {
   const mobile = width < 700;
   const context = await browser.newContext({ viewport: { width, height: 900 }, hasTouch: mobile, isMobile: mobile });

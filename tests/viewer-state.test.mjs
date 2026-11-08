@@ -353,7 +353,7 @@ test('the cross-section slider reaches both ends of the four chambers', () => {
 
 test('the right and left bundle branches are separate parts with their own colours, and the label anchors follow them', () => {
   const ids = conductionDefinitions.map(d => d[0]);
-  assert.deepEqual(ids, ['sa', 'atria', 'av', 'his', 'rbb', 'lbb', 'purkinje']);
+  assert.deepEqual(ids, ['sa', 'atria', 'av', 'his', 'bhis', 'rbb', 'lbb', 'purkinje']);
   const colors = ['rbb', 'lbb', 'purkinje'].map(id => parts.get(id).userData.color);
   assert.equal(new Set(colors).size, 3, 'the two branches and the Purkinje lines must not share a colour');
   // paths.branches is [left, right] in the generated data (the regression test above checks the walls they lie on).
@@ -445,14 +445,20 @@ test('schematic conduction paths share their junctions and have no unsampled lon
   for (const atrial of paths.atria) assert.deepEqual(atrial[0], nodes.sa, 'both atrial routes start at the sinus node');
   assert.deepEqual(paths.atria[0].at(-1), nodes.av, 'atrial route meets the AV node');
   assert.deepEqual(paths.his[0][0], nodes.av, 'His bundle starts at the AV node');
-  for (const branch of paths.branches) assert.deepEqual(branch[0], paths.his[0].at(-1), 'both branches meet His');
+  const { leftOrigin, rightOrigin } = anatomy.meta.conduction.junctions;
+  assert.notDeepEqual(leftOrigin, rightOrigin, 'left and right take-offs are distinct');
+  assert.deepEqual(paths.his[0].at(-1), leftOrigin);
+  assert.deepEqual(paths.branchingHis[0][0], leftOrigin);
+  assert.deepEqual(paths.branchingHis[0].at(-1), rightOrigin);
+  assert.deepEqual(paths.branches[0][0], leftOrigin, 'left branch leaves the earlier take-off');
+  assert.deepEqual(paths.branches[1][0], rightOrigin, 'right branch continues from the distal interval');
   for (const [i, fibre] of paths.purkinje.entries()) assert.deepEqual(fibre[0], paths.branches[i < 2 ? 0 : 1].at(-1), 'fibres meet their branch');
   const right = paths.branches[1];
   const gaps = right.slice(1).map((p, i) => Math.hypot(...p.map((v, k) => v - right[i][k])));
   assert.ok(Math.max(...gaps) < 12, `unsampled right-branch interval: ${Math.max(...gaps)} mm`);
 });
 
-test('His schematic crosses directly between its anchors; sinus node is elongated caudally', () => {
+test('proximal His schematic crosses directly between its anchors; sinus node is elongated caudally', () => {
   const root = new THREE.Group(), map = new Map();
   createConduction(root, map, anatomy.meta.conduction);
   const curve = map.get('his').children[0].geometry.parameters.path;
@@ -469,4 +475,34 @@ test('His schematic crosses directly between its anchors; sinus node is elongate
   assert.ok(size.y > size.x * 3 && size.y > size.z * 3, 'elongated instead of spherical');
   assert.ok(box.containsPoint(new THREE.Vector3(...anatomy.meta.conduction.nodes.sa)), 'head anchor remains inside the node');
   assert.ok(box.getCenter(new THREE.Vector3()).y < anatomy.meta.conduction.nodes.sa[1], 'body extends caudally');
+});
+
+
+test('His intervals are separately selectable, differently coloured, and share only their junction', () => {
+  const root = new THREE.Group(), map = new Map();
+  const anchors = createConduction(root, map, anatomy.meta.conduction);
+  const proximal = map.get('his'), branching = map.get('bhis');
+  assert.ok(proximal && branching);
+  assert.notEqual(proximal.userData.color, branching.userData.color);
+  assert.equal(selectableIn(branching.userData, 'conduction', false), true);
+  assert.equal(selectableIn(branching.userData, 'interior', false), false);
+  assert.equal(selectableIn(branching.userData, 'interior', true), true);
+  const first = proximal.children[0].geometry.parameters.path;
+  const second = branching.children[0].geometry.parameters.path;
+  assert.ok(first.getPoint(1).distanceTo(second.getPoint(0)) < 1e-6);
+  assert.ok(first.getPoint(0).distanceTo(second.getPoint(1)) > 1);
+  for (const [id, curve] of [['his', first], ['bhis', second]]) {
+    assert.ok(new THREE.Vector3(...anchors.get(id)).distanceTo(curve.getPointAt(.5)) < 1e-6, id + ' anchor is on its own curve');
+  }
+  heart.updateMatrixWorld(true);
+  const camera = new THREE.PerspectiveCamera(36, 1, .1, 150);
+  camera.position.set(0, .06, 1).normalize().multiplyScalar(fitDistance(bounds.radius, 1)).add(bounds.center);
+  camera.lookAt(bounds.center); camera.updateMatrixWorld();
+  for (const id of ['his', 'bhis']) {
+    const world = conduction.localToWorld(new THREE.Vector3(...anchors.get(id)));
+    const ray = new THREE.Raycaster(camera.position, world.clone().sub(camera.position).normalize());
+    ray.params.Line.threshold = .08 / exterior.scale.x;
+    assert.equal(pickPart(ray, [...parts.values()].filter(g => g.userData.kind === 'conduction')), id, id + ' is picked at its label anchor');
+  }
+
 });
