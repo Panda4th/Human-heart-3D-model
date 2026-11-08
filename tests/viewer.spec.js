@@ -182,7 +182,7 @@ for (const width of [1440,390,320]) test(`offline model and interactions at widt
   const overlayOffBehind = await stableShot(c);
   await page.locator('#interior-conduction').click();
   await expect(page.locator('#interior-conduction')).toHaveAttribute('aria-pressed','true');
-  await expect(page.locator('.part:visible')).toHaveCount(16);
+  await expect(page.locator('.part:visible')).toHaveCount(17);
   await expect(page.locator('#conduction-note')).toBeVisible();
   // Clicking the button scrolled the page. A canvas at a different fractional scroll position differs in its first pixel row,
   // so put the page back where overlayOffBehind was taken (the selected aortic valve may now show a cut notice that shifts the layout).
