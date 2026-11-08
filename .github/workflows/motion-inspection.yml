@@ -1,0 +1,31 @@
+name: Motion inspection
+on:
+  push:
+    branches: [codex/complete-motion-review-20261108]
+    paths:
+      - scripts/inspect-motion.mjs
+      - .github/workflows/motion-inspection.yml
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium
+      - run: node scripts/inspect-motion.mjs motion-inspection
+      - name: Inspection must not change the distributable
+        run: git diff --exit-code -- index.html src/
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: motion-inspection
+          path: motion-inspection/
+          retention-days: 14
