@@ -20,7 +20,7 @@ import { createValves, leafletDistance, partnerValve, valveKind, valveNames, val
 // the valve's binary window is open and its leaflets are completely open, and a leaflet only takes a pose that keeps the
 // clearance (valves.mjs) from every particle near the valve; otherwise it waits. So a particle never meets a leaflet, moving or
 // not, whatever the frame interval is.
-export const flowSettings = { gap: 4, ejectionFraction: .6, atrialShare: .25, spacing: 6.5, step: 4, warmUp: 4, ramp: 25 };
+export const flowSettings = { gap: 4, ejectionFraction: .6, atrialShare: .25, spacing: 6.5, step: 4, warmUp: 4, ramp: 10 };
 
 const clamp01 = x => Math.min(1, Math.max(0, x));
 const ejection = { from: cycle.atrialSystole + isovolumic.contraction, to: cycle.atrialSystole + cycle.ventricularSystole };

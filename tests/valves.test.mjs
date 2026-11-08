@@ -119,7 +119,7 @@ test('no particle comes within the clearance of a leaflet, whether the leaflets 
   }
 });
 
-test('the leaflets are completely open within 20 ms of the start of the valve window, and closed within 70 ms of its end', () => {
+test('the leaflets are completely open within 20 ms of the start of the valve window, and closed within 60 ms of its end', () => {
   const flow = createFlow(data), seen = Object.fromEntries(valveNames.map(name => [name, { open: [], close: [] }]));
   const before = Object.fromEntries(valveNames.map(name => [name, valvesAt(0)[valveKind[name]]]));
   const openedAt = {}, closedAt = {};
@@ -134,38 +134,45 @@ test('the leaflets are completely open within 20 ms of the start of the valve wi
       before[name] = now;
     }
   }
-  // Measured over 8 beats: leaflets completely open 0 to 11 ms after the window opens, closed 24 to 58 ms after it ends.
+  // Measured over 8 beats with the 10 ms swing: leaflets completely open 0 ms after the window opens, closed 11 to 54 ms after it ends.
   for (const name of valveNames) {
     assert.ok(seen[name].open.length >= 5, `${name}: ${seen[name].open.length} openings seen`);
     assert.ok(Math.max(...seen[name].open) <= 20, `${name}: completely open ${Math.max(...seen[name].open)} ms after the window opened`);
     assert.ok(seen[name].close.length >= 5, `${name}: ${seen[name].close.length} closings seen`);
-    assert.ok(Math.max(...seen[name].close) <= 70, `${name}: closed ${Math.max(...seen[name].close)} ms after the window`);
+    assert.ok(Math.max(...seen[name].close) <= 60, `${name}: closed ${Math.max(...seen[name].close)} ms after the window`);
   }
 });
 
-test('on each side of the heart the atrioventricular valve is closed before the arterial valve opens, and the other way round (review of PR #32)', () => {
-  // Review of PR #32: the mitral valve was held open by the last particle of the filling column while the aortic valve opened
-  // from 25 ms before its window, so both were completely open at 150 ms (mitral 1, aortic 1 at 150 ms and at 160 ms).
+test('the four valves are never open together on one side, and all four are closed together for a stretch of each isovolumic period (review of PR #32)', () => {
+  // Review of PR #32, first round: the mitral valve was held open by the last particle of the filling column while the aortic valve
+  // opened from 25 ms before its window, so both were completely open at 150 ms and at 160 ms. Second round: the two sides closed at
+  // different times (right 123-125 ms, left 137 ms in the contraction period), so there was no instant at which all four were closed,
+  // while the screen says that in the isovolumic periods all four valves are closed.
   const flow = createFlow(data), pairs = [['tricuspid', 'pulmonary'], ['mitral', 'aortic']];
-  const bothClosed = pairs.map(() => ({ contraction: new Set(), relaxation: new Set() }));
-  let worst = 0;
+  const runs = { contraction: [], relaxation: [] };
+  let run = null, worst = 0;
   for (let ms = 0; ms < 8 * period; ms += 1) {
     flow.advance(ms, ms + 1);
     if (ms < 2 * period) continue;
     const t = (ms + 1) % period;
-    pairs.forEach(([a, b], i) => {
-      const oa = flow.openness(a), ob = flow.openness(b);
-      worst = Math.max(worst, Math.min(oa, ob));
-      assert.ok(Math.min(oa, ob) <= .05, `${a} ${oa} and ${b} ${ob} are open together at ${t} ms`);
-      if (oa <= .05 && ob <= .05) { const beatNumber = Math.floor((ms + 1) / period); if (t >= 100 && t < 170) bothClosed[i].contraction.add(beatNumber); if (t >= 370 && t < 460) bothClosed[i].relaxation.add(beatNumber); }
-    });
+    for (const [a, b] of pairs) {
+      const small = Math.min(flow.openness(a), flow.openness(b));
+      worst = Math.max(worst, small);
+      assert.ok(small <= .05, `${a} ${flow.openness(a)} and ${b} ${flow.openness(b)} are open together at ${t} ms`);
+    }
+    const phase = t >= 100 && t < 170 ? 'contraction' : t >= 370 && t < 460 ? 'relaxation' : null;
+    if (phase && valveNames.every(name => flow.openness(name) <= .05)) {
+      run = run ?? { phase, from: t, length: 0 };
+      run.length++;
+      // The leaflets are closed only while both of the beat's valve windows are closed too.
+      assert.ok(!valvesAt(t).atrioventricular && !valvesAt(t).arterial, `all four leaflets closed at ${t} ms, inside a valve window`);
+    } else if (run) { runs[run.phase].push(run); run = null; }
   }
-  // Each isovolumic period of each of the 6 beats counted has an instant (1 ms steps) in which both valves are closed. It is
-  // short, about 2 ms: the second valve starts to open the moment the first is closed, and a longer closed time would
-  // postpone the ejection and the filling against the beat's windows (README, 血流の模式弁尖).
-  pairs.forEach(([a, b], i) => {
-    assert.equal(bothClosed[i].contraction.size, 6, `${a} and ${b}: both closed in the isovolumic contraction of ${bothClosed[i].contraction.size} of 6 beats`);
-    assert.equal(bothClosed[i].relaxation.size, 6, `${a} and ${b}: both closed in the isovolumic relaxation of ${bothClosed[i].relaxation.size} of 6 beats`);
-  });
+  // 6 beats counted. Each isovolumic period has one stretch with all four closed. Measured with the 10 ms swing: 10-11 ms of the
+  // 50 ms contraction period and 17-19 ms of the 80 ms relaxation period. The leaflets do not show the whole of either period.
+  assert.equal(runs.contraction.length, 6, JSON.stringify(runs.contraction));
+  assert.equal(runs.relaxation.length, 6, JSON.stringify(runs.relaxation));
+  assert.ok(runs.contraction.every(r => r.length >= 8), `contraction: ${runs.contraction.map(r => `${r.from}+${r.length}`)}`);
+  assert.ok(runs.relaxation.every(r => r.length >= 12), `relaxation: ${runs.relaxation.map(r => `${r.from}+${r.length}`)}`);
   assert.ok(worst <= .05);
 });

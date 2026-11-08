@@ -192,7 +192,9 @@ try {
     const phase = phases[index];
     $('beat-phase-name').textContent = `${phase.name}（${phase.time}）`;
     $('beat-phase-short').textContent = phase.short;
-    $('beat-phase-valves').textContent = phase.valves;
+    // In the flow view the leaflets are drawn, and they are closed together for only part of the two periods in which all four valves
+    // are closed (README, 血流の模式弁尖); the text says so instead of describing the whole period.
+    $('beat-phase-valves').textContent = phase.valves + (mode === 'flow' && index > 0 ? ` この画面の弁尖が4つとも閉じるのは、この時期のうち約${index === 1 ? '0.01' : '0.02'}秒だけです。` : '');
   }
   function render(time) {
     const elapsed = previousTime ? (time - previousTime) / 1000 : 0;
@@ -340,6 +342,8 @@ try {
     // The walls are almost transparent where something inside them is shown: the conduction system and the blood.
     const conductionView = mode === 'conduction' || mode === 'flow';
     dots.visible = mode === 'flow';
+    shownPhase = -1;
+    if (!$('beat-phase').hidden) showPhase();
     for (const { mesh } of leaflets) mesh.visible = mode === 'flow';
     flowStale = true;
     for (const group of parts.values()) {
