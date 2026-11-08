@@ -7,6 +7,8 @@ import { readFileSync, writeFileSync, mkdirSync } from 'node:fs';
 import { createHash } from 'node:crypto';
 import { inflateRawSync } from 'node:zlib';
 import { MeshoptSimplifier } from 'meshoptimizer';
+import { CatmullRomCurve3, Vector3 } from 'three';
+import { checkRoute, inside, makeSolid, nearestVertexDistance } from './flow-geometry.mjs';
 
 const [v3Path, v4Path] = process.argv.slice(2);
 if (!v3Path || !v4Path) throw new Error('Usage: node scripts/prepare-bodyparts3d.mjs <v3 zip> <v4 partof zip>');
@@ -243,6 +245,9 @@ const parts = {
   aov: part(['FJ2426', 'FJ2431', 'FJ2435']),
   pov: part(['FJ2417', 'FJ2427', 'FJ2434']),
   pm: part(['FJ2418', 'FJ2429', 'FJ2419', 'FJ2430', 'FJ2437']),
+  // The four cavities are not drawn (anatomy.mjs has no definition for them). They are kept in the bundle so that the
+  // unit tests can check the blood-flow routes against them without the BodyParts3D zips.
+  cavlv: weld(load(cavities.lv)), cavrv: weld(load(cavities.rv)), cavra: weld(load(cavities.ra)), cavla: weld(load(cavities.la)),
 };
 
 // Anchor points for the explanatory conduction overlay. BodyParts3D has no conduction-system
@@ -418,6 +423,179 @@ const conduction = {
   },
 };
 
+// Blood-flow routes for the explanatory motion. Not streamlines: each route is a smooth line that follows the middle of
+// the vessel or cavity and passes through the middle of each valve opening. It stays inside the cavities and vessels except
+// for a few short stretches where the data has no opening (checked below). Veins and venae cavae
+// (inflow) are followed toward the heart, arteries (outflow) away from it. Right side: vena cava, right atrium, tricuspid
+// valve, right ventricle, pulmonary valve, pulmonary trunk, one pulmonary artery. Left side: pulmonary vein, left atrium,
+// mitral valve, left ventricle, aortic valve, ascending aorta, aortic arch.
+const vsub = (a, b) => a.map((v, k) => v - b[k]);
+const vadd = (a, b) => a.map((v, k) => v + b[k]);
+const vmul = (a, s) => a.map(v => v * s);
+const vdot = (a, b) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
+const vunit = a => vmul(a, 1 / (Math.hypot(...a) || 1));
+const dist = (a, b) => Math.sqrt(d2(a, b));
+const meshVertices = mesh => { const out = []; for (let i = 0; i < mesh.positions.length; i += 3) out.push(mesh.positions.slice(i, i + 3)); return out; };
+const endNear = (mesh, ref, n = 12) => mean(meshVertices(mesh).sort((a, b) => d2(a, ref) - d2(b, ref)).slice(0, n));
+const endFar = (mesh, ref, n = 12) => mean(meshVertices(mesh).sort((a, b) => d2(b, ref) - d2(a, ref)).slice(0, n));
+
+// Cut a tube's surface with the plane through p perpendicular to d: the centre and rms radius of the cut curve near p.
+function cutCentre(mesh, p, d, radius) {
+  const at = i => mesh.positions.slice(i * 3, i * 3 + 3), segments = [];
+  for (let t = 0; t < mesh.indices.length; t += 3) {
+    const v = [0, 1, 2].map(k => at(mesh.indices[t + k])), s = v.map(q => vdot(vsub(q, p), d)), cut = [];
+    for (let k = 0; k < 3; k++) {
+      const a = s[k], b = s[(k + 1) % 3];
+      if ((a >= 0) !== (b >= 0)) cut.push(lerp(v[k], v[(k + 1) % 3], a / (a - b)));
+    }
+    if (cut.length === 2 && dist(lerp(cut[0], cut[1], .5), p) < radius) segments.push(cut);
+  }
+  if (segments.length < 4) return null;
+  let total = 0, centre = [0, 0, 0];
+  for (const [a, b] of segments) { const l = dist(a, b); total += l; centre = vadd(centre, vmul(lerp(a, b, .5), l)); }
+  centre = vmul(centre, 1 / total);
+  const spread = segments.reduce((s, [a, b]) => s + dist(a, b) * d2(lerp(a, b, .5), centre), 0) / total;
+  return { centre, radius: Math.sqrt(spread) };
+}
+// Follow a tube from `start` toward `toward` in steps, moving to the centre of each cut. Cuts at the capped ends are
+// small (the cap is flat, so the cut curve shrinks), so the stations at both ends whose radius is under 60% of the median
+// are dropped.
+function centreline(mesh, start, toward, { step = 3, radius = 24 } = {}) {
+  // Start 2 mm inside the end: a cut exactly in the plane of a flat cap has no usable cut curve.
+  let d = vunit(vsub(toward, start)), p = vadd(start, vmul(d, 2));
+  const stations = [];
+  for (let i = 0; i < 300; i++) {
+    const cut = cutCentre(mesh, p, d, radius);
+    if (!cut) break;
+    stations.push(cut);
+    const previous = stations.length > 1 ? vunit(vsub(cut.centre, stations.at(-2).centre)) : d;
+    d = vunit(vadd(vmul(d, .5), vmul(previous, .5)));
+    p = vadd(cut.centre, vmul(d, step));
+  }
+  const median = stations.map(s => s.radius).sort((a, b) => a - b)[Math.floor(stations.length / 2)];
+  while (stations.length && stations[0].radius < .6 * median) stations.shift();
+  while (stations.length && stations.at(-1).radius < .6 * median) stations.pop();
+  if (stations.length < 3) throw new Error('a vessel centreline is too short');
+  return stations.map(s => s.centre);
+}
+// The vessel's centreline from the end nearest `from` to the far end, as an ordered list of points.
+const vesselFrom = (mesh, from, opts) => centreline(mesh, endNear(mesh, from), endFar(mesh, from), opts);
+// ... or from the far end to the end nearest `to` (toward the heart).
+const vesselTo = (mesh, to, opts) => centreline(mesh, endFar(mesh, to), endNear(mesh, to), opts);
+// Continue `first` with `second` (which starts near its end): cut `first` where it comes closest to the start of `second`.
+function chain(first, second) {
+  let cut = 0;
+  first.forEach((p, i) => { if (d2(p, second[0]) < d2(first[cut], second[0])) cut = i; });
+  return [...first.slice(0, cut + 1), ...second];
+}
+
+// Cavity solids, the centre of the largest sphere that fits in each (searched on a 3 mm grid), and each valve opening.
+const cavityMesh = Object.fromEntries(Object.keys(cavities).map(id => [id, parts['cav' + id]]));
+const cavitySolid = Object.fromEntries(Object.entries(cavityMesh).map(([id, mesh]) => [id, makeSolid(mesh)]));
+function widestPoint(id) {
+  const { min, max } = cavitySolid[id];
+  let best = null;
+  for (let x = min[0]; x <= max[0]; x += 3) for (let y = min[1]; y <= max[1]; y += 3) for (let z = min[2]; z <= max[2]; z += 3) {
+    if (!inside(cavitySolid[id], [x, y, z])) continue;
+    const clearance = nearestVertexDistance(cavityMesh[id], [x, y, z]);
+    if (!best || clearance > best.clearance) best = { point: [x, y, z], clearance };
+  }
+  return best.point;
+}
+const core = Object.fromEntries(Object.keys(cavities).map(id => [id, widestPoint(id)]));
+// A valve opening: the leaflet vertices that touch the chambers on both sides of the valve (the ring where the valve is
+// attached), or for a semilunar valve those touching the ventricle (the cusps' base). The centre is their mean and the
+// radius their rms distance from it. Both depend on the touching range, so the range is a display parameter.
+function valveOpening(files, sides, range) {
+  const ring = files.flatMap(pts).filter(p => sides.every(id => nearestVertexDistance(cavityMesh[id], p) < range));
+  if (ring.length < 50) throw new Error(`valve ring of ${files}: only ${ring.length} vertices touch ${sides}`);
+  const centre = mean(ring);
+  return { centre, radius: Math.sqrt(ring.reduce((s, p) => s + d2(p, centre), 0) / ring.length) };
+}
+const opening = {
+  tricuspid: valveOpening(['FJ2421', 'FJ2433', 'FJ2436'], ['ra', 'rv'], 4),
+  mitral: valveOpening(['FJ2420', 'FJ2432'], ['la', 'lv'], 5),
+  aortic: valveOpening(['FJ2426', 'FJ2431', 'FJ2435'], ['lv'], 2.5),
+  pulmonary: valveOpening(['FJ2417', 'FJ2427', 'FJ2434'], ['rv'], 2.5),
+};
+
+// Vessel meshes as unsimplified solids for the centrelines; the checks below use the simplified parts that are shipped.
+// clip() leaves the vertices it cut away in the array, so compact() keeps only those still used.
+const cutAt = (id, planes) => compact(weld(clip(load(id), planes)));
+const vessels = {
+  svc: weld(load('FMA4720')), ivc: cutAt('FMA10951', [[Y, 1165, 1]]),
+  trunk: weld(load('FJ2966')), lpa: cutAt('FJ2924', [[X, 70, -1]]), rpa: cutAt('FJ3019', [[X, -45, 1]]),
+  // Each pulmonary vein is its longest part, the trunk. The other parts of the left veins (FJ2925, FJ2944, FJ2950) are
+  // tributaries lying beside it; cutting them together puts the middle of the cut outside every one of them.
+  lspv: weld(load('FJ2933')), lipv: weld(load('FJ2955')), rspv: weld(load('FJ3020')), ripv: weld(load('FJ3040')),
+  ascending: weld(load('FMA3736')), arch: weld(load('FMA3768')),
+};
+// A branch that continues `trunkLine`: traced from its far end (a clean cross-section) back toward the trunk and stopped
+// once it is within 8 mm of the trunk's middle line, because near the junction the two shells overlap and the cuts are
+// not a tube any more. Returned from the junction outward.
+function branchFrom(trunkLine, mesh, opts) {
+  const back = vesselTo(mesh, trunkLine.at(-1), opts);
+  const stop = back.findIndex(p => trunkLine.some(q => dist(p, q) < 8));
+  return back.slice(0, stop < 0 ? back.length : stop + 1).reverse();
+}
+const pulmonaryOutflow = branch => { const trunk = vesselFrom(vessels.trunk, opening.pulmonary.centre, { radius: 22 }); return chain(trunk, branchFrom(trunk, vessels[branch], { radius: 22 })); };
+const aorticOutflow = (() => { const ascending = vesselFrom(vessels.ascending, opening.aortic.centre, { radius: 22 }); return chain(ascending, branchFrom(ascending, vessels.arch, { radius: 24 })); })();
+
+// A route is described by control points; marks name the ones that are chamber middles or valve centres.
+function buildRoute({ id, side, outlet, inflow, atrium, atrioventricular, ventricle, arterial, outflow }) {
+  const control = [], index = {};
+  const mark = (name, p) => { index[name] = control.length; control.push(p); };
+  control.push(...inflow);
+  mark('atrium', core[atrium]); mark('atrioventricular', opening[atrioventricular].centre);
+  mark('ventricle', core[ventricle]); mark('arterial', opening[arterial].centre);
+  control.push(...outflow);
+  // Resample every 2 mm, smooth with the valve centres held fixed, and store every 3 mm.
+  const dense = [control[0]], pinned = new Map();
+  for (let i = 1; i < control.length; i++) {
+    const n = Math.max(1, Math.round(dist(control[i - 1], control[i]) / 2));
+    for (let k = 1; k <= n; k++) dense.push(lerp(control[i - 1], control[i], k / n));
+    for (const name of ['atrioventricular', 'arterial']) if (index[name] === i) pinned.set(dense.length - 1, name);
+  }
+  pinned.set(0, 'start'); pinned.set(dense.length - 1, 'end');
+  let line = dense;
+  for (let pass = 0; pass < 40; pass++) line = line.map((p, i) => pinned.has(i) ? p : lerp(p, mean([line[i - 1], line[i + 1]]), .5));
+  const lengths = [0];
+  line.forEach((p, i) => { if (i) lengths.push(lengths[i - 1] + dist(p, line[i - 1])); });
+  // The ends are cut open at the vessels' clip planes, where a vessel is not closed around the line, so 10 mm are left off each end.
+  const trim = 10, count = Math.round((lengths.at(-1) - 2 * trim) / 3), points = [];
+  for (let k = 0; k <= count; k++) {
+    const s = trim + (lengths.at(-1) - 2 * trim) * k / count;
+    let j = 1; while (j < lengths.length - 1 && lengths[j] < s) j++;
+    points.push(lerp(line[j - 1], line[j], (s - lengths[j - 1]) / (lengths[j] - lengths[j - 1] || 1)));
+  }
+  const rounded = round(points), marks = {};
+  for (const name of ['atrium', 'ventricle']) marks[name] = rounded.reduce((best, p, i) => dist(p, core[name === 'atrium' ? atrium : ventricle]) < dist(rounded[best], core[name === 'atrium' ? atrium : ventricle]) ? i : best, 0);
+  for (const [name, valve] of [['atrioventricular', atrioventricular], ['arterial', arterial]]) marks[name] = rounded.reduce((best, p, i) => dist(p, opening[valve].centre) < dist(rounded[best], opening[valve].centre) ? i : best, 0);
+  return { id, side, outlet, points: rounded, marks };
+}
+const routeSpecs = [
+  { id: 'svc', side: 'right', outlet: 'lpa', inflow: vesselTo(vessels.svc, core.ra), atrium: 'ra', atrioventricular: 'tricuspid', ventricle: 'rv', arterial: 'pulmonary', outflow: pulmonaryOutflow('lpa') },
+  { id: 'ivc', side: 'right', outlet: 'rpa', inflow: vesselTo(vessels.ivc, core.ra), atrium: 'ra', atrioventricular: 'tricuspid', ventricle: 'rv', arterial: 'pulmonary', outflow: pulmonaryOutflow('rpa') },
+  ...['lspv', 'lipv', 'rspv', 'ripv'].map(id => ({ id, side: 'left', outlet: 'arch', inflow: vesselTo(vessels[id], core.la, { radius: 18 }), atrium: 'la', atrioventricular: 'mitral', ventricle: 'lv', arterial: 'aortic', outflow: aorticOutflow })),
+];
+const flow = {
+  valves: Object.fromEntries(Object.entries(opening).map(([id, v]) => [id, { center: round([v.centre])[0], radius: Math.round(v.radius * 10) / 10 }])),
+  routes: routeSpecs.map(buildRoute),
+};
+
+// Build-time check (checkRoute in flow-geometry.mjs, which the unit tests run too): along the curve the viewer will draw
+// through the stored points, every millimetre must be inside a cavity or the vessel; the few short stretches that are
+// not are the valve roots and the entries of veins through the atrial wall, where the meshes have no opening.
+const vesselSolids = { vc: makeSolid(parts.vc), pa: makeSolid(parts.pa), pv: makeSolid(parts.pv), ao: makeSolid(parts.ao) };
+const vesselsOf = { right: ['vc', 'pa'], left: ['pv', 'ao'] }, expectedOrder = { right: ['ra', 'rv'], left: ['la', 'lv'] };
+for (const route of flow.routes) {
+  const curve = new CatmullRomCurve3(route.points.map(p => new Vector3(...p)), false, 'centripetal');
+  const regions = { cavities: cavitySolid, vessels: Object.fromEntries(vesselsOf[route.side].map(id => [id, vesselSolids[id]])), valves: flow.valves };
+  const result = checkRoute(curve, regions, expectedOrder[route.side]);
+  console.log(`route ${route.id.padEnd(5)} ${String(route.points.length).padStart(3)} points, ${result.samples} samples, cavities ${result.order}, gaps ${result.gaps.map(g => `${g.length} mm ${g.atValve ? 'at a valve' : 'at a junction'}`).join('; ') || 'none'}`);
+  if (result.problems.length) throw new Error(`route ${route.id}: ${result.problems.join('; ')}`);
+}
+
 // Binary layout: "BP3D", uint32 JSON length, JSON, then per part Int16 positions (0.01 mm steps
 // around the heart centre) and Uint16 indices, each 4-byte aligned.
 const min = [Infinity, Infinity, Infinity], max = [-Infinity, -Infinity, -Infinity];
@@ -425,7 +603,7 @@ for (const mesh of Object.values(parts)) mesh.positions.forEach((v, i) => {
   min[i % 3] = Math.min(min[i % 3], v); max[i % 3] = Math.max(max[i % 3], v);
 });
 const center = [0, 1, 2].map(k => Math.round((min[k] + max[k]) / 2 * 100) / 100);
-const step = .01, chunks = [], meta = { format: 5, unit: 'mm', step, center, parts: [], conduction };
+const step = .01, chunks = [], meta = { format: 6, unit: 'mm', step, center, parts: [], conduction, flow };
 let offset = 0;
 for (const [id, mesh] of Object.entries(parts)) {
   const count = mesh.positions.length / 3;
