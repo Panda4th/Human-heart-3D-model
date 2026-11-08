@@ -72,7 +72,7 @@ test('every route moves blood in the order of the cycle: atria to ventricle, the
     assert.ok(ejected >= 40, `${id}: only ${ejected} particles ejected in 10 beats`);
   }
   // The share of the filling that atrial systole delivers. OpenStax 19.3: the remaining 20 to 30%. The setting is 25%; with
-  // 6 to 9 particles through a valve per beat the share comes in steps of about 11%, and measured 117 of 547 (21.4%).
+  // 6 to 9 particles through a valve per beat the share comes in steps of about 11%, and measured 118 of 548 (21.5%) at bd65bd0 (117 of 547 before the steps were cut at the valve times).
   const atrial = total(crossings, c => c.valve === 'atrioventricular' && c.at < cycle.atrialSystole), all = total(crossings, c => c.valve === 'atrioventricular');
   assert.ok(atrial / all > .2 && atrial / all < .3, `${atrial} of ${all} (${(atrial / all * 100).toFixed(1)}%) came through in atrial systole`);
   // Ejected per beat against what the ventricular segment holds when full (its length over the gap): measured 64%.
