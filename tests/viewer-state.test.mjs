@@ -67,7 +67,8 @@ test('standalone HTML includes license and has no external runtime resources', (
 
 const anatomy = decodeAnatomy(bundle);
 test('BodyParts3D bundle has every defined part with valid geometry', () => {
-  assert.deepEqual(anatomy.parts.map(p => p.id), [...anatomyDefinitions, ...interiorDefinitions].map(d => d[0]));
+  // Format 6 also carries the four cavities, which are not drawn (tests/flow.test.mjs checks the blood-flow routes against them).
+  assert.deepEqual(anatomy.parts.map(p => p.id), [...[...anatomyDefinitions, ...interiorDefinitions].map(d => d[0]), 'cavlv', 'cavrv', 'cavra', 'cavla']);
   for (const p of anatomy.parts) {
     assert.ok(p.indices.length > 0 && p.indices.length % 3 === 0, p.id);
     assert.ok(p.positions.every(Number.isFinite), p.id);
@@ -75,7 +76,7 @@ test('BodyParts3D bundle has every defined part with valid geometry', () => {
   }
 });
 // This checks the bounding box of the four chambers only. It cannot tell whether a valve lies in a cavity
-// or pierces the wall; that needs the cavity meshes, which are not in the bundle.
+// or pierces the wall; that needs the cavity meshes, which are in the bundle from format 6 but are not used here.
 test('valves and papillary muscles fit within the bounding box of the four chambers; only the interior view selects them', () => {
   const wall = new THREE.Box3();
   for (const id of ['lv', 'rv', 'ra', 'la']) wall.expandByObject(parts.get(id));
