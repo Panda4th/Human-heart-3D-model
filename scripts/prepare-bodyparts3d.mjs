@@ -293,7 +293,7 @@ const septumRV = cav.rv.filter(p => d2(nearest(cav.lv, p), p) < 15 ** 2);
 // Branching bundle: on the crest of the septum beneath the non-coronary and right coronary cusps (Stephenson 2017,
 // Chen et al. 2025). Taken as the septal point of the LV cavity closest to both cusps' lowest points. No distance is
 // set; the distances it gives are measured afterwards, so their agreement with the papers is built in, not a check.
-// This is a shared schematic junction, not an identified RBB origin. Kawashima/Sato 2021
+// This LV-side proxy is not an identified tissue boundary or RBB origin. Kawashima/Sato 2021
 // distinguish the LBB take-off along the branching bundle from its distal continuation into RBB.
 const nadir = set => extreme(set, p => -p[1]);
 const [nccNadir, rccNadir] = [nadir(nonCoronary), nadir(rightCoronary)];
@@ -302,11 +302,15 @@ const bifurcationFromSeptum = septum => {
   return septum.reduce((best, p) => Math.sqrt(d2(p, nccNadir)) + Math.sqrt(d2(p, rccNadir)) < Math.sqrt(d2(best, nccNadir)) + Math.sqrt(d2(best, rccNadir)) ? p : best);
 };
 const bifurcation = bifurcationFromSeptum(septumLV);
+// Schematic take-offs are separate. Reuse the LV anchor for the left take-off;
+// the nearest RV septal vertex (already the old right path's first surface point)
+// marks the distal continuation into RBB. Neither is a histologically identified boundary.
+const rightOrigin = nearest(septumRV, bifurcation);
 if (process.argv.includes('--inspect-landmarks')) {
   const rounded = p => p.map(v => Math.round(v * 10000) / 10000);
   const delta = (a, b) => rounded(b.map((v, k) => v - a[k]));
   const axis = (a, b) => ({ start: rounded(a), end: rounded(b), delta: delta(a, b), length: Math.sqrt(d2(a, b)) });
-  const nearestRV = nearest(septumRV, bifurcation);
+  const nearestRV = rightOrigin;
   console.log(JSON.stringify({
     schema: 1,
     unit: 'mm',
@@ -315,15 +319,16 @@ if (process.argv.includes('--inspect-landmarks')) {
     interpretation: 'Algorithm sensitivity only; no anatomical validation. No bundle is written.',
     pointRoles: {
       av: 'Valve-derived proxy, not an observed compact-node distal boundary',
-      bifurcation: 'Shared model branch point on LV cavity, not an observed RBB origin',
-      nearestRV: 'Nearest RV septal candidate, not an observed RBB origin',
+      bifurcation: 'LV-side left take-off proxy, not an observed histological boundary',
+      nearestRV: 'RV-side right take-off proxy, not an observed RBB origin',
     },
     nominal: { hingeRange: 4, septumRange: 15, ...axis(av, bifurcation) },
     displayed: axis(av.map(v => Math.round(v * 10) / 10), bifurcation.map(v => Math.round(v * 10) / 10)),
     hingeSweep: [3, 4, 5, 6].map(mm => ({ hingeRange: mm, ...axis(avFromHinge(hingeWithin(mm)), bifurcation) })),
     septumSweep: [10, 15, 20].map(mm => ({ septumRange: mm, ...axis(av, bifurcationFromSeptum(cav.lv.filter(p => d2(nearest(cav.rv, p), p) < mm ** 2))) })),
+    schematicSegments: { proximal: axis(av, bifurcation), branching: axis(bifurcation, rightOrigin), overallAxis: axis(av, rightOrigin) },
     endpointCounterexample: {
-      warning: 'Changing the measurement endpoint is NOT a proposed anatomical correction.',
+      warning: 'Changing the schematic endpoint changes the axis definition; agreement of its sign is NOT anatomical validation.',
       ...axis(av, nearestRV),
     },
     missingObservedBoundaries: ['compact-node distal end', 'penetrating/branching bundle junction', 'RBB origin', 'membranous septum'],
@@ -342,18 +347,21 @@ const round = set => set.map(p => p.map(v => Math.round(v * 10) / 10));
 // chamber surface, but the His segment crosses the septum and is not an LV-surface path.
 const anchored = (line, start, end) => line.map((p, i) => i === 0 ? start : i === line.length - 1 ? end : p);
 const rightEnd = nearest(cav.rv, rvModerator);
+// Keep the existing RV surface samples; its first point is rightOrigin.
 const rightSeptal = along(septumRV, [bifurcation, lerp(bifurcation, rvModerator, .5)]);
 // The papillary-muscle base is outside the septal candidate patch. Continue over
 // the RV endocardium rather than snapping its distal route back onto the septum.
 const rightDistal = along(cav.rv, [rightSeptal.at(-1), rightEnd]);
 const conduction = {
   nodes: { sa: round([sa])[0], av: round([av])[0] },
+  junctions: { leftOrigin: round([bifurcation])[0], rightOrigin: round([rightOrigin])[0] },
   paths: {
     atria: [round(anchored(along(cav.ra, [sa, lerp(sa, av, .5), av]), sa, av)), round(anchored(along(atrialWall, [sa, lerp(sa, laAppendage, .5), laAppendage]), sa, laAppendage))],
     his: [round([av, bifurcation])],
+    branchingHis: [round([bifurcation, rightOrigin])],
     branches: [
       round(along(septumLV, [bifurcation, lerp(bifurcation, lvApex, .5), lvApex])),
-      round(anchored([bifurcation, ...rightSeptal, ...rightDistal.slice(1)], bifurcation, rightEnd)),
+      round(anchored([...rightSeptal, ...rightDistal.slice(1)], rightOrigin, rightEnd)),
     ],
     purkinje: [
       round(along(cav.lv, [lvApex, lvLateral, lerp(lvLateral, mitral, .6)])),
@@ -371,7 +379,7 @@ for (const mesh of Object.values(parts)) mesh.positions.forEach((v, i) => {
   min[i % 3] = Math.min(min[i % 3], v); max[i % 3] = Math.max(max[i % 3], v);
 });
 const center = [0, 1, 2].map(k => Math.round((min[k] + max[k]) / 2 * 100) / 100);
-const step = .01, chunks = [], meta = { format: 3, unit: 'mm', step, center, parts: [], conduction };
+const step = .01, chunks = [], meta = { format: 4, unit: 'mm', step, center, parts: [], conduction };
 let offset = 0;
 for (const [id, mesh] of Object.entries(parts)) {
   const count = mesh.positions.length / 3;

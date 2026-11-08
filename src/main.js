@@ -80,7 +80,7 @@ try {
   // Line.raycast divides the threshold by the line's own scale only, not its parents' scale.
   // The overlay is drawn in millimetres under a scaled group, so convert to millimetres here.
   ray.params.Line.threshold = .08 / exterior.scale.x;
-  const stageOrder = ['sa', 'atria', 'av', 'his', 'rbb', 'lbb', 'purkinje'];
+  const stageOrder = ['sa', 'atria', 'av', 'his', 'bhis', 'rbb', 'lbb', 'purkinje'];
   const labels = new Map();
   for (const [id] of labelAnchors) {
     const label = document.createElement('span');

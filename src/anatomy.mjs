@@ -2,8 +2,8 @@ import * as THREE from 'three';
 
 // Decode the bundle written by scripts/prepare-bodyparts3d.mjs.
 // Kept free of WebGL so Node tests can check the data.
-// Format 3 added the valves and papillary muscles; bump both sides when the layout or parts change.
-export const anatomyFormat = 3;
+// Format 4 separates proximal/branching His intervals and left/right take-off proxies.
+export const anatomyFormat = 4;
 export function decodeAnatomy(bytes) {
   const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
   if (new TextDecoder().decode(bytes.subarray(0, 4)) !== 'BP3D') throw new Error('Not a BodyParts3D heart bundle');
