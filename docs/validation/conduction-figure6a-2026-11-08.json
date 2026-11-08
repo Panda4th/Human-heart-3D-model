@@ -1,0 +1,166 @@
+{
+  "schema": 1,
+  "unit": "mm",
+  "axes": {
+    "x": "body left",
+    "y": "superior",
+    "z": "anterior"
+  },
+  "dataSha256": "65ba86f97643e5f13f6b24c459883edf0be674827ea8f66ab2668af1a13600c6",
+  "indexSha256": "21173c36fe81a61ced7791d3172afe80dc1fef6fa126cfd5b534a9194816690c",
+  "anchors": {
+    "A": [
+      -2.7,
+      1245.3,
+      124.1
+    ],
+    "B": [
+      15.5,
+      1240.8,
+      122.1
+    ],
+    "C": [
+      12.5,
+      1236.9,
+      129
+    ]
+  },
+  "intervals": {
+    "proximal": {
+      "points": [
+        [
+          -2.7,
+          1245.3,
+          124.1
+        ],
+        [
+          15.5,
+          1240.8,
+          122.1
+        ]
+      ],
+      "delta": [
+        18.2,
+        -4.5,
+        -2
+      ],
+      "straightMm": 18.854442447338503,
+      "viewerCurveMm": 18.854442447338528
+    },
+    "branching": {
+      "points": [
+        [
+          15.5,
+          1240.8,
+          122.1
+        ],
+        [
+          12.5,
+          1236.9,
+          129
+        ]
+      ],
+      "delta": [
+        -3,
+        -3.8999999999998636,
+        6.900000000000006
+      ],
+      "straightMm": 8.474668135095262,
+      "viewerCurveMm": 8.474668135095182
+    }
+  },
+  "proxyToDisplayedLeafletMm": {
+    "A": {
+      "aov": 10.329738724908955,
+      "tv": 0.016966492892742543,
+      "mv": 28.08688155054879
+    },
+    "B": {
+      "aov": 4.641097488271534,
+      "tv": 12.211415521835622,
+      "mv": 17.04656318039139
+    },
+    "C": {
+      "aov": 8.968254288749254,
+      "tv": 4.47924729208329,
+      "mv": 22.15239882618177
+    }
+  },
+  "renderer": "CPU barycentric rasterizer; orthographic depth buffer; double-sided face lighting; diagnostic colors",
+  "views": {
+    "front": {
+      "screenRight": [
+        1,
+        0,
+        0
+      ],
+      "screenUp": [
+        0,
+        1,
+        0
+      ],
+      "cameraDirection": [
+        0,
+        0,
+        1
+      ],
+      "caption": "Anterior (+Z); screen right = body left (+X)"
+    },
+    "right": {
+      "screenRight": [
+        0,
+        0,
+        1
+      ],
+      "screenUp": [
+        0,
+        1,
+        0
+      ],
+      "cameraDirection": [
+        -1,
+        0,
+        0
+      ],
+      "caption": "Body right (-X); screen right = anterior (+Z)"
+    },
+    "top": {
+      "screenRight": [
+        1,
+        0,
+        0
+      ],
+      "screenUp": [
+        0,
+        0,
+        -1
+      ],
+      "cameraDirection": [
+        0,
+        1,
+        0
+      ],
+      "caption": "Superior (+Y); screen right = body left (+X)"
+    }
+  },
+  "framing": {
+    "size": [
+      1200,
+      1000
+    ],
+    "fullCenter": [
+      26.730000495910645,
+      1226.739990234375,
+      129.07500457763672
+    ],
+    "localCenter": [
+      8.433333333333334,
+      1241.0,
+      125.06666666666666
+    ],
+    "pixelsPerMm": {
+      "full": 5.428571428571429,
+      "local": 14.615384615384615
+    }
+  }
+}
