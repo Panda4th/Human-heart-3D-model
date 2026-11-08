@@ -3,7 +3,9 @@ import assert from 'node:assert/strict';
 import * as THREE from 'three';
 import { readFileSync } from 'node:fs';
 import { anatomyDefinitions, createAnatomy, decodeAnatomy, interiorDefinitions } from '../src/anatomy.mjs';
-import { createBeat } from '../src/heartbeat.mjs';
+import { contraction, createBeat, period } from '../src/heartbeat.mjs';
+import { createFlow } from '../src/flow.mjs';
+import { leafletDistance, valveNames, valveSettings } from '../src/valves.mjs';
 import { checkRoute, inside, makeSolid, makeVessel, nearestVertexDistance, rayHits, vesselClearance } from '../scripts/flow-geometry.mjs';
 
 // The blood-flow routes (meta.flow) are a schematic made by scripts/prepare-bodyparts3d.mjs. These tests check what the
@@ -214,4 +216,42 @@ test('moved by the heartbeat displacement together with the cavities and vessels
     console.log(`${name}: ${atRestFailures} of ${flow.routes.length} routes fail the check if left at rest`);
   }
   beat.set({ atria: 0, ventricles: 0 });
+});
+
+// The schematic leaflets and the particles are both drawn through the heartbeat displacement (main.js, drawFlow). The displacement is
+// not a rigid motion (it pulls points towards the chambers' centres by an amount that depends on the position), so the distance
+// between a particle and a leaflet can change by a little. Measured here with the real displacement at the beat time of each frame.
+test('moved by the heartbeat displacement together, no particle comes within a particle radius of a leaflet', () => {
+  const heart = new THREE.Group(), exterior = new THREE.Group(), parts = new Map();
+  heart.add(exterior);
+  createAnatomy(exterior, parts, new Uint8Array(bytes), .033);
+  const beat = createBeat(exterior, parts);
+  const flowState = createFlow(flow), out = [0, 0, 0], at = [0, 0, 0];
+  const rest = Object.fromEntries(valveNames.map(name => [name, new Float64Array(flowState.valves[name].vertexCount * 3)]));
+  const moved = Object.fromEntries(valveNames.map(name => [name, new Float64Array(flowState.valves[name].vertexCount * 3)]));
+  let best = { distance: Infinity }, restBest = Infinity;
+  for (let time = 0; time < 6 * period; time += 5) {
+    flowState.advance(time, time + 5);
+    if (time < 2 * period) continue;
+    beat.set(contraction(time + 5));
+    for (const name of valveNames) {
+      flowState.leaflets(name, rest[name]);
+      for (let i = 0; i < rest[name].length; i += 3) moved[name].set(beat.displace([rest[name][i], rest[name][i + 1], rest[name][i + 2]]), i);
+    }
+    for (let k = 0; k < flowState.count; k++) {
+      flowState.sample(k, out);
+      const p = beat.displace(out);
+      for (const name of valveNames) {
+        const v = flowState.valves[name], d = Math.hypot(out[0] - v.center[0], out[1] - v.center[1], out[2] - v.center[2]);
+        if (d > v.ring + 12) continue;
+        at[0] = p[0]; at[1] = p[1]; at[2] = p[2];
+        const distance = leafletDistance(v, moved[name], at);
+        restBest = Math.min(restBest, leafletDistance(v, rest[name], out));
+        if (distance < best.distance) best = { distance, name, time: (time + 5) % period };
+      }
+    }
+  }
+  beat.set({ atria: 0, ventricles: 0 });
+  console.log(`closest particle centre to a leaflet over 4 beats: ${best.distance.toFixed(2)} mm with the displacement (${best.name}, ${best.time} ms), ${restBest.toFixed(2)} mm at rest`);
+  assert.ok(best.distance >= valveSettings.particleRadius, `${best.distance} mm from the ${best.name} valve at ${best.time} ms`);
 });
