@@ -73,7 +73,7 @@ try {
   // Blood-flow particles (flow.mjs) travel along meta.flow.routes. Their instance matrices are written in the millimetre frame
   // every frame, after the beat has moved the walls, through the same displacement (beat.displace), so they stay inside.
   // The mesh is a helper: createBeat must not deform its sphere geometry, and it is not a part (no clicking, no cut).
-  const flow = createFlow(meta.flow.routes);
+  const flow = createFlow(meta.flow);
   const dots = new THREE.InstancedMesh(new THREE.SphereGeometry(1.5, 12, 8), new THREE.MeshStandardMaterial({ roughness: .45, metalness: 0 }), flow.count);
   const dotColors = { right: new THREE.Color(0x4a9bff), left: new THREE.Color(0xff5a4f) };
   for (let k = 0; k < flow.count; k++) dots.setColorAt(k, dotColors[flow.side(k)]);
@@ -81,6 +81,20 @@ try {
   dots.frustumCulled = false;
   dots.visible = false;
   exterior.add(dots);
+  // Schematic valve leaflets (valves.mjs) of the flow view. They open and close with the particles' valve windows and are
+  // moved by the same displacement as the particles. The valves of the source data are not drawn in this view.
+  const leafletColors = { tricuspid: 0xd8c39d, mitral: 0xead2b0, aortic: 0xf3e1c4, pulmonary: 0xbfd6d0 };
+  const leaflets = Object.entries(flow.valves).map(([name, valve]) => {
+    const geometry = new THREE.BufferGeometry();
+    geometry.setAttribute('position', new THREE.BufferAttribute(new Float32Array(valve.vertexCount * 3), 3));
+    geometry.setIndex(new THREE.BufferAttribute(valve.indices, 1));
+    const mesh = new THREE.Mesh(geometry, new THREE.MeshStandardMaterial({ color: leafletColors[name], roughness: .6, metalness: 0, side: THREE.DoubleSide }));
+    mesh.userData.helper = true;
+    mesh.frustumCulled = false;
+    mesh.visible = false;
+    exterior.add(mesh);
+    return { name, mesh, rest: new Float64Array(valve.vertexCount * 3), moved: [0, 0, 0] };
+  });
   const dotPoint = [0, 0, 0], dotMatrix = new THREE.Matrix4();
   let flowStale = true;
   function drawFlow() {
@@ -90,6 +104,17 @@ try {
       dots.setMatrixAt(k, dotMatrix);
     }
     dots.instanceMatrix.needsUpdate = true;
+    for (const { name, mesh, rest, moved } of leaflets) {
+      flow.leaflets(name, rest);
+      const position = mesh.geometry.attributes.position;
+      for (let i = 0; i < position.count; i++) {
+        moved[0] = rest[3 * i]; moved[1] = rest[3 * i + 1]; moved[2] = rest[3 * i + 2];
+        const p = beat.displace(moved);
+        position.setXYZ(i, p[0], p[1], p[2]);
+      }
+      position.needsUpdate = true;
+      mesh.geometry.computeVertexNormals();
+    }
     flowStale = false;
   }
   const modeText = {
@@ -167,7 +192,9 @@ try {
     const phase = phases[index];
     $('beat-phase-name').textContent = `${phase.name}（${phase.time}）`;
     $('beat-phase-short').textContent = phase.short;
-    $('beat-phase-valves').textContent = phase.valves;
+    // In the flow view the leaflets are drawn, and they are closed together for only part of the two periods in which all four valves
+    // are closed (README, 血流の模式弁尖); the text says so instead of describing the whole period.
+    $('beat-phase-valves').textContent = phase.valves + (mode === 'flow' && index > 0 ? ` この画面の弁尖が4つとも閉じるのは、この時期のうち約${index === 1 ? '0.01' : '0.02'}秒だけです。` : '');
   }
   function render(time) {
     const elapsed = previousTime ? (time - previousTime) / 1000 : 0;
@@ -315,6 +342,9 @@ try {
     // The walls are almost transparent where something inside them is shown: the conduction system and the blood.
     const conductionView = mode === 'conduction' || mode === 'flow';
     dots.visible = mode === 'flow';
+    shownPhase = -1;
+    if (!$('beat-phase').hidden) showPhase();
+    for (const { mesh } of leaflets) mesh.visible = mode === 'flow';
     flowStale = true;
     for (const group of parts.values()) {
       if (group.userData.kind !== 'exterior') continue;
