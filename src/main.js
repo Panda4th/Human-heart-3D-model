@@ -3,7 +3,7 @@ import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { createConduction } from './conduction.mjs';
 import { createAnatomy } from './anatomy.mjs';
 import { createFlow } from './flow.mjs';
-import { contraction, createBeat, period, phaseAt, phases, slowFactor } from './heartbeat.mjs';
+import { contraction, createBeat, phaseAt, phases, slowFactor, stepBeat } from './heartbeat.mjs';
 import anatomyData from './data/bodyparts3d-heart.bin';
 import { createCrossSection, fitDistance, modelSphere, pickHit, removedByCut, selectableIn, TapGesture } from './viewer-state.mjs';
 
@@ -174,11 +174,13 @@ try {
     if (controls.autoRotate) controls.update(Math.min(elapsed, .05));
     // The beat keeps to the clock on a slow device too; a long pause (previousTime reset to 0) does not jump ahead.
     if (beating) {
-      const before = beatTime;
-      beatTime += Math.min(elapsed, .25) * 1000 / (realSpeed ? 1 : slowFactor);
-      flow.advance(before, beatTime);
+      // The particles advance to the same limited time as the beat: a frame that crosses the end of a one-beat play must not
+      // move them into the next beat.
+      const { next, done } = stepBeat(beatTime, Math.min(elapsed, .25) * 1000 / (realSpeed ? 1 : slowFactor), reduceMotion.matches);
+      flow.advance(beatTime, next);
       flowStale = true;
-      if (reduceMotion.matches && beatTime >= period) {
+      beatTime = next;
+      if (done) {
         beating = false;
         beatTime = 0;
         $('beat-play').setAttribute('aria-pressed', 'false');

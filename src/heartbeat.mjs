@@ -39,6 +39,13 @@ export function phaseAt(ms) {
   return t < cycle.atrialSystole ? 0 : t < cycle.atrialSystole + cycle.ventricularSystole ? 1 : 2;
 }
 
+// One step of the beat clock. With `once` (reduced motion: one beat per press) the time stops at the end of the first beat,
+// so that whatever is advanced with it (the blood-flow particles) never goes past the beat it was asked to play.
+export function stepBeat(time, delta, once) {
+  const next = once ? Math.min(time + delta, period) : time + delta;
+  return { next, done: once && next >= period };
+}
+
 // Which valves are open at time ms. OpenStax 19.3 gives the order (atrioventricular valves open in atrial systole and
 // again once the ventricle has relaxed; semilunar valves open only after isovolumic contraction and close at the end of
 // ventricular systole) but no length for the two isovolumic periods, in which all four valves are closed. The lengths

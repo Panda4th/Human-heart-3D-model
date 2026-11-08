@@ -643,3 +643,25 @@ for (const width of [1440, 390]) test(`flow view: particles appear, move with th
   expect(errors).toEqual([]);
   await context.close();
 });
+
+// Reduced motion in the flow view (review of PR #30): the beat stops after one beat, the walls return to rest, and the particles
+// stay drawn where that beat left them (they are not put back into a starting arrangement).
+test('with reduced motion the flow view plays one beat, stops, and keeps drawing the particles', async ({ browser }) => {
+  const context = await browser.newContext({ viewport: { width: 1440, height: 900 }, reducedMotion: 'reduce' });
+  const page = await context.newPage(), errors = [];
+  page.on('pageerror', e => errors.push(e.message));
+  await page.goto(url);
+  await expect(page.locator('html')).toHaveAttribute('data-ready', 'true');
+  await page.addStyleTag({ content: '#beat-phase{visibility:hidden}' });
+  await page.locator('#mode-flow').click();
+  const c = page.locator('canvas');
+  await c.scrollIntoViewIfNeeded();
+  const rest = await stableShot(c);
+  await page.locator('#beat-play').click();
+  await expect(page.locator('#beat-play')).toHaveAttribute('aria-pressed', 'false', { timeout: 15000 });
+  const after = await stableShot(c), pixels = await particlePixels(page, after);
+  expect(pixels.red).toBeGreaterThan(40);
+  expect(after.equals(rest)).toBe(false);
+  expect(errors).toEqual([]);
+  await context.close();
+});

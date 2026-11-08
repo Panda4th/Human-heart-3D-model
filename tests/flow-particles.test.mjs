@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { decodeAnatomy } from '../src/anatomy.mjs';
 import { createFlow } from '../src/flow.mjs';
-import { cycle, period, valvesAt } from '../src/heartbeat.mjs';
+import { cycle, period, stepBeat, valvesAt } from '../src/heartbeat.mjs';
 
 // The particles of the blood-flow view (src/flow.mjs). These tests check what the module does with the generated routes:
 // that the particles follow the beat's valve windows, queue behind closed valves and keep their order. They do not show that
@@ -135,4 +135,73 @@ test('sample puts a particle on its route, shrinks it towards the ends of the ro
     }
   }
   assert.equal(k, flow.count);
+});
+
+// Unwrapped positions of all particles (the ring keeps counting past the end of a route), so that a lap does not look like a jump.
+const unwrapped = flow => flow.routes.flatMap(r => Array.from(r.u));
+const furthest = (a, b) => Math.max(...a.map((v, i) => Math.abs(v - b[i])));
+
+test('a step never crosses the time a valve changes: the result does not depend on where the frames fall', () => {
+  // Review of PR #30: with a step of 4 ms judged by its middle, advance(448.4, 452.4) gave the 450 ms opening of the
+  // atrioventricular valve 4 ms of movement instead of 2.4 ms, and 148 -> 152 differed by 0.36 mm from the split at 150.
+  const flow = createFlow(data.routes);
+  flow.advance(0, 448.4);
+  const queued = flow.routes.map(r => r.u.reduce((best, u) => { const p = u - Math.floor(u / r.length) * r.length; return p < r.av && p > best ? p : best; }, 0));
+  flow.advance(448.4, 449.99);
+  // Still closed: whatever stands in front of the atrioventricular valve has not gone through it.
+  flow.routes.forEach((r, i) => { const front = r.u.reduce((best, u) => { const p = u - Math.floor(u / r.length) * r.length; return p < r.av && p > best ? p : best; }, 0); assert.ok(front < r.av && front >= queued[i] - 1e-9, `${r.id}`); });
+  const before = unwrapped(flow);
+  flow.advance(449.99, 452.4);
+  // After the opening only 2.4 ms of movement at the filling speed is possible for a particle that was waiting at the valve.
+  flow.routes.forEach((r, i) => {
+    const start = flow.routes.slice(0, i).reduce((sum, q) => sum + q.n, 0);
+    for (let n = 0; n < r.n; n++) {
+      const u = before[start + n], p = u - Math.floor(u / r.length) * r.length;
+      if (p > r.av - 1e-3 && p < r.av) assert.ok(r.u[n] - u <= r.speed.passive * 2.41 + 1e-9, `${r.id}: a waiting particle moved ${r.u[n] - u} mm in 2.41 ms`);
+    }
+  });
+  const atOnce = createFlow(data.routes), split = createFlow(data.routes);
+  atOnce.advance(0, 148); split.advance(0, 148);
+  atOnce.advance(148, 152); split.advance(148, 150); split.advance(150, 152);
+  // Equal up to floating-point rounding (the two cut the time at slightly different binary fractions): measured 6e-14 mm.
+  assert.ok(furthest(unwrapped(atOnce), unwrapped(split)) < 1e-9, 'a frame that spans the 150 ms valve opening equals the same time cut at 150 ms');
+  // The same at every boundary and at fractional frame times.
+  for (const boundary of [100, 150, 370, 450, 800]) {
+    const x = createFlow(data.routes), y = createFlow(data.routes);
+    x.advance(0, boundary - 1.7); y.advance(0, boundary - 1.7);
+    x.advance(boundary - 1.7, boundary + 2.3); y.advance(boundary - 1.7, boundary); y.advance(boundary, boundary + 2.3);
+    assert.ok(furthest(unwrapped(x), unwrapped(y)) < 1e-9, `boundary ${boundary} ms: ${furthest(unwrapped(x), unwrapped(y))} mm`);
+  }
+});
+
+test('a one-beat play (reduced motion) moves the particles through that beat only, however long the last frame is', () => {
+  // Review of PR #30: the particles were advanced before the clock was limited to the beat, so a 250 ms frame at 750 -> 1000 ms
+  // moved them 200 ms into the next beat while the heart and the phase went back to 0.
+  assert.deepEqual(stepBeat(750, 250, true), { next: 800, done: true });
+  assert.deepEqual(stepBeat(300, 250, true), { next: 550, done: false });
+  assert.deepEqual(stepBeat(750, 250, false), { next: 1000, done: false }, 'without the setting the clock runs on');
+  const exact = createFlow(data.routes);
+  exact.advance(0, period);
+  for (const frame of [250, 16.7, 33.3, 790, 1000]) {
+    const flow = createFlow(data.routes);
+    let time = 0, done = false, frames = 0;
+    while (!done && frames++ < 1000) {
+      const step = stepBeat(time, frame, true);
+      flow.advance(time, step.next);
+      time = step.next; done = step.done;
+    }
+    assert.equal(time, period, `frame ${frame} ms`);
+    // The frames cut the beat in other places than the single call does; the steps then differ a little (measured at most 0.5 mm).
+    assert.ok(furthest(unwrapped(flow), unwrapped(exact)) < 1, `frame ${frame} ms: ${furthest(unwrapped(flow), unwrapped(exact))} mm from the particles after exactly one beat`);
+  }
+  // The order that was wrong: advance first, limit the clock after. The last 250 ms frame (750 -> 1000 ms) then moves the particles
+  // 200 ms into the next beat, and the test above would fail for it.
+  const unlimited = createFlow(data.routes);
+  for (let time = 0; time < period; time += 250) unlimited.advance(time, time + 250);
+  assert.ok(furthest(unwrapped(unlimited), unwrapped(exact)) > 5, 'the unlimited order does differ visibly');
+  // Pressing again plays the next beat from the same rest state: two presses equal two beats.
+  const twice = createFlow(data.routes), twoBeats = createFlow(data.routes);
+  for (let press = 0; press < 2; press++) { let time = 0, done = false; while (!done) { const step = stepBeat(time, 250, true); twice.advance(time, step.next); time = step.next; done = step.done; } }
+  twoBeats.advance(0, 2 * period);
+  assert.ok(furthest(unwrapped(twice), unwrapped(twoBeats)) < 1);
 });

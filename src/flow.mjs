@@ -18,6 +18,9 @@ export const flowSettings = { gap: 4, ejectionFraction: .6, atrialShare: .25, sp
 const clamp01 = x => Math.min(1, Math.max(0, x));
 const ejection = { from: cycle.atrialSystole + isovolumic.contraction, to: cycle.atrialSystole + cycle.ventricularSystole };
 const filling = { from: ejection.to + isovolumic.relaxation, to: period };
+// Times within a beat at which a valve opens or closes or the atrial speed changes. An integration step never crosses one, so
+// every step has one valve state and one set of speeds, whatever the frame interval is.
+const boundaries = [cycle.atrialSystole, ejection.from, ejection.to, filling.from, period];
 
 // Arc length of every route point, the positions of the two valve mouths and the atrium centre along the route, and the
 // speeds. A route is described by the mark indices of the generated data (README, 血流の経路).
@@ -92,7 +95,8 @@ export function createFlow(routes, overrides = {}) {
   // Move the particles from beat time `from` to `to` (milliseconds). `to` before `from` moves nothing.
   function advance(from, to) {
     for (let ms = from; ms < to;) {
-      const dt = Math.min(settings.step, to - ms);
+      const t = ((ms % period) + period) % period, until = (boundaries.find(b => b > t + 1e-9) ?? period + boundaries[0]) - t;
+      const dt = Math.min(settings.step, to - ms, until);
       integrate(ms, dt);
       ms += dt;
     }
