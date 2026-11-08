@@ -1,5 +1,5 @@
 import { cycle, isovolumic, period, valvesAt } from './heartbeat.mjs';
-import { createValves, leafletDistance, valveKind, valveNames, valveOfRoute } from './valves.mjs';
+import { createValves, leafletDistance, partnerValve, valveKind, valveNames, valveOfRoute } from './valves.mjs';
 
 // Schematic blood-flow particles. Kept free of WebGL so Node tests can check it.
 //
@@ -130,11 +130,15 @@ export function createFlow(flow, overrides = {}) {
   // A valve lets particles in while its binary window is open and its leaflets are completely open. Otherwise the zone is
   // closed: a wall at the zone's start in every lap, in front of which the particles wait. A particle already inside a zone is
   // not held (the zone is cleared before the leaflets move).
-  const gate = (r, u, next, admit) => {
+  const gate = (r, u, next, admit, inside) => {
     const p = u - Math.floor(u / r.length) * r.length, base = u - p;
     let limit = next;
     for (const kind of ['atrioventricular', 'arterial']) {
-      if (!admit[kind] && p < r.zone[kind].lo) limit = Math.min(limit, base + r.zone[kind].lo - 1e-6);
+      // The atrioventricular valve also keeps the ventricular column out of its zone: a particle goes in only if, with the column
+      // packed against the closed arterial valve at the gap, it would still come to rest beyond the zone. Otherwise the last
+      // particle of a full column rests inside the zone, and the leaflets cannot close until the ejection has moved it on.
+      const room = kind !== 'atrioventricular' || r.zone.arterial.lo - inside * settings.gap >= r.zone[kind].hi;
+      if (!(admit[kind] && room) && p < r.zone[kind].lo) limit = Math.min(limit, base + r.zone[kind].lo - 1e-6);
     }
     return limit;
   };
@@ -180,6 +184,9 @@ export function createFlow(flow, overrides = {}) {
     for (const name of valveNames) {
       const kind = valveKind[name], target = valvesAt(end)[kind] || valvesAt(end + settings.ramp)[kind], from = openness[name];
       if (!target && upstreamOccupied(name)) continue;
+      // A valve starts to open only when the other valve of its side is closed, so the leaflets always pass through the state
+      // with both closed (the isovolumic periods), even when one of them has been held up by a particle.
+      if (target && from === 0 && openness[partnerValve[name]] > .05) continue;
       const to = target ? Math.min(1, from + dt / settings.ramp) : Math.max(0, from - dt / settings.ramp);
       if (to !== from && keepsClearance(name, to) && keepsClearance(name, (from + to) / 2)) openness[name] = to;
     }
@@ -190,10 +197,13 @@ export function createFlow(flow, overrides = {}) {
     for (const r of state) {
       // Admission is judged on the leaflets as they are at the start of the step.
       const admit = Object.fromEntries(['atrioventricular', 'arterial'].map(kind => [kind, binary[kind] && openness[r.valve[kind]] >= 1]));
+      // How many particles are in the ventricular column: past the atrioventricular wall and not past the arterial wall.
+      let inside = 0;
+      for (let i = 0; i < r.n; i++) { const p = r.u[i] - Math.floor(r.u[i] / r.length) * r.length; if (p > r.zone.atrioventricular.lo && p <= r.zone.arterial.lo + 1e-3) inside++; }
       for (let i = 0; i < r.n; i++) {
         const u = r.u[i], p = u - Math.floor(u / r.length) * r.length;
         let next = u + speedAt(r, p, ms + dt / 2, binary) * dt;
-        next = gate(r, u, next, admit);
+        next = gate(r, u, next, admit, inside);
         const leader = i === 0 ? r.u[r.n - 1] + r.length : r.u[i - 1];
         next = Math.min(next, leader - settings.gap);
         r.u[i] = Math.max(u, next);

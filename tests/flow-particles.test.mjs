@@ -83,7 +83,7 @@ test('every route moves blood in the order of the cycle: atria to ventricle, the
     assert.ok(ejected >= 40, `${id}: only ${ejected} particles ejected in 10 beats`);
   }
   // The share of the filling that atrial systole delivers. OpenStax 19.3: the remaining 20 to 30%. The setting is 25%; with
-  // 6 to 9 particles through a valve per beat the share comes in steps of about 11%, and measured 118 of 548 (21.5%) at bd65bd0; 129 of 549 (23.5%) with the leaflets (valves.mjs), whose zones change where particles wait.
+  // 6 to 9 particles through a valve per beat the share comes in steps of about 11%, and measured 118 of 548 (21.5%) at bd65bd0; 130 of 532 (24.4%) with the leaflets (valves.mjs), whose zones change where particles wait.
   const atrial = total(crossings, c => c.valve === 'atrioventricular' && c.at < cycle.atrialSystole), all = total(crossings, c => c.valve === 'atrioventricular');
   assert.ok(atrial / all > .2 && atrial / all < .3, `${atrial} of ${all} (${(atrial / all * 100).toFixed(1)}%) came through in atrial systole`);
   // Ejected per beat against what the ventricular segment holds when full (its length over the gap): measured 64%.
@@ -91,6 +91,8 @@ test('every route moves blood in the order of the cycle: atria to ventricle, the
   assert.ok(ejected / capacity > .5 && ejected / capacity < .75, `${(ejected / capacity * 100).toFixed(1)}% of the ventricular segment is ejected per beat`);
 });
 
+// How far in front of the wall the front particle of a queue stands (negative: it has gone past the wall).
+const shortOfWall = (wall, front) => wall - front;
 test('blood waits behind a closed valve: just before the arterial valve opens the ventricular particles queue at the gap', () => {
   const flow = createFlow(data);
   flow.advance(0, 145);
@@ -100,9 +102,16 @@ test('blood waits behind a closed valve: just before the arterial valve opens th
     for (let i = 0; i < r.n; i++) { const p = flow.arc(start + i); if (p >= r.av && p < r.zone.arterial.lo + 1e-3) queued.push(p); }
     queued.sort((a, b) => b - a);
     assert.ok(queued.length >= 8, `${r.id}: ${queued.length} particles in the ventricular segment`);
-    assert.ok(queued[0] - r.zone.arterial.lo < 1 && queued[0] <= r.zone.arterial.lo, `${r.id}: the front particle is ${r.zone.arterial.lo - queued[0]} mm from the wall in front of the closed valve`);
+    const short = shortOfWall(r.zone.arterial.lo, queued[0]);
+    assert.ok(short >= 0 && short < 1, `${r.id}: the front particle is ${short} mm short of the wall in front of the closed valve`);
     assert.ok(queued[0] - queued[1] < flow.settings.gap + 1, `${r.id}: the second is ${queued[0] - queued[1]} mm behind it`);
   }
+  // The check itself: a queue standing 10 mm short of the wall, or past it, must fail it (review of PR #32: the first version of the
+  // test had the sign the wrong way and accepted a queue that stopped far short).
+  const accepts = short => short >= 0 && short < 1;
+  assert.ok(accepts(shortOfWall(100, 99.5)));
+  assert.ok(!accepts(shortOfWall(100, 90)), 'a queue 10 mm short is not accepted');
+  assert.ok(!accepts(shortOfWall(100, 101)), 'a queue past the wall is not accepted');
 });
 
 test('the particles come back to the same places beat after beat, within one queue place, and do not move when time does not advance', () => {
@@ -157,20 +166,33 @@ test('a step never crosses the time a valve changes: the result does not depend 
   // atrioventricular valve 4 ms of movement instead of 2.4 ms, and 148 -> 152 differed by 0.36 mm from the split at 150.
   const flow = createFlow(data);
   flow.advance(0, 448.4);
-  const queued = flow.routes.map(r => r.u.reduce((best, u) => { const p = u - Math.floor(u / r.length) * r.length; return p < r.av && p > best ? p : best; }, 0));
+  // The particles waiting at the wall in front of the atrioventricular valve: the one nearest the wall in each route.
+  const waiting = () => flow.routes.map(r => r.u.reduce((best, u) => { const p = u - Math.floor(u / r.length) * r.length; return p < r.zone.atrioventricular.lo && p > best ? p : best; }, 0));
+  const queued = waiting();
   flow.advance(448.4, 449.99);
-  // Still closed: whatever stands in front of the atrioventricular valve has not gone through it.
-  flow.routes.forEach((r, i) => { const front = r.u.reduce((best, u) => { const p = u - Math.floor(u / r.length) * r.length; return p < r.av && p > best ? p : best; }, 0); assert.ok(front < r.av && front >= queued[i] - 1e-9, `${r.id}`); });
+  // Still closed: whatever stands in front of the wall has not gone through it.
+  flow.routes.forEach((r, i) => { const front = waiting()[i]; assert.ok(front < r.zone.atrioventricular.lo && front >= queued[i] - 1e-9, `${r.id}`); });
   const before = unwrapped(flow);
   flow.advance(449.99, 452.4);
-  // After the opening only 2.4 ms of movement at the filling speed is possible for a particle that was waiting at the valve.
+  // After the opening only 2.41 ms of movement is possible for a particle that was waiting at the wall, and in that time it can
+  // be no faster than in a valve's zone (the ejection speed, the fastest of the valve speeds). The leaflets are still opening,
+  // so in fact it has not moved. Each route has such a particle (review of PR #32: the first version of this check looked at a
+  // place that is no longer where the particles wait, and found no particle at all).
+  let checked = 0;
   flow.routes.forEach((r, i) => {
     const start = flow.routes.slice(0, i).reduce((sum, q) => sum + q.n, 0);
+    let here = 0;
     for (let n = 0; n < r.n; n++) {
       const u = before[start + n], p = u - Math.floor(u / r.length) * r.length;
-      if (p > r.av - 1e-3 && p < r.av) assert.ok(r.u[n] - u <= r.speed.passive * 2.41 + 1e-9, `${r.id}: a waiting particle moved ${r.u[n] - u} mm in 2.41 ms`);
+      if (p > r.zone.atrioventricular.lo - 1e-3 && p < r.zone.atrioventricular.lo) {
+        here++;
+        assert.ok(r.u[n] - u <= r.speed.ejection * 2.41 + 1e-9, `${r.id}: a waiting particle moved ${r.u[n] - u} mm in 2.41 ms`);
+      }
     }
+    assert.equal(here, 1, `${r.id}: ${here} particles waiting at the wall at 449.99 ms`);
+    checked += here;
   });
+  assert.equal(checked, flow.routes.length);
   const atOnce = createFlow(data), split = createFlow(data);
   atOnce.advance(0, 148); split.advance(0, 148);
   atOnce.advance(148, 152); split.advance(148, 150); split.advance(150, 152);

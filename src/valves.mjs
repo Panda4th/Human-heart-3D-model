@@ -9,6 +9,9 @@
 
 export const valveNames = ['tricuspid', 'mitral', 'aortic', 'pulmonary'];
 export const valveKind = { tricuspid: 'atrioventricular', mitral: 'atrioventricular', aortic: 'arterial', pulmonary: 'arterial' };
+// The two valves of one side of the heart. Between the filling and the ejection (and the other way round) all four are closed,
+// so one of a pair starts to open only when the other is closed.
+export const partnerValve = { tricuspid: 'pulmonary', pulmonary: 'tricuspid', mitral: 'aortic', aortic: 'mitral' };
 export const leafletCount = { tricuspid: 3, mitral: 2, aortic: 3, pulmonary: 3 };
 // ring: share of the stored opening radius that is drawn (the stored radius is the rms distance of the valve's attachment
 // vertices, so the full radius reaches the walls). apex: how far from the axis the free corner stands when open, as a share
