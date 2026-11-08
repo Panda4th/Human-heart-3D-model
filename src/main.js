@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { createConduction } from './conduction.mjs';
 import { createAnatomy } from './anatomy.mjs';
+import { contraction, createBeat, period, phaseAt, phases, slowFactor } from './heartbeat.mjs';
 import anatomyData from './data/bodyparts3d-heart.bin';
 import { createCrossSection, fitDistance, modelSphere, pickHit, removedByCut, selectableIn, TapGesture } from './viewer-state.mjs';
 
@@ -57,6 +58,8 @@ try {
   const crossSection = createCrossSection(exterior, parts, cutPlane, 0xc98478);
   exterior.add(conduction);
   const labelAnchors = createConduction(conduction, parts, meta.conduction);
+  // Created after the cross-section and the conduction overlay so that it deforms their geometry too.
+  const beat = createBeat(exterior, parts);
   // The overlay on the cross-section is cut by the same plane. Its materials keep one clipping plane in
   // every mode so that showing it never recompiles shaders; outside the interior view the plane is
   // moved far enough to keep everything. The bounds are taken before the plane can clip anything.
@@ -73,6 +76,13 @@ try {
   };
   controls.target.copy(bounds.center);
   let mode = 'exterior', selected = 'lv', frame = 0, previousTime = 0, failed = false, overlay = false, pick = null;
+  // beatTime is the time within the heartbeat in real milliseconds; it advances only while beating.
+  let beating = false, realSpeed = false, beatTime = 0, shownPhase = -1;
+  // With the system setting "reduce motion" the beat plays once per press and stops at rest, instead of looping.
+  const reduceMotion = matchMedia('(prefers-reduced-motion: reduce)');
+  const playLabel = () => reduceMotion.matches ? '拍動を1回再生' : '拍動を再生';
+  $('beat-play').textContent = playLabel();
+  reduceMotion.addEventListener('change', () => { if (!beating) $('beat-play').textContent = playLabel(); });
   const selectable = group => selectableIn(group.userData, mode, overlay);
   let fittedDistance = 12, userZoom = 1;
   const gesture = new TapGesture();
@@ -102,7 +112,7 @@ try {
   }
   function updateLabels() {
     for (const [id, anchor] of labelAnchors) {
-      const world = conduction.localToWorld(new THREE.Vector3(...anchor));
+      const world = conduction.localToWorld(new THREE.Vector3(...beat.displace(anchor)));
       const p = world.clone().project(camera);
       const el = labels.get(id);
       // Show one selected label to avoid overlaps in small viewports, and none for a point the cut removed.
@@ -124,13 +134,37 @@ try {
   function requestRender() {
     if (!frame && !document.hidden && !failed) frame = requestAnimationFrame(render);
   }
+  function showPhase() {
+    const index = phaseAt(beatTime);
+    $('beat-phase').hidden = false;
+    $('beat-note').hidden = false;
+    if (index === shownPhase) return;
+    shownPhase = index;
+    const phase = phases[index];
+    $('beat-phase-name').textContent = `${phase.name}（${phase.time}）`;
+    $('beat-phase-short').textContent = phase.short;
+    $('beat-phase-valves').textContent = phase.valves;
+  }
   function render(time) {
-    if (controls.autoRotate) controls.update(previousTime ? Math.min((time - previousTime) / 1000, .05) : 0);
+    const elapsed = previousTime ? (time - previousTime) / 1000 : 0;
+    if (controls.autoRotate) controls.update(Math.min(elapsed, .05));
+    // The beat keeps to the clock on a slow device too; a long pause (previousTime reset to 0) does not jump ahead.
+    if (beating) {
+      beatTime += Math.min(elapsed, .25) * 1000 / (realSpeed ? 1 : slowFactor);
+      if (reduceMotion.matches && beatTime >= period) {
+        beating = false;
+        beatTime = 0;
+        $('beat-play').setAttribute('aria-pressed', 'false');
+        $('beat-play').textContent = playLabel();
+      }
+      beat.set(contraction(beatTime));
+      showPhase();
+    }
     renderer.render(scene, camera);
     updateLabels();
     frame = 0;
     previousTime = time;
-    if (controls.autoRotate) requestRender();
+    if (controls.autoRotate || beating) requestRender();
   }
   controls.addEventListener('change', () => {
     userZoom = camera.position.distanceTo(controls.target) / fittedDistance;
@@ -306,6 +340,19 @@ try {
     $('rotate').setAttribute('aria-pressed', String(controls.autoRotate));
     previousTime = 0;
     requestRender();
+  };
+  // Stopping keeps the current shape and phase, so a moment of the beat can be looked at.
+  $('beat-play').onclick = () => {
+    beating = !beating;
+    $('beat-play').setAttribute('aria-pressed', String(beating));
+    $('beat-play').textContent = beating ? '拍動を止める' : playLabel();
+    previousTime = 0;
+    showPhase();
+    requestRender();
+  };
+  $('beat-speed').onclick = () => {
+    realSpeed = !realSpeed;
+    $('beat-speed').setAttribute('aria-pressed', String(realSpeed));
   };
   function zoom(factor) {
     const offset = camera.position.clone().sub(controls.target).multiplyScalar(factor).clampLength(controls.minDistance, controls.maxDistance);
