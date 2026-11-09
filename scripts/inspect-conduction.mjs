@@ -6,6 +6,12 @@ import {createHash} from 'node:crypto';
 import {decodeAnatomy} from '../src/anatomy.mjs';
 import {createConduction} from '../src/conduction.mjs';
 
+const [outputPath] = process.argv.slice(2);
+if (!outputPath || process.argv.length !== 3) {
+  console.error('Usage: node scripts/inspect-conduction.mjs <new-output.json>');
+  process.exit(1);
+}
+
 const bytes = new Uint8Array(await readFile('src/data/bodyparts3d-heart.bin'));
 const {meta, parts} = decodeAnatomy(bytes);
 const root = new THREE.Group(), groups = new Map();
@@ -39,4 +45,4 @@ const report={schema:1,unit:'mm',axes:{x:'body left',y:'superior',z:'anterior'},
   indexSha256:createHash('sha256').update(await readFile('index.html')).digest('hex'),
   anchors,intervals,proxyToDisplayedLeafletMm:Object.fromEntries(Object.entries(anchors).map(([id,p])=>[id,Object.fromEntries(['aov','tv','mv'].map(v=>[v,distance(p,parts.find(m=>m.id===v))]))])),
   meshes};
-await writeFile(process.argv[2]||'/tmp/conduction.json',JSON.stringify(report));
+await writeFile(outputPath, JSON.stringify(report), { flag: 'wx' });
