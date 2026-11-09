@@ -936,6 +936,8 @@ test.only('Issue 17: reproduce the 11 cut-face selections in the standalone view
     await page.mouse.click(coordinates.x,coordinates.y);
     await expect(page.locator('#name')).toHaveText('左心房');
     await expect(page.locator('#pick-note')).toBeVisible();
+    await settle(page);
+    await expect(page.locator('#pick-mark')).toBeVisible();
     const marker=await page.locator('#pick-mark').boundingBox();
     const currentCanvas=await canvas.boundingBox();
     // The explanatory note above the viewport can move it after a cut-face click.
