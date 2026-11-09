@@ -758,7 +758,7 @@ test.only('Issue 17: reproduce the 11 cut-face selections in the standalone view
   await expect(page.locator('#error')).toBeHidden();
   const canvas=page.locator('canvas');
   // The unit-test camera has aspect ratio 1. Keep the same projection in the browser.
-  await canvas.evaluate(node=>{node.style.width='800px';node.style.height='800px';});
+  await page.locator('.viewport').evaluate(node=>{node.style.width='800px';node.style.height='800px';});
   await canvas.scrollIntoViewIfNeeded();
   await page.locator('#mode-interior').click();
   await settle(page);
@@ -936,6 +936,9 @@ test.only('Issue 17: reproduce the 11 cut-face selections in the standalone view
     await page.mouse.click(coordinates.x,coordinates.y);
     await expect(page.locator('#name')).toHaveText('左心房');
     await expect(page.locator('#pick-note')).toBeVisible();
+    const marker=await page.locator('#pick-mark').boundingBox();
+    expect(Math.abs(marker.x+marker.width/2-coordinates.x)).toBeLessThan(1);
+    expect(Math.abs(marker.y+marker.height/2-coordinates.y)).toBeLessThan(1);
     const highlighted=await stableShot(canvas);
     const colors = await page.evaluate(async ({before,after,x,y})=>{
       const image=new Image(), surface=document.createElement('canvas');
