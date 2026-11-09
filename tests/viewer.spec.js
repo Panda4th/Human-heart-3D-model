@@ -764,6 +764,7 @@ test('Issue 17: inspect aortic joins and duplicated wall faces in the distribute
     {name:'front',turns:0,zoom:0,depth:null},
     {name:'front-zoom',turns:0,zoom:3,depth:null},
     {name:'right-zoom',turns:10,zoom:3,depth:null},
+    {name:'back-zoom',turns:0,zoom:3,depth:null,back:true},
     {name:'cut-front-minus-060',turns:0,zoom:2,depth:-.6},
     {name:'cut-front-zero',turns:0,zoom:2,depth:0},
     {name:'cut-front-plus-050',turns:0,zoom:2,depth:.5},
@@ -771,6 +772,7 @@ test('Issue 17: inspect aortic joins and duplicated wall faces in the distribute
   ]) {
     await page.locator(view.depth === null ? '#mode-exterior' : '#mode-interior').click();
     if (view.depth !== null) await page.locator('#cut-depth').fill(String(view.depth));
+    if (view.back) await page.locator('#view-back').click();
     await canvas.scrollIntoViewIfNeeded();
     await canvas.focus();
     for(let index=0;index<view.turns;index++) await canvas.press('ArrowLeft');
@@ -798,13 +800,19 @@ test('Issue 17: inspect aortic joins and duplicated wall faces in the distribute
         for(let offset=0;offset<wall.geometry.index.count;offset+=3) {
           const points = triangle(wall,offset);
           const sorted = points.map(key).sort().join('/');
-          const first = seen.get(sorted);
-          if(first) {
-            duplicates.push({wall,points,other:first.wall.parent.userData.id,normalDot:cross(first.points).dot(cross(points)),center:midpoint(points)});
-            skip.get(first.wall).add(first.face);
-            skip.get(wall).add(offset/3);
-          } else seen.set(sorted,{wall,points,face:offset/3});
+          if (!seen.has(sorted)) seen.set(sorted,[]);
+          seen.get(sorted).push({wall,points,face:offset/3});
         }
+      }
+      for (const members of seen.values()) {
+        if (members.length<2) continue;
+        const [{wall,points}] = members;
+        const normal=cross(points);
+        duplicates.push({wall,points,memberCount:members.length,
+          crossChamber:members.some(member=>member.wall!==wall),
+          opposite:members.some(member=>normal.dot(cross(member.points))<0),
+          center:midpoint(points)});
+        for(const member of members) skip.get(member.wall).add(member.face);
       }
       const screen = (mesh,point) => mesh.localToWorld(point.clone()).project(camera);
       const cameraRay = p => {
@@ -821,7 +829,10 @@ test('Issue 17: inspect aortic joins and duplicated wall faces in the distribute
         if (!isScreen(p)) continue;
         const world = aorta.localToWorld(center.clone());
         const hit = hitAt(p);
-        if(hit?.id==='ao' && Math.abs(hit.distance-camera.position.distanceTo(world))<.012) seams.push({p,center,hit});
+        if(hit?.id==='ao' && Math.abs(hit.distance-camera.position.distanceTo(world))<.012) {
+          const joint = center.z > 100 ? 'ascending-arch' : center.z < 90 ? 'arch-descending' : 'other';
+          seams.push({p,center,hit,joint});
+        }
       }
       const spread = candidates => {
         const chosen = [];
@@ -854,21 +865,32 @@ test('Issue 17: inspect aortic joins and duplicated wall faces in the distribute
         Math.abs(item.hit.distance-camera.position.distanceTo(item.wall.localToWorld(item.center.clone())))<.012);
       const cutHits = projected.filter(item => item.hit?.onCut);
       const changed = projected.filter(item => signature(item.hit)!==signature(item.without));
-      const describe = item => ({
-        x:(item.p.x+1)/2, y:(1-item.p.y)/2,
-        hit:signature(item.hit), without:item.without ? signature(item.without):'none',
-        center:item.center.toArray().map(v=>+v.toFixed(2)),
-      });
+      const rect = document.querySelector('canvas').getBoundingClientRect();
+      const describe = item => {
+        const x=(item.p.x+1)/2,y=(1-item.p.y)/2;
+        const actualX=Math.round(rect.left+rect.width*x);
+        const actualY=Math.round(rect.top+rect.height*y);
+        const rounded=hitAt({x:(actualX-rect.left)/rect.width*2-1,y:1-(actualY-rect.top)/rect.height*2});
+        if (signature(rounded)!==signature(item.hit)) return null;
+        return {x,y,hit:signature(item.hit),without:item.without ? signature(item.without):'none',
+          center:item.center.toArray().map(v=>+v.toFixed(2))};
+      };
+      const samples=(items,sample,limit=3)=>spread(items).map(item=>{
+        const point=describe(item);
+        return point && {...point,sample:typeof sample==='function'?sample(item):sample};
+      }).filter(Boolean).slice(0,limit);
       const click = [
-        ...spread(seams).slice(0,3).map(item=>({...describe(item),sample:'aortic-join-band'})),
-        ...spread(ownSurface.sort((a,b)=>b.area-a.area)).slice(0,3).map(item=>({...describe(item),sample:'duplicate-at-visible-surface'})),
-        ...spread((changed.length?changed:cutHits).filter(item=>item.hit?.onCut)).slice(0,3).map(item=>({...describe(item),sample:'cut-in-front-of-duplicate'})),
+        ...samples(seams.filter(item=>item.joint==='ascending-arch'),item=>item.joint,2),
+        ...samples(seams.filter(item=>item.joint==='arch-descending'),item=>item.joint,2),
+        ...samples(ownSurface.sort((a,b)=>b.area-a.area),'duplicate-at-visible-surface'),
+        ...samples((changed.length?changed:cutHits).filter(item=>item.hit?.onCut),'cut-in-front-of-duplicate'),
       ];
       return {
         camera:camera.position.toArray(),
-        duplicates:duplicates.length, opposite:duplicates.filter(item=>item.normalDot<0).length,
-        crossChamber:duplicates.filter(item=>item.wall.parent.userData.id!==item.other).length,
-        projected:projected.length, atVisibleSurface:ownSurface.length, cutHits:cutHits.length, seamSamples:seams.length,
+        duplicates:duplicates.length, opposite:duplicates.filter(item=>item.opposite).length,
+        crossChamber:duplicates.filter(item=>item.crossChamber).length,
+        multiplicities:duplicates.reduce((counts,item)=>{counts[item.memberCount]=(counts[item.memberCount]||0)+1;return counts;},{}),
+        projected:projected.length, atVisibleSurface:ownSurface.length, cutHits:cutHits.length, seamSamples:seams.reduce((counts,item)=>{counts[item.joint]=(counts[item.joint]||0)+1;return counts;},{}),
         changed:changed.reduce((counts,item)=>{
           const change = signature(item.hit)+' -> '+signature(item.without);
           counts[change] = (counts[change]||0)+1;
@@ -890,7 +912,7 @@ test('Issue 17: inspect aortic joins and duplicated wall faces in the distribute
       if(view.depth!==null && id==='ao') await page.getByRole('button',{name:'僧帽弁',exact:true}).click();
       await canvas.scrollIntoViewIfNeeded();
       const box = await canvas.boundingBox();
-      await page.mouse.click(box.x+box.width*point.x,box.y+box.height*point.y);
+      await page.mouse.click(Math.round(box.x+box.width*point.x),Math.round(box.y+box.height*point.y));
       point.actual = await page.locator('#name').innerText();
       point.actualCut = await page.locator('#pick-note').isVisible();
       point.expected = expected;
