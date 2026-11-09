@@ -937,8 +937,10 @@ test.only('Issue 17: reproduce the 11 cut-face selections in the standalone view
     await expect(page.locator('#name')).toHaveText('左心房');
     await expect(page.locator('#pick-note')).toBeVisible();
     const marker=await page.locator('#pick-mark').boundingBox();
-    expect(Math.abs(marker.x+marker.width/2-coordinates.x)).toBeLessThan(1);
-    expect(Math.abs(marker.y+marker.height/2-coordinates.y)).toBeLessThan(1);
+    const currentCanvas=await canvas.boundingBox();
+    // The explanatory note above the viewport can move it after a cut-face click.
+    expect(Math.abs(marker.x+marker.width/2-currentCanvas.x-coordinates.localX)).toBeLessThan(1);
+    expect(Math.abs(marker.y+marker.height/2-currentCanvas.y-coordinates.localY)).toBeLessThan(1);
     const highlighted=await stableShot(canvas);
     const colors = await page.evaluate(async ({before,after,x,y})=>{
       const image=new Image(), surface=document.createElement('canvas');
