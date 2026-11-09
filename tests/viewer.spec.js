@@ -718,3 +718,38 @@ test('with reduced motion the flow view plays one beat, stops, and keeps drawing
   expect(errors).toEqual([]);
   await context.close();
 });
+
+test('Issue 17: capture both section slider endpoints', async ({page}, testInfo) => {
+  const errors = [];
+  const requests = [];
+  page.on('pageerror', error => errors.push(error.message));
+  page.on('request', request => { if (/^https?:/.test(request.url())) requests.push(request.url()); });
+  await page.context().setOffline(true);
+  await page.goto(url);
+  await expect(page.locator('html')).toHaveAttribute('data-ready', 'true');
+  await expect(page.locator('#error')).toBeHidden();
+  await page.locator('#mode-interior').click();
+  const slider = page.locator('#cut-depth');
+  const canvas = page.locator('canvas');
+  const capture = async (key, value, filename) => {
+    await slider.press(key);
+    await expect(slider).toHaveValue(value);
+    await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(() => requestAnimationFrame(resolve)))));
+    let previous = await canvas.screenshot();
+    for (let attempt = 0; attempt < 20; attempt++) {
+      await page.waitForTimeout(75);
+      const picture = await canvas.screenshot();
+      if (picture.equals(previous)) {
+        await testInfo.attach(filename, {body:picture,contentType:'image/png'});
+        return picture;
+      }
+      previous = picture;
+    }
+    throw new Error('Section screenshot did not stabilize');
+  };
+  const front = await capture('Home', '-1.8', 'section-front-end');
+  const back = await capture('End', '1.8', 'section-back-end');
+  expect(front.equals(back)).toBe(false);
+  expect(errors).toEqual([]);
+  expect(requests).toEqual([]);
+});
