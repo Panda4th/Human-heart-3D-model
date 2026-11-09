@@ -1,0 +1,696 @@
+{
+  "target": "d6e525feea51b7c34be2323e3460a5b291655793",
+  "probe": "8a7168b892b2079d3cdcc8404161e2a978db39b1",
+  "actionsRun": 42580584330,
+  "views": [
+    {
+      "name": "front",
+      "turns": 0,
+      "zoom": 0,
+      "depth": null,
+      "camera": [
+        -0.09899999999999998,
+        1.531247220867717,
+        12.563122393108737
+      ],
+      "duplicates": 457,
+      "opposite": 456,
+      "crossChamber": 0,
+      "multiplicities": {
+        "2": 447,
+        "3": 8,
+        "4": 2
+      },
+      "projected": 457,
+      "atVisibleSurface": 1,
+      "cutHits": 0,
+      "seamSamples": {
+        "ascending-arch": 32
+      },
+      "changed": {},
+      "click": [
+        {
+          "x": 0.49628244572192226,
+          "y": 0.3278242688637164,
+          "hit": "ao/surface",
+          "center": [
+            16.92,
+            1302.69,
+            128.44
+          ],
+          "sample": "ascending-arch",
+          "actual": "大動脈",
+          "actualCut": false,
+          "expected": "大動脈",
+          "matches": true
+        },
+        {
+          "x": 0.482345947274842,
+          "y": 0.330021178776607,
+          "hit": "ao/surface",
+          "center": [
+            11.49,
+            1301.75,
+            136.71
+          ],
+          "sample": "ascending-arch",
+          "actual": "大動脈",
+          "actualCut": false,
+          "expected": "大動脈",
+          "matches": true
+        },
+        {
+          "x": 0.5650488847583441,
+          "y": 0.47733710497802884,
+          "hit": "rv/surface",
+          "without": "rv/surface",
+          "center": [
+            43.25,
+            1267.38,
+            148.13
+          ],
+          "sample": "duplicate-at-visible-surface",
+          "actual": "右心室",
+          "actualCut": false,
+          "expected": "右心室",
+          "matches": true
+        }
+      ]
+    },
+    {
+      "name": "front-zoom",
+      "turns": 0,
+      "zoom": 3,
+      "depth": null,
+      "camera": [
+        -0.09899999999999998,
+        1.1846442125367207,
+        6.786405587592138
+      ],
+      "duplicates": 457,
+      "opposite": 456,
+      "crossChamber": 0,
+      "multiplicities": {
+        "2": 447,
+        "3": 8,
+        "4": 2
+      },
+      "projected": 457,
+      "atVisibleSurface": 1,
+      "cutHits": 0,
+      "seamSamples": {
+        "ascending-arch": 31
+      },
+      "changed": {},
+      "click": [
+        {
+          "x": 0.48761448154175424,
+          "y": 0.17114044409404827,
+          "hit": "ao/surface",
+          "center": [
+            15.83,
+            1302.63,
+            131.63
+          ],
+          "sample": "ascending-arch",
+          "actual": "大動脈",
+          "actualCut": false,
+          "expected": "大動脈",
+          "matches": true
+        },
+        {
+          "x": 0.4716498439458059,
+          "y": 0.17277240106201902,
+          "hit": "ao/surface",
+          "center": [
+            12.63,
+            1301.78,
+            135.94
+          ],
+          "sample": "ascending-arch",
+          "actual": "大動脈",
+          "actualCut": false,
+          "expected": "大動脈",
+          "matches": true
+        },
+        {
+          "x": 0.6286432605710313,
+          "y": 0.4551809578221649,
+          "hit": "rv/surface",
+          "without": "rv/surface",
+          "center": [
+            43.25,
+            1267.38,
+            148.13
+          ],
+          "sample": "duplicate-at-visible-surface",
+          "actual": "右心室",
+          "actualCut": false,
+          "expected": "右心室",
+          "matches": true
+        }
+      ]
+    },
+    {
+      "name": "right-zoom",
+      "turns": 10,
+      "zoom": 3,
+      "depth": null,
+      "camera": [
+        -7.180791048105512,
+        1.1846442125367207,
+        0.189034117113424
+      ],
+      "duplicates": 457,
+      "opposite": 456,
+      "crossChamber": 0,
+      "multiplicities": {
+        "2": 447,
+        "3": 8,
+        "4": 2
+      },
+      "projected": 457,
+      "atVisibleSurface": 0,
+      "cutHits": 0,
+      "seamSamples": {
+        "ascending-arch": 12,
+        "arch-descending": 30
+      },
+      "changed": {},
+      "click": [
+        {
+          "x": 0.579841318185809,
+          "y": 0.16323257030257954,
+          "hit": "ao/surface",
+          "center": [
+            -7.45,
+            1302.4,
+            130.22
+          ],
+          "sample": "ascending-arch",
+          "actual": "大動脈",
+          "actualCut": false,
+          "expected": "大動脈",
+          "matches": true
+        },
+        {
+          "x": 0.602029569015566,
+          "y": 0.15648345452475243,
+          "hit": "ao/surface",
+          "center": [
+            -4.18,
+            1303.68,
+            134.76
+          ],
+          "sample": "ascending-arch",
+          "actual": "大動脈",
+          "actualCut": false,
+          "expected": "大動脈",
+          "matches": true
+        },
+        {
+          "x": 0.2684810072538689,
+          "y": 0.18754662490077473,
+          "hit": "ao/surface",
+          "center": [
+            10.36,
+            1302.69,
+            60.81
+          ],
+          "sample": "arch-descending",
+          "actual": "大動脈",
+          "actualCut": false,
+          "expected": "大動脈",
+          "matches": true
+        },
+        {
+          "x": 0.3011062291789919,
+          "y": 0.186719904527256,
+          "hit": "ao/surface",
+          "center": [
+            9.81,
+            1302.65,
+            68.42
+          ],
+          "sample": "arch-descending",
+          "actual": "大動脈",
+          "actualCut": false,
+          "expected": "大動脈",
+          "matches": true
+        }
+      ]
+    },
+    {
+      "name": "back-zoom",
+      "turns": 0,
+      "zoom": 3,
+      "depth": null,
+      "back": true,
+      "camera": [
+        -0.0989999999999991,
+        1.1846442125367207,
+        -7.412745572485936
+      ],
+      "duplicates": 457,
+      "opposite": 456,
+      "crossChamber": 0,
+      "multiplicities": {
+        "2": 447,
+        "3": 8,
+        "4": 2
+      },
+      "projected": 457,
+      "atVisibleSurface": 0,
+      "cutHits": 0,
+      "seamSamples": {
+        "ascending-arch": 9,
+        "arch-descending": 42
+      },
+      "changed": {},
+      "click": [
+        {
+          "x": 0.5895755115931891,
+          "y": 0.20315601451456466,
+          "hit": "ao/surface",
+          "center": [
+            -2.54,
+            1301.72,
+            116.55
+          ],
+          "sample": "ascending-arch",
+          "actual": "大動脈",
+          "actualCut": false,
+          "expected": "大動脈",
+          "matches": true
+        },
+        {
+          "x": 0.565373212223004,
+          "y": 0.19284908437568876,
+          "hit": "ao/surface",
+          "center": [
+            3.39,
+            1302.65,
+            112.8
+          ],
+          "sample": "ascending-arch",
+          "actual": "大動脈",
+          "actualCut": false,
+          "expected": "大動脈",
+          "matches": true
+        },
+        {
+          "x": 0.4451206848059447,
+          "y": 0.11544747815821388,
+          "hit": "ao/surface",
+          "center": [
+            27.84,
+            1303.17,
+            58.99
+          ],
+          "sample": "arch-descending",
+          "actual": "大動脈",
+          "actualCut": false,
+          "expected": "大動脈",
+          "matches": true
+        },
+        {
+          "x": 0.45428989311145995,
+          "y": 0.10543449645475089,
+          "hit": "ao/surface",
+          "center": [
+            26.15,
+            1303.76,
+            56.7
+          ],
+          "sample": "arch-descending",
+          "actual": "大動脈",
+          "actualCut": false,
+          "expected": "大動脈",
+          "matches": true
+        }
+      ]
+    },
+    {
+      "name": "cut-front-minus-060",
+      "turns": 0,
+      "zoom": 2,
+      "depth": -0.6,
+      "camera": [
+        -0.09899999999999998,
+        1.278150817737235,
+        8.344849007600708
+      ],
+      "duplicates": 457,
+      "opposite": 456,
+      "crossChamber": 0,
+      "multiplicities": {
+        "2": 447,
+        "3": 8,
+        "4": 2
+      },
+      "projected": 457,
+      "atVisibleSurface": 0,
+      "cutHits": 143,
+      "seamSamples": {
+        "ascending-arch": 31
+      },
+      "changed": {
+        "rv/cut -> ra/cut": 5,
+        "tv/surface -> rv/cut": 2,
+        "rv/cut -> lv/cut": 10,
+        "rv/cut -> la/cut": 5,
+        "ra/cut -> rv/cut": 2,
+        "pov/surface -> rv/cut": 1
+      },
+      "click": [
+        {
+          "x": 0.49004539485040144,
+          "y": 0.23568591094895863,
+          "hit": "ao/surface",
+          "center": [
+            15.83,
+            1302.63,
+            131.63
+          ],
+          "sample": "ascending-arch",
+          "actual": "僧帽弁",
+          "actualCut": false,
+          "expected": "僧帽弁",
+          "matches": true
+        },
+        {
+          "x": 0.4773141210398064,
+          "y": 0.23815150478356573,
+          "hit": "ao/surface",
+          "center": [
+            12.63,
+            1301.78,
+            135.94
+          ],
+          "sample": "ascending-arch",
+          "actual": "僧帽弁",
+          "actualCut": false,
+          "expected": "僧帽弁",
+          "matches": true
+        },
+        {
+          "x": 0.34552808727810047,
+          "y": 0.7822520494645628,
+          "hit": "rv/cut",
+          "without": "ra/cut",
+          "center": [
+            -22.08,
+            1216.58,
+            134.37
+          ],
+          "sample": "cut-in-front-of-duplicate",
+          "actual": "右心室",
+          "actualCut": true,
+          "expected": "右心室",
+          "matches": true
+        },
+        {
+          "x": 0.35994953555679926,
+          "y": 0.8377296091401651,
+          "hit": "rv/cut",
+          "without": "ra/cut",
+          "center": [
+            -18.65,
+            1207.18,
+            132.63
+          ],
+          "sample": "cut-in-front-of-duplicate",
+          "actual": "右心室",
+          "actualCut": true,
+          "expected": "右心室",
+          "matches": true
+        },
+        {
+          "x": 0.5818703235288375,
+          "y": 0.548046787014421,
+          "hit": "rv/cut",
+          "without": "lv/cut",
+          "center": [
+            39.41,
+            1254.04,
+            137.31
+          ],
+          "sample": "cut-in-front-of-duplicate",
+          "actual": "右心室",
+          "actualCut": true,
+          "expected": "右心室",
+          "matches": true
+        }
+      ]
+    },
+    {
+      "name": "cut-front-zero",
+      "turns": 0,
+      "zoom": 2,
+      "depth": 0,
+      "camera": [
+        -0.09899999999999998,
+        1.278150817737235,
+        8.344849007600708
+      ],
+      "duplicates": 457,
+      "opposite": 456,
+      "crossChamber": 0,
+      "multiplicities": {
+        "2": 447,
+        "3": 8,
+        "4": 2
+      },
+      "projected": 457,
+      "atVisibleSurface": 1,
+      "cutHits": 92,
+      "seamSamples": {
+        "ascending-arch": 20
+      },
+      "changed": {
+        "lv/cut -> la/cut": 6,
+        "rv/cut -> ra/cut": 1,
+        "tv/surface -> rv/cut": 1,
+        "rv/surface -> rv/cut": 1,
+        "la/cut -> ca/surface": 1
+      },
+      "click": [
+        {
+          "x": 0.4899924926543976,
+          "y": 0.24884563295273937,
+          "hit": "ao/surface",
+          "center": [
+            15.66,
+            1302.07,
+            117.13
+          ],
+          "sample": "ascending-arch",
+          "actual": "僧帽弁",
+          "actualCut": false,
+          "expected": "僧帽弁",
+          "matches": true
+        },
+        {
+          "x": 0.4240456231229373,
+          "y": 0.25130774129534755,
+          "hit": "ao/surface",
+          "center": [
+            -2.54,
+            1301.72,
+            116.55
+          ],
+          "sample": "ascending-arch",
+          "actual": "僧帽弁",
+          "actualCut": false,
+          "expected": "僧帽弁",
+          "matches": true
+        },
+        {
+          "x": 0.537738183964992,
+          "y": 0.4762411334959656,
+          "hit": "lv/cut",
+          "without": "la/cut",
+          "center": [
+            29.08,
+            1264.06,
+            112.25
+          ],
+          "sample": "cut-in-front-of-duplicate",
+          "actual": "左心室",
+          "actualCut": true,
+          "expected": "左心室",
+          "matches": true
+        },
+        {
+          "x": 0.4291395614245378,
+          "y": 0.6037184465402301,
+          "hit": "rv/cut",
+          "without": "ra/cut",
+          "center": [
+            -1.16,
+            1243.11,
+            119.65
+          ],
+          "sample": "cut-in-front-of-duplicate",
+          "actual": "右心室",
+          "actualCut": true,
+          "expected": "右心室",
+          "matches": true
+        },
+        {
+          "x": 0.5542736044170091,
+          "y": 0.47649337804986225,
+          "hit": "la/cut",
+          "without": "ca/surface",
+          "center": [
+            33.55,
+            1264.18,
+            115.9
+          ],
+          "sample": "cut-in-front-of-duplicate",
+          "actual": "左心房",
+          "actualCut": true,
+          "expected": "左心房",
+          "matches": true
+        }
+      ]
+    },
+    {
+      "name": "cut-front-plus-050",
+      "turns": 0,
+      "zoom": 2,
+      "depth": 0.5,
+      "camera": [
+        -0.09899999999999998,
+        1.278150817737235,
+        8.344849007600708
+      ],
+      "duplicates": 457,
+      "opposite": 456,
+      "crossChamber": 0,
+      "multiplicities": {
+        "2": 447,
+        "3": 8,
+        "4": 2
+      },
+      "projected": 457,
+      "atVisibleSurface": 0,
+      "cutHits": 119,
+      "seamSamples": {},
+      "changed": {
+        "ra/cut -> la/cut": 5
+      },
+      "click": [
+        {
+          "x": 0.4525782428247179,
+          "y": 0.5503137828727362,
+          "hit": "ra/cut",
+          "without": "la/cut",
+          "center": [
+            4.63,
+            1250.77,
+            105.89
+          ],
+          "sample": "cut-in-front-of-duplicate",
+          "actual": "右心房",
+          "actualCut": true,
+          "expected": "右心房",
+          "matches": true
+        }
+      ]
+    },
+    {
+      "name": "cut-right-zero",
+      "turns": 8,
+      "zoom": 2,
+      "depth": 0,
+      "camera": [
+        -8.168612115091248,
+        1.278150817737235,
+        2.824130330626727
+      ],
+      "duplicates": 457,
+      "opposite": 456,
+      "crossChamber": 0,
+      "multiplicities": {
+        "2": 447,
+        "3": 8,
+        "4": 2
+      },
+      "projected": 457,
+      "atVisibleSurface": 0,
+      "cutHits": 98,
+      "seamSamples": {
+        "ascending-arch": 9,
+        "arch-descending": 28
+      },
+      "changed": {
+        "rv/surface -> rv/cut": 1,
+        "ra/surface -> ra/cut": 1,
+        "ao/surface -> lv/cut": 1
+      },
+      "click": [
+        {
+          "x": 0.5125208290367013,
+          "y": 0.24914128976963995,
+          "hit": "ao/surface",
+          "center": [
+            15.66,
+            1302.07,
+            117.13
+          ],
+          "sample": "ascending-arch",
+          "actual": "僧帽弁",
+          "actualCut": false,
+          "expected": "僧帽弁",
+          "matches": true
+        },
+        {
+          "x": 0.49559015651712535,
+          "y": 0.23386409478314707,
+          "hit": "ao/surface",
+          "center": [
+            -6.54,
+            1302.13,
+            120.87
+          ],
+          "sample": "ascending-arch",
+          "actual": "僧帽弁",
+          "actualCut": false,
+          "expected": "僧帽弁",
+          "matches": true
+        },
+        {
+          "x": 0.3255992557276248,
+          "y": 0.25460176637867593,
+          "hit": "ao/surface",
+          "center": [
+            10.36,
+            1302.69,
+            60.81
+          ],
+          "sample": "arch-descending",
+          "actual": "僧帽弁",
+          "actualCut": false,
+          "expected": "僧帽弁",
+          "matches": true
+        },
+        {
+          "x": 0.3473743700080292,
+          "y": 0.2529878091485793,
+          "hit": "ao/surface",
+          "center": [
+            9.81,
+            1302.65,
+            68.42
+          ],
+          "sample": "arch-descending",
+          "actual": "僧帽弁",
+          "actualCut": false,
+          "expected": "僧帽弁",
+          "matches": true
+        }
+      ]
+    }
+  ]
+}
