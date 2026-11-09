@@ -718,3 +718,210 @@ test('with reduced motion the flow view plays one beat, stops, and keeps drawing
   expect(errors).toEqual([]);
   await context.close();
 });
+
+test('Issue 17: inspect aortic joins and duplicated wall faces in the distributed viewer', async ({browser}, testInfo) => {
+  test.setTimeout(180000);
+  const fs = require('node:fs/promises');
+  const {execFileSync} = require('node:child_process');
+  expect(execFileSync('git', ['hash-object', 'index.html'], {encoding:'utf8'}).trim()).toBe('01e9bc86a573c0e5c57c24ec01610e1536e73c30');
+  const context = await browser.newContext({viewport:{width:1440,height:1000},deviceScaleFactor:2});
+  await context.setOffline(true);
+  const page = await context.newPage();
+  const errors = [];
+  page.on('pageerror', error => errors.push(error.message));
+  const requests = [];
+  page.on('request', request => { if (/^https?:/.test(request.url())) requests.push(request.url()); });
+  const cdp = await context.newCDPSession(page);
+  const lines = (await fs.readFile('index.html','utf8')).split('\n');
+  const lineNumber = lines.findIndex(line => line.includes('i.render(t,e),xe()'));
+  expect(lineNumber).toBeGreaterThan(0);
+  const columnNumber = lines[lineNumber].indexOf('i.render(t,e),xe()');
+  await cdp.send('Debugger.enable');
+  await cdp.send('Debugger.setBreakpointByUrl', {url, lineNumber, columnNumber});
+  const probe = new Promise((resolve,reject) => cdp.once('Debugger.paused', async event => {
+    try {
+      const result = await cdp.send('Debugger.evaluateOnCallFrame', {
+        callFrameId:event.callFrames[0].callFrameId,
+        expression:'window.__issue17 = {camera:e, parts:o, plane:c, section:h, ray:se, pick:tc, vec:I, point:yt, get mode(){return O}}; true',
+        returnByValue:true,
+      });
+      if (result.exceptionDetails || result.result.value !== true) throw Error(JSON.stringify(result.exceptionDetails));
+      resolve();
+    } catch (error) {
+      reject(error);
+    } finally {
+      await cdp.send('Debugger.resume').catch(() => {});
+    }
+  }));
+  await Promise.all([page.goto(url), probe]);
+  await cdp.send('Debugger.disable');
+  await expect(page.locator('html')).toHaveAttribute('data-ready','true');
+  await expect(page.locator('#error')).toBeHidden();
+  const canvas = page.locator('canvas');
+  const runs = [];
+  const pictures = [];
+  for (const view of [
+    {name:'front',turns:0,zoom:0,depth:null},
+    {name:'front-zoom',turns:0,zoom:3,depth:null},
+    {name:'right-zoom',turns:10,zoom:3,depth:null},
+    {name:'cut-front-minus-060',turns:0,zoom:2,depth:-.6},
+    {name:'cut-front-zero',turns:0,zoom:2,depth:0},
+    {name:'cut-front-plus-050',turns:0,zoom:2,depth:.5},
+    {name:'cut-right-zero',turns:8,zoom:2,depth:0},
+  ]) {
+    await page.locator(view.depth === null ? '#mode-exterior' : '#mode-interior').click();
+    if (view.depth !== null) await page.locator('#cut-depth').fill(String(view.depth));
+    await canvas.scrollIntoViewIfNeeded();
+    await canvas.focus();
+    for(let index=0;index<view.turns;index++) await canvas.press('ArrowLeft');
+    for(let index=0;index<view.zoom;index++) await canvas.press('+');
+    await settle(page);
+    const sample = await page.evaluate(() => {
+      const {camera,parts,plane,section,ray:baseRay,pick,vec:Vector,point:Point,mode} = window.__issue17;
+      const ray = new baseRay.constructor();
+      const interior = mode === 'interior';
+      const targets = [...parts.values()].filter(group => group.userData.kind !== 'conduction');
+      const walls = ['lv','rv','ra','la'].map(id => parts.get(id).children[0]);
+      const aorta = parts.get('ao').children[0];
+      const vertices = mesh => mesh.geometry.attributes.position;
+      const triangle = (mesh, offset) => {
+        const points = vertices(mesh);
+        const indices = mesh.geometry.index;
+        return [0,1,2].map(i => new Vector().fromBufferAttribute(points, indices.getX(offset + i)));
+      };
+      const midpoint = ([a,b,c]) => a.clone().add(b).add(c).divideScalar(3);
+      const cross = ([a,b,c]) => b.clone().sub(a).cross(c.clone().sub(a));
+      const key = point => point.toArray().map(v => Math.round(v * 100)).join(',');
+      const seen = new Map(), duplicates = [];
+      const skip = new Map(walls.map(wall => [wall,new Set()]));
+      for(const wall of walls) {
+        for(let offset=0;offset<wall.geometry.index.count;offset+=3) {
+          const points = triangle(wall,offset);
+          const sorted = points.map(key).sort().join('/');
+          const first = seen.get(sorted);
+          if(first) {
+            duplicates.push({wall,points,other:first.wall.parent.userData.id,normalDot:cross(first.points).dot(cross(points)),center:midpoint(points)});
+            skip.get(first.wall).add(first.face);
+            skip.get(wall).add(offset/3);
+          } else seen.set(sorted,{wall,points,face:offset/3});
+        }
+      }
+      const screen = (mesh,point) => mesh.localToWorld(point.clone()).project(camera);
+      const cameraRay = p => {
+        ray.setFromCamera(new Point(p.x,p.y),camera);
+        return ray;
+      };
+      const isScreen = p => Math.abs(p.x)<.98 && Math.abs(p.y)<.98;
+      const hitAt = p => pick(cameraRay(p),targets,interior?[plane]:[],interior?section.solids:[]);
+      const seams = [];
+      for(let offset=0;offset<aorta.geometry.index.count;offset+=3) {
+        const points = triangle(aorta,offset), center = midpoint(points);
+        if(points.some(p => p.y<1299 || p.y>1306)) continue;
+        const p = screen(aorta,center);
+        if (!isScreen(p)) continue;
+        const world = aorta.localToWorld(center.clone());
+        const hit = hitAt(p);
+        if(hit?.id==='ao' && Math.abs(hit.distance-camera.position.distanceTo(world))<.012) seams.push({p,center,hit});
+      }
+      const spread = candidates => {
+        const chosen = [];
+        for (const candidate of candidates) {
+          if (chosen.every(old => old.p.distanceTo(candidate.p)>.025)) chosen.push(candidate);
+          if(chosen.length===6) break;
+        }
+        return chosen;
+      };
+      const projected = duplicates.map(item => ({...item,p:screen(item.wall,item.center),area:cross(item.points).length()/2})).filter(x => isScreen(x.p));
+      for(const item of projected) item.hit=hitAt(item.p);
+      const saved = [];
+      for(const [wall,faces] of skip) for(const mesh of wall.parent.children) {
+        if(mesh.geometry!==wall.geometry) continue;
+        const original = mesh.raycast;
+        mesh.raycast = function(r,hits) {
+          const subset = [];
+          original.call(this,r,subset);
+          hits.push(...subset.filter(hit => !faces.has(hit.faceIndex)));
+        };
+        saved.push([mesh,original]);
+      }
+      try {
+        for(const item of projected) item.without = hitAt(item.p);
+      } finally {
+        for(const [mesh,method] of saved) mesh.raycast=method;
+      }
+      const signature = h => h ? `${h.id}/${h.onCut ? 'cut' : 'surface'}` : 'none';
+      const ownSurface = projected.filter(item => item.hit && !item.hit.onCut &&
+        Math.abs(item.hit.distance-camera.position.distanceTo(item.wall.localToWorld(item.center.clone())))<.012);
+      const cutHits = projected.filter(item => item.hit?.onCut);
+      const changed = projected.filter(item => signature(item.hit)!==signature(item.without));
+      const describe = item => ({
+        x:(item.p.x+1)/2, y:(1-item.p.y)/2,
+        hit:signature(item.hit), without:item.without ? signature(item.without):'none',
+        center:item.center.toArray().map(v=>+v.toFixed(2)),
+      });
+      const click = [
+        ...spread(seams).slice(0,3).map(item=>({...describe(item),sample:'aortic-join-band'})),
+        ...spread(ownSurface.sort((a,b)=>b.area-a.area)).slice(0,3).map(item=>({...describe(item),sample:'duplicate-at-visible-surface'})),
+        ...spread((changed.length?changed:cutHits).filter(item=>item.hit?.onCut)).slice(0,3).map(item=>({...describe(item),sample:'cut-in-front-of-duplicate'})),
+      ];
+      return {
+        camera:camera.position.toArray(),
+        duplicates:duplicates.length, opposite:duplicates.filter(item=>item.normalDot<0).length,
+        crossChamber:duplicates.filter(item=>item.wall.parent.userData.id!==item.other).length,
+        projected:projected.length, atVisibleSurface:ownSurface.length, cutHits:cutHits.length, seamSamples:seams.length,
+        changed:changed.reduce((counts,item)=>{
+          const change = signature(item.hit)+' -> '+signature(item.without);
+          counts[change] = (counts[change]||0)+1;
+          return counts;
+        },{}),
+        click,
+      };
+    });
+    expect(sample.duplicates).toBe(457);
+    const picture = await stableShot(canvas);
+    await testInfo.attach(view.name,{body:picture,contentType:'image/png'});
+    // A compact contact sheet is logged too so the images can be inspected from the run without downloading its archive.
+    pictures.push({name:view.name,png:picture.toString('base64')});
+    const names = {lv:'左心室',rv:'右心室',la:'左心房',ra:'右心房',ao:'大動脈',pa:'肺動脈',vc:'大静脈',pv:'肺静脈',ca:'冠動脈',cv:'冠静脈',mv:'僧帽弁',tv:'三尖弁',aov:'大動脈弁',pov:'肺動脈弁',pm:'乳頭筋'};
+    for(const point of sample.click) {
+      const [id,kind] = point.hit.split('/');
+      const expected = view.depth!==null && id==='ao' ? '僧帽弁' : names[id];
+      await page.getByRole('button',{name:expected==='僧帽弁'?'三尖弁':view.depth===null?'大静脈':'僧帽弁',exact:true}).click();
+      if(view.depth!==null && id==='ao') await page.getByRole('button',{name:'僧帽弁',exact:true}).click();
+      await canvas.scrollIntoViewIfNeeded();
+      const box = await canvas.boundingBox();
+      await page.mouse.click(box.x+box.width*point.x,box.y+box.height*point.y);
+      point.actual = await page.locator('#name').innerText();
+      point.actualCut = await page.locator('#pick-note').isVisible();
+      point.expected = expected;
+      point.matches = point.actual===expected && point.actualCut===(kind==='cut');
+    }
+    runs.push({...view,...sample});
+    console.log('ISSUE17_RESULT '+JSON.stringify(runs.at(-1)));
+  }
+  const sheet = await page.evaluate(async pictures => {
+    const chart=document.createElement('canvas');
+    chart.width=1120; chart.height=980;
+    const ctx=chart.getContext('2d');
+    ctx.fillStyle='#181b24';ctx.fillRect(0,0,chart.width,chart.height);
+    ctx.fillStyle='#fff';ctx.font='15px sans-serif';
+    for(const [i,picture] of pictures.entries()) {
+      const image=new Image();
+      image.src='data:image/png;base64,'+picture.png;
+      await image.decode();
+      const x=i%2*560,y=Math.floor(i/2)*245;
+      ctx.fillText(picture.name,x+8,y+19);
+      const size=Math.min(560/image.width,224/image.height);
+      ctx.drawImage(image,x+(560-image.width*size)/2,y+21,image.width*size,image.height*size);
+    }
+    return chart.toDataURL('image/jpeg',.75).split(',')[1];
+  }, pictures);
+  for(let offset=0;offset<sheet.length;offset+=5000) console.log('ISSUE17_SHEET '+sheet.slice(offset,offset+5000));
+  await testInfo.attach('issue-17-contact-sheet',{body:Buffer.from(sheet,'base64'),contentType:'image/jpeg'});
+  expect(errors).toEqual([]);
+  expect(requests).toEqual([]);
+  expect(runs.flatMap(run=>run.click).length).toBeGreaterThan(10);
+  const mismatches = runs.flatMap(run=>run.click.filter(point=>!point.matches));
+  expect(mismatches).toEqual([]);
+  await context.close();
+});
