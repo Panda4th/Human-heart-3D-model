@@ -32,4 +32,4 @@ Chromiumの撮影では、正面で最前面に出る重複箇所を通常・拡
 
 ## 再現用のChromiumテストの扱い
 
-検証に使ったPlaywrightのテストは `tests/viewer.spec.js` には入れていない。配布HTMLのGit blob SHA（`01e9bc86a573c0e5c57c24ec01610e1536e73c30`）を固定した使い捨ての検査で、`index.html` が変わると失敗するため。コードは `8a7168b` に残る（このコミットはmainの履歴に含まれる）。
+検証に使ったPlaywrightのテストは `tests/viewer.spec.js` には入れていない。配布HTMLのGit blob SHA（`01e9bc86a573c0e5c57c24ec01610e1536e73c30`）を固定した使い捨ての検査で、`index.html` が変わると失敗するため。コードは `8a7168b` に残る。このコミットがmainの履歴に残るのは、PR #39を「Create a merge commit」で取り込んだ場合だけで、Squashでは記録と画像は入るがコミットは辿れない。

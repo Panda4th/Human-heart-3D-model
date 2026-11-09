@@ -45,4 +45,18 @@
 
 ## 再現用のChromiumテストの扱い
 
-画面6構図の撮影に使ったPlaywrightのテスト（`test.only`付き）は `tests/viewer.spec.js` には入れていない。配布HTMLのGit blob SHAを固定し、`index.html` が変わると失敗し、`npm test` の他のテストを止めるため。コードは `77e7415`〜`c41b3e7` に残る（これらのコミットはmainの履歴に含まれる）。数値の再現は `node scripts/inspect-cut-picks.mjs`。
+画面6構図の撮影に使ったPlaywrightのテスト（`test.only`付き）は `tests/viewer.spec.js` には入れていない。配布HTMLのGit blob SHAを固定し、`index.html` が変わると失敗し、`npm test` の他のテストを止めるため。コードは `77e7415`〜`c41b3e7` に残る。これらのコミットがmainの履歴に残るのは、PR #39を「Create a merge commit」で取り込んだ場合だけで、Squashでは記録と画像は入るがコミットは辿れない。
+
+## 数値の再現手順（対象コミットに固定）
+
+`scripts/inspect-cut-picks.mjs` は実行したチェックアウトの `src`・モデルのバイナリ・Three.jsを読む。将来のmainで実行すると、モデル更新後の値が旧記録と区別できずに出るため、記録の対象版で実行する。`d6e525f` にはこのスクリプトがない。スクリプトと配布HTMLがそろう `10f1d35` を別のworktreeに取り出す。
+
+```
+git worktree add --detach ../heart-10f1d35 10f1d35
+cd ../heart-10f1d35
+npm ci
+git hash-object index.html   # 01e9bc86a573c0e5c57c24ec01610e1536e73c30 であること
+node scripts/inspect-cut-picks.mjs
+```
+
+この手順は2026-11-09にこの環境で実行し、blobの一致と、225点分の出力が完走することを確認した。
