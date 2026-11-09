@@ -718,3 +718,246 @@ test('with reduced motion the flow view plays one beat, stops, and keeps drawing
   expect(errors).toEqual([]);
   await context.close();
 });
+
+test.only('Issue 17: reproduce the 11 cut-face selections in the standalone viewer', async ({browser}, testInfo) => {
+  test.setTimeout(120000);
+  const fs = require('node:fs/promises');
+  const {execFileSync} = require('node:child_process');
+  expect(execFileSync('git', ['hash-object', 'index.html'], {encoding:'utf8'}).trim()).toBe('01e9bc86a573c0e5c57c24ec01610e1536e73c30');
+  const context = await browser.newContext({viewport:{width:1440,height:1050}, deviceScaleFactor:1});
+  await context.setOffline(true);
+  const page = await context.newPage();
+  const errors = [];
+  const requests = [];
+  page.on('pageerror', error=>errors.push(error.message));
+  page.on('request', request=>{if (/^https?:/.test(request.url())) requests.push(request.url());});
+  const cdp = await context.newCDPSession(page);
+  const lines = (await fs.readFile('index.html','utf8')).split('\n');
+  const lineNumber = lines.findIndex(line=>line.includes('i.render(t,e),xe()'));
+  expect(lineNumber).toBeGreaterThan(0);
+  await cdp.send('Debugger.enable');
+  await cdp.send('Debugger.setBreakpointByUrl',{url,lineNumber,columnNumber:lines[lineNumber].indexOf('i.render(t,e),xe()')});
+  const ready = new Promise((resolve,reject)=>cdp.once('Debugger.paused',async event=>{
+    try {
+      const result = await cdp.send('Debugger.evaluateOnCallFrame',{
+        callFrameId:event.callFrames[0].callFrameId,
+        expression:'window.__cutProbe={ camera:e, world:I, setEye(eye){ e.position.copy(n.target).add(new I(...eye).normalize().multiplyScalar(wt));n.update();Yt(); } }; true',
+        returnByValue:true,
+      });
+      if (result.exceptionDetails || result.result.value!==true) throw Error(JSON.stringify(result.exceptionDetails));
+      resolve();
+    } catch(error) {
+      reject(error);
+    } finally {
+      await cdp.send('Debugger.resume').catch(()=>{});
+    }
+  }));
+  await Promise.all([page.goto(url),ready]);
+  await cdp.send('Debugger.disable');
+  await expect(page.locator('html')).toHaveAttribute('data-ready','true');
+  await expect(page.locator('#error')).toBeHidden();
+  const canvas=page.locator('canvas');
+  // The unit-test camera has aspect ratio 1. Keep the same projection in the browser.
+  await canvas.evaluate(node=>{node.style.width='800px';node.style.height='800px';});
+  await canvas.scrollIntoViewIfNeeded();
+  await page.locator('#mode-interior').click();
+  await settle(page);
+  const cases = [
+    {
+      "constant": -0.5,
+      "eye": [
+        0,
+        0.06,
+        1
+      ],
+      "point": [
+        -0.4398323736682636,
+        0.32065322630112236,
+        -0.5
+      ],
+      "expected": "lv"
+    },
+    {
+      "constant": -0.5,
+      "eye": [
+        0,
+        0.06,
+        1
+      ],
+      "point": [
+        -0.2694161868341318,
+        0.32065322630112236,
+        -0.5
+      ],
+      "expected": "lv"
+    },
+    {
+      "constant": -0.5,
+      "eye": [
+        0,
+        0.06,
+        1
+      ],
+      "point": [
+        -0.09899999999999998,
+        0.32065322630112236,
+        -0.5
+      ],
+      "expected": "lv"
+    },
+    {
+      "constant": -0.5,
+      "eye": [
+        0,
+        0.06,
+        1
+      ],
+      "point": [
+        0.24156627885109,
+        0.4915758167113051,
+        -0.5
+      ],
+      "expected": "lv"
+    },
+    {
+      "constant": -0.5,
+      "eye": [
+        0.5,
+        0.2,
+        1
+      ],
+      "point": [
+        -0.38533325261269624,
+        0.2676441949677777,
+        -0.5
+      ],
+      "expected": "lv"
+    },
+    {
+      "constant": -0.5,
+      "eye": [
+        -0.5,
+        -0.1,
+        1
+      ],
+      "point": [
+        -0.38014811997831455,
+        0.1737456644390537,
+        -0.5
+      ],
+      "expected": "lv"
+    },
+    {
+      "constant": -0.5,
+      "eye": [
+        -0.5,
+        -0.1,
+        1
+      ],
+      "point": [
+        -0.38057669971862307,
+        0.3414258671413969,
+        -0.5
+      ],
+      "expected": "lv"
+    },
+    {
+      "constant": 0.5,
+      "eye": [
+        0,
+        0.06,
+        1
+      ],
+      "point": [
+        0.8430154827168918,
+        0.8861023428863174,
+        0.5
+      ],
+      "expected": "rv"
+    },
+    {
+      "constant": 0.5,
+      "eye": [
+        0,
+        0.06,
+        1
+      ],
+      "point": [
+        0.8422817504487504,
+        1.0432035111466265,
+        0.5
+      ],
+      "expected": "rv"
+    },
+    {
+      "constant": 0.5,
+      "eye": [
+        0.5,
+        0.2,
+        1
+      ],
+      "point": [
+        0.818922256138003,
+        1.0396463218928502,
+        0.5
+      ],
+      "expected": "rv"
+    },
+    {
+      "constant": 0.5,
+      "eye": [
+        -0.5,
+        -0.1,
+        1
+      ],
+      "point": [
+        0.9654627331694652,
+        0.818756936710104,
+        0.5
+      ],
+      "expected": "rv"
+    }
+  ];
+  const results=[];
+  for (const [i,example] of cases.entries()) {
+    await page.locator('#cut-depth').fill(String(-example.constant));
+    await page.getByRole('button',{name:'右心房',exact:true}).click();
+    await canvas.scrollIntoViewIfNeeded();
+    await page.evaluate(eye=>window.__cutProbe.setEye(eye),example.eye);
+    await settle(page);
+    const coordinates = await canvas.evaluate((node,point)=>{
+      const {world,camera}=window.__cutProbe;
+      const p = new world(...point).project(camera);
+      const r=node.getBoundingClientRect();
+      return {x:Math.round(r.left+r.width*(p.x+1)/2),y:Math.round(r.top+r.height*(1-p.y)/2),aspect:camera.aspect,localX:Math.round(r.width*(p.x+1)/2),localY:Math.round(r.height*(1-p.y)/2)};
+    },example.point);
+    expect(coordinates.aspect).toBe(1);
+    const baseline = await stableShot(canvas);
+    await page.mouse.click(coordinates.x,coordinates.y);
+    await expect(page.locator('#name')).toHaveText('左心房');
+    await expect(page.locator('#pick-note')).toBeVisible();
+    const highlighted=await stableShot(canvas);
+    const colors = await page.evaluate(async ({before,after,x,y})=>{
+      const image=new Image(), surface=document.createElement('canvas');
+      const colors=[];
+      for (const png of [before,after]) {
+        image.src='data:image/png;base64,'+png;
+        await image.decode();
+        surface.width=image.width;surface.height=image.height;
+        const ctx=surface.getContext('2d');
+        ctx.drawImage(image,0,0);
+        colors.push([...ctx.getImageData(x,y,1,1).data].slice(0,3));
+      }
+      return colors;
+    },{before:baseline.toString('base64'),after:highlighted.toString('base64'),x:coordinates.localX,y:coordinates.localY});
+    results.push({case:i+1,reference:example.expected,display:'la',slider:-example.constant,eye:example.eye,colors});
+    if ([0,4,5,7,9,10].includes(i)) {
+      await testInfo.attach('cut-case-'+(i+1),{body:await page.screenshot(),contentType:'image/png'});
+    }
+  }
+  console.log('ISSUE17_CUT_RESULTS '+JSON.stringify(results));
+  await testInfo.attach('cut-clicks',{body:JSON.stringify(results,null,2),contentType:'application/json'});
+  expect(errors).toEqual([]);
+  expect(requests).toEqual([]);
+  await context.close();
+});
