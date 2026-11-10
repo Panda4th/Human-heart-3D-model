@@ -1,0 +1,1265 @@
+{
+  "target": "d6e525feea51b7c34be2323e3460a5b291655793",
+  "probe": "c41b3e7fdf797cdf131a55cde19fcc367dd5ae55",
+  "actionsRun": 42583749565,
+  "sampleCount": 225,
+  "metrics": {
+    "got": {
+      "matches": 214,
+      "corrected": 0,
+      "newMismatches": 0
+    },
+    "nearestWall": {
+      "matches": 220,
+      "corrected": 7,
+      "newMismatches": 1
+    },
+    "nearestCavity": {
+      "matches": 221,
+      "corrected": 8,
+      "newMismatches": 1
+    },
+    "majority": {
+      "matches": 221,
+      "corrected": 7,
+      "newMismatches": 0
+    }
+  },
+  "raysHittingDuplicates": {
+    "view": 0,
+    "reference": 0
+  },
+  "mismatches": [
+    {
+      "constant": -0.5,
+      "eye": [
+        0,
+        0.06,
+        1
+      ],
+      "x": -0.07999999999999999,
+      "y": -0.09999999999999992,
+      "point": [
+        -0.4398323736682636,
+        0.32065322630112236,
+        -0.5
+      ],
+      "expected": "lv",
+      "got": "la",
+      "onCut": true,
+      "current": {
+        "net": {
+          "lv": 0,
+          "rv": 0,
+          "ra": 0,
+          "la": 1
+        },
+        "sum": 1,
+        "first": "la",
+        "firstNet": "la",
+        "firstPositive": "la",
+        "firstExit": "la"
+      },
+      "masked": {
+        "net": {
+          "lv": 0,
+          "rv": 0,
+          "ra": 0,
+          "la": 1
+        },
+        "sum": 1,
+        "first": "la",
+        "firstNet": "la",
+        "firstPositive": "la",
+        "firstExit": "la"
+      },
+      "hits": [
+        {
+          "id": "la",
+          "face": 1895,
+          "distance": 3.7417152387233847,
+          "sign": 1,
+          "duplicate": false
+        },
+        {
+          "id": "la",
+          "face": 1972,
+          "distance": 35.826630499076096,
+          "sign": -1,
+          "duplicate": false
+        },
+        {
+          "id": "la",
+          "face": 1982,
+          "distance": 38.8791537009967,
+          "sign": 1,
+          "duplicate": false
+        }
+      ],
+      "refsWithDuplicates": [],
+      "wall": {
+        "lv": 3.191744924362063,
+        "rv": 11.913982054839982,
+        "ra": 3.139164468773408,
+        "la": 3.6506121512534477
+      },
+      "cavity": {
+        "lv": 4.529575336363235,
+        "rv": 17.59619451876778,
+        "ra": 5.186383696789561,
+        "la": 3.7380822833220146
+      },
+      "nearestWall": "ra",
+      "nearestCavity": "la",
+      "votes": {
+        "lv": 4,
+        "rv": 4,
+        "ra": 3,
+        "la": 4
+      },
+      "majority": "la",
+      "case": 1
+    },
+    {
+      "constant": -0.5,
+      "eye": [
+        0,
+        0.06,
+        1
+      ],
+      "x": -0.03999999999999999,
+      "y": -0.09999999999999992,
+      "point": [
+        -0.2694161868341318,
+        0.32065322630112236,
+        -0.5
+      ],
+      "expected": "lv",
+      "got": "la",
+      "onCut": true,
+      "current": {
+        "net": {
+          "lv": 0,
+          "rv": 0,
+          "ra": 0,
+          "la": 1
+        },
+        "sum": 1,
+        "first": "la",
+        "firstNet": "la",
+        "firstPositive": "la",
+        "firstExit": "la"
+      },
+      "masked": {
+        "net": {
+          "lv": 0,
+          "rv": 0,
+          "ra": 0,
+          "la": 1
+        },
+        "sum": 1,
+        "first": "la",
+        "firstNet": "la",
+        "firstPositive": "la",
+        "firstExit": "la"
+      },
+      "hits": [
+        {
+          "id": "la",
+          "face": 2134,
+          "distance": 4.81611272202875,
+          "sign": 1,
+          "duplicate": false
+        },
+        {
+          "id": "la",
+          "face": 2253,
+          "distance": 35.62452750166716,
+          "sign": -1,
+          "duplicate": false
+        },
+        {
+          "id": "la",
+          "face": 2183,
+          "distance": 38.646260154950625,
+          "sign": 1,
+          "duplicate": false
+        }
+      ],
+      "refsWithDuplicates": [],
+      "wall": {
+        "lv": 1.5053038139211794,
+        "rv": 15.916057603441391,
+        "ra": 6.977622558053978,
+        "la": 4.433265974144497
+      },
+      "cavity": {
+        "lv": 1.5769359533770853,
+        "rv": 19.743768957704887,
+        "ra": 10.237124344717039,
+        "la": 4.482947287650512
+      },
+      "nearestWall": "lv",
+      "nearestCavity": "lv",
+      "votes": {
+        "lv": 7,
+        "rv": 2,
+        "ra": 1,
+        "la": 4
+      },
+      "majority": "lv",
+      "case": 2
+    },
+    {
+      "constant": -0.5,
+      "eye": [
+        0,
+        0.06,
+        1
+      ],
+      "x": 1.3877787807814457e-17,
+      "y": -0.09999999999999992,
+      "point": [
+        -0.09899999999999998,
+        0.32065322630112236,
+        -0.5
+      ],
+      "expected": "lv",
+      "got": "la",
+      "onCut": true,
+      "current": {
+        "net": {
+          "lv": 0,
+          "rv": 0,
+          "ra": 0,
+          "la": 1
+        },
+        "sum": 1,
+        "first": "la",
+        "firstNet": "la",
+        "firstPositive": "la",
+        "firstExit": "la"
+      },
+      "masked": {
+        "net": {
+          "lv": 0,
+          "rv": 0,
+          "ra": 0,
+          "la": 1
+        },
+        "sum": 1,
+        "first": "la",
+        "firstNet": "la",
+        "firstPositive": "la",
+        "firstExit": "la"
+      },
+      "hits": [
+        {
+          "id": "la",
+          "face": 2274,
+          "distance": 6.803221039512421,
+          "sign": 1,
+          "duplicate": false
+        },
+        {
+          "id": "la",
+          "face": 2253,
+          "distance": 35.01386100928538,
+          "sign": -1,
+          "duplicate": false
+        },
+        {
+          "id": "la",
+          "face": 2399,
+          "distance": 38.08180176501707,
+          "sign": 1,
+          "duplicate": false
+        }
+      ],
+      "refsWithDuplicates": [],
+      "wall": {
+        "lv": 0.058525801779822965,
+        "rv": 20.445909703549336,
+        "ra": 11.391350444248584,
+        "la": 6.337431766198808
+      },
+      "cavity": {
+        "lv": 0.005538584540806883,
+        "rv": 22.705504327468923,
+        "ra": 15.340412393170057,
+        "la": 6.266468197196107
+      },
+      "nearestWall": "lv",
+      "nearestCavity": "lv",
+      "votes": {
+        "lv": 7,
+        "rv": 2,
+        "ra": 1,
+        "la": 4
+      },
+      "majority": "lv",
+      "case": 3
+    },
+    {
+      "constant": -0.5,
+      "eye": [
+        0,
+        0.06,
+        1
+      ],
+      "x": 0.08000000000000002,
+      "y": -0.05999999999999992,
+      "point": [
+        0.24156627885109,
+        0.4915758167113051,
+        -0.5
+      ],
+      "expected": "lv",
+      "got": "la",
+      "onCut": true,
+      "current": {
+        "net": {
+          "lv": 0,
+          "rv": 0,
+          "ra": 0,
+          "la": 1
+        },
+        "sum": 1,
+        "first": "la",
+        "firstNet": "la",
+        "firstPositive": "la",
+        "firstExit": "la"
+      },
+      "masked": {
+        "net": {
+          "lv": 0,
+          "rv": 0,
+          "ra": 0,
+          "la": 1
+        },
+        "sum": 1,
+        "first": "la",
+        "firstNet": "la",
+        "firstPositive": "la",
+        "firstExit": "la"
+      },
+      "hits": [
+        {
+          "id": "la",
+          "face": 3153,
+          "distance": 10.513868307006657,
+          "sign": 1,
+          "duplicate": false
+        },
+        {
+          "id": "la",
+          "face": 3189,
+          "distance": 31.760273276369,
+          "sign": -1,
+          "duplicate": false
+        },
+        {
+          "id": "la",
+          "face": 3201,
+          "distance": 35.281163611967,
+          "sign": 1,
+          "duplicate": false
+        }
+      ],
+      "refsWithDuplicates": [],
+      "wall": {
+        "lv": 0.12189768023047211,
+        "rv": 20.55754523324469,
+        "ra": 18.557658464209634,
+        "la": 8.104666206521506
+      },
+      "cavity": {
+        "lv": 0.20998979432584025,
+        "rv": 23.117856072625035,
+        "ra": 25.688537402372983,
+        "la": 8.007734199665421
+      },
+      "nearestWall": "lv",
+      "nearestCavity": "lv",
+      "votes": {
+        "lv": 5,
+        "rv": 2,
+        "ra": 1,
+        "la": 6
+      },
+      "majority": "la",
+      "case": 4
+    },
+    {
+      "constant": -0.5,
+      "eye": [
+        0.5,
+        0.2,
+        1
+      ],
+      "x": -0.03999999999999999,
+      "y": -0.09999999999999992,
+      "point": [
+        -0.38533325261269624,
+        0.2676441949677777,
+        -0.5
+      ],
+      "expected": "lv",
+      "got": "la",
+      "onCut": true,
+      "current": {
+        "net": {
+          "lv": 0,
+          "rv": 0,
+          "ra": 0,
+          "la": 1
+        },
+        "sum": 1,
+        "first": "la",
+        "firstNet": "la",
+        "firstPositive": "la",
+        "firstExit": "la"
+      },
+      "masked": {
+        "net": {
+          "lv": 0,
+          "rv": 0,
+          "ra": 0,
+          "la": 1
+        },
+        "sum": 1,
+        "first": "la",
+        "firstNet": "la",
+        "firstPositive": "la",
+        "firstExit": "la"
+      },
+      "hits": [
+        {
+          "id": "la",
+          "face": 1893,
+          "distance": 4.214749151303492,
+          "sign": 1,
+          "duplicate": false
+        },
+        {
+          "id": "la",
+          "face": 1325,
+          "distance": 38.93362148753986,
+          "sign": -1,
+          "duplicate": false
+        },
+        {
+          "id": "la",
+          "face": 1208,
+          "distance": 42.7759904919373,
+          "sign": 1,
+          "duplicate": false
+        }
+      ],
+      "refsWithDuplicates": [],
+      "wall": {
+        "lv": 4.273841289397386,
+        "rv": 12.562079870872818,
+        "ra": 4.7617940496524165,
+        "la": 3.6256459471738163
+      },
+      "cavity": {
+        "lv": 4.322027108110891,
+        "rv": 17.409454885225898,
+        "ra": 6.82640136617088,
+        "la": 3.5872048808554324
+      },
+      "nearestWall": "la",
+      "nearestCavity": "la",
+      "votes": {
+        "lv": 4,
+        "rv": 3,
+        "ra": 4,
+        "la": 3
+      },
+      "majority": "la",
+      "case": 5
+    },
+    {
+      "constant": -0.5,
+      "eye": [
+        -0.5,
+        -0.1,
+        1
+      ],
+      "x": -0.07999999999999999,
+      "y": -0.13999999999999993,
+      "point": [
+        -0.38014811997831455,
+        0.1737456644390537,
+        -0.5
+      ],
+      "expected": "lv",
+      "got": "la",
+      "onCut": true,
+      "current": {
+        "net": {
+          "lv": 0,
+          "rv": 0,
+          "ra": 0,
+          "la": 1
+        },
+        "sum": 1,
+        "first": "la",
+        "firstNet": "la",
+        "firstPositive": "la",
+        "firstExit": "la"
+      },
+      "masked": {
+        "net": {
+          "lv": 0,
+          "rv": 0,
+          "ra": 0,
+          "la": 1
+        },
+        "sum": 1,
+        "first": "la",
+        "firstNet": "la",
+        "firstPositive": "la",
+        "firstExit": "la"
+      },
+      "hits": [
+        {
+          "id": "la",
+          "face": 2204,
+          "distance": 4.422367527559446,
+          "sign": 1,
+          "duplicate": false
+        },
+        {
+          "id": "la",
+          "face": 2779,
+          "distance": 37.74520169542992,
+          "sign": -1,
+          "duplicate": false
+        },
+        {
+          "id": "la",
+          "face": 2792,
+          "distance": 40.824130822159155,
+          "sign": 1,
+          "duplicate": false
+        }
+      ],
+      "refsWithDuplicates": [],
+      "wall": {
+        "lv": 5.783145799275509,
+        "rv": 12.199315742791779,
+        "ra": 6.153985150985305,
+        "la": 3.461407160299147
+      },
+      "cavity": {
+        "lv": 5.913111594453329,
+        "rv": 16.10933952044211,
+        "ra": 7.034117691451196,
+        "la": 3.4482650118077016
+      },
+      "nearestWall": "la",
+      "nearestCavity": "la",
+      "votes": {
+        "lv": 3,
+        "rv": 3,
+        "ra": 4,
+        "la": 4
+      },
+      "majority": "la",
+      "case": 6
+    },
+    {
+      "constant": -0.5,
+      "eye": [
+        -0.5,
+        -0.1,
+        1
+      ],
+      "x": -0.07999999999999999,
+      "y": -0.09999999999999992,
+      "point": [
+        -0.38057669971862307,
+        0.3414258671413969,
+        -0.5
+      ],
+      "expected": "lv",
+      "got": "la",
+      "onCut": true,
+      "current": {
+        "net": {
+          "lv": 0,
+          "rv": 0,
+          "ra": 0,
+          "la": 1
+        },
+        "sum": 1,
+        "first": "la",
+        "firstNet": "la",
+        "firstPositive": "la",
+        "firstExit": "la"
+      },
+      "masked": {
+        "net": {
+          "lv": 0,
+          "rv": 0,
+          "ra": 0,
+          "la": 1
+        },
+        "sum": 1,
+        "first": "la",
+        "firstNet": "la",
+        "firstPositive": "la",
+        "firstExit": "la"
+      },
+      "hits": [
+        {
+          "id": "la",
+          "face": 2135,
+          "distance": 4.688084058550028,
+          "sign": 1,
+          "duplicate": false
+        },
+        {
+          "id": "la",
+          "face": 2780,
+          "distance": 36.68508587260906,
+          "sign": -1,
+          "duplicate": false
+        },
+        {
+          "id": "la",
+          "face": 3200,
+          "distance": 39.832773783194135,
+          "sign": 1,
+          "duplicate": false
+        }
+      ],
+      "refsWithDuplicates": [],
+      "wall": {
+        "lv": 2.9761967963497122,
+        "rv": 13.472104564385496,
+        "ra": 3.9655644139449473,
+        "la": 3.7214641208015973
+      },
+      "cavity": {
+        "lv": 2.962471733724989,
+        "rv": 18.549521089127317,
+        "ra": 6.941308215955481,
+        "la": 3.6976851022988035
+      },
+      "nearestWall": "lv",
+      "nearestCavity": "lv",
+      "votes": {
+        "lv": 5,
+        "rv": 3,
+        "ra": 3,
+        "la": 4
+      },
+      "majority": "lv",
+      "case": 7
+    },
+    {
+      "constant": 0.5,
+      "eye": [
+        0,
+        0.06,
+        1
+      ],
+      "x": 0.24000000000000005,
+      "y": 0.02000000000000008,
+      "point": [
+        0.8430154827168918,
+        0.8861023428863174,
+        0.5
+      ],
+      "expected": "rv",
+      "got": "la",
+      "onCut": true,
+      "current": {
+        "net": {
+          "lv": 0,
+          "rv": 0,
+          "ra": 0,
+          "la": 1
+        },
+        "sum": 1,
+        "first": "la",
+        "firstNet": "la",
+        "firstPositive": "la",
+        "firstExit": "la"
+      },
+      "masked": {
+        "net": {
+          "lv": 0,
+          "rv": 0,
+          "ra": 0,
+          "la": 1
+        },
+        "sum": 1,
+        "first": "la",
+        "firstNet": "la",
+        "firstPositive": "la",
+        "firstExit": "la"
+      },
+      "hits": [
+        {
+          "id": "la",
+          "face": 5429,
+          "distance": 6.792417416940185,
+          "sign": 1,
+          "duplicate": false
+        },
+        {
+          "id": "la",
+          "face": 5596,
+          "distance": 16.195197116578008,
+          "sign": -1,
+          "duplicate": false
+        },
+        {
+          "id": "la",
+          "face": 5672,
+          "distance": 33.83082148963319,
+          "sign": 1,
+          "duplicate": false
+        }
+      ],
+      "refsWithDuplicates": [],
+      "wall": {
+        "lv": 4.530147048599983,
+        "rv": 2.452975187915141,
+        "ra": 39.882256633212684,
+        "la": 5.316554445744372
+      },
+      "cavity": {
+        "lv": 14.708488307331475,
+        "rv": 6.992797736099097,
+        "ra": 44.790883054229305,
+        "la": 13.019260934281391
+      },
+      "nearestWall": "rv",
+      "nearestCavity": "rv",
+      "votes": {
+        "lv": 2,
+        "rv": 9,
+        "ra": 0,
+        "la": 3
+      },
+      "majority": "rv",
+      "case": 8
+    },
+    {
+      "constant": 0.5,
+      "eye": [
+        0,
+        0.06,
+        1
+      ],
+      "x": 0.24000000000000005,
+      "y": 0.06000000000000008,
+      "point": [
+        0.8422817504487504,
+        1.0432035111466265,
+        0.5
+      ],
+      "expected": "rv",
+      "got": "la",
+      "onCut": true,
+      "current": {
+        "net": {
+          "lv": 0,
+          "rv": 0,
+          "ra": 0,
+          "la": 1
+        },
+        "sum": 1,
+        "first": "la",
+        "firstNet": "la",
+        "firstPositive": "la",
+        "firstExit": "la"
+      },
+      "masked": {
+        "net": {
+          "lv": 0,
+          "rv": 0,
+          "ra": 0,
+          "la": 1
+        },
+        "sum": 1,
+        "first": "la",
+        "firstNet": "la",
+        "firstPositive": "la",
+        "firstExit": "la"
+      },
+      "hits": [
+        {
+          "id": "la",
+          "face": 5628,
+          "distance": 29.532657210654232,
+          "sign": 1,
+          "duplicate": false
+        }
+      ],
+      "refsWithDuplicates": [],
+      "wall": {
+        "lv": 8.25509734613803,
+        "rv": 4.518607720408079,
+        "ra": 40.22405405234265,
+        "la": 4.518410075030891
+      },
+      "cavity": {
+        "lv": 18.73510893947083,
+        "rv": 8.81314935376929,
+        "ra": 44.66284837181827,
+        "la": 11.256298517760039
+      },
+      "nearestWall": "la",
+      "nearestCavity": "rv",
+      "votes": {
+        "lv": 2,
+        "rv": 7,
+        "ra": 0,
+        "la": 5
+      },
+      "majority": "rv",
+      "case": 9
+    },
+    {
+      "constant": 0.5,
+      "eye": [
+        0.5,
+        0.2,
+        1
+      ],
+      "x": 0.12000000000000002,
+      "y": 0.02000000000000008,
+      "point": [
+        0.818922256138003,
+        1.0396463218928502,
+        0.5
+      ],
+      "expected": "rv",
+      "got": "la",
+      "onCut": true,
+      "current": {
+        "net": {
+          "lv": 0,
+          "rv": 0,
+          "ra": 0,
+          "la": 1
+        },
+        "sum": 1,
+        "first": "la",
+        "firstNet": "la",
+        "firstPositive": "la",
+        "firstExit": "la"
+      },
+      "masked": {
+        "net": {
+          "lv": 0,
+          "rv": 0,
+          "ra": 0,
+          "la": 1
+        },
+        "sum": 1,
+        "first": "la",
+        "firstNet": "la",
+        "firstPositive": "la",
+        "firstExit": "la"
+      },
+      "hits": [
+        {
+          "id": "la",
+          "face": 5438,
+          "distance": 9.60942584705317,
+          "sign": 1,
+          "duplicate": false
+        },
+        {
+          "id": "la",
+          "face": 4272,
+          "distance": 13.140669258108074,
+          "sign": -1,
+          "duplicate": false
+        },
+        {
+          "id": "la",
+          "face": 3013,
+          "distance": 38.0458359002966,
+          "sign": 1,
+          "duplicate": false
+        },
+        {
+          "id": "la",
+          "face": 2312,
+          "distance": 70.01909022825679,
+          "sign": -1,
+          "duplicate": false
+        },
+        {
+          "id": "la",
+          "face": 2256,
+          "distance": 73.87872766325539,
+          "sign": 1,
+          "duplicate": false
+        }
+      ],
+      "refsWithDuplicates": [],
+      "wall": {
+        "lv": 8.373085132394344,
+        "rv": 4.961766235272725,
+        "ra": 39.508125849010675,
+        "la": 5.076156468684928
+      },
+      "cavity": {
+        "lv": 18.554012310354253,
+        "rv": 8.184625998952619,
+        "ra": 43.95856841305092,
+        "la": 11.084627687380618
+      },
+      "nearestWall": "rv",
+      "nearestCavity": "rv",
+      "votes": {
+        "lv": 1,
+        "rv": 7,
+        "ra": 0,
+        "la": 6
+      },
+      "majority": "rv",
+      "case": 10
+    },
+    {
+      "constant": 0.5,
+      "eye": [
+        -0.5,
+        -0.1,
+        1
+      ],
+      "x": 0.32,
+      "y": 0.02000000000000008,
+      "point": [
+        0.9654627331694652,
+        0.818756936710104,
+        0.5
+      ],
+      "expected": "rv",
+      "got": "la",
+      "onCut": true,
+      "current": {
+        "net": {
+          "lv": 0,
+          "rv": 0,
+          "ra": 0,
+          "la": 1
+        },
+        "sum": 1,
+        "first": "la",
+        "firstNet": "la",
+        "firstPositive": "la",
+        "firstExit": "la"
+      },
+      "masked": {
+        "net": {
+          "lv": 0,
+          "rv": 0,
+          "ra": 0,
+          "la": 1
+        },
+        "sum": 1,
+        "first": "la",
+        "firstNet": "la",
+        "firstPositive": "la",
+        "firstExit": "la"
+      },
+      "hits": [
+        {
+          "id": "la",
+          "face": 5808,
+          "distance": 16.40844289618098,
+          "sign": 1,
+          "duplicate": false
+        }
+      ],
+      "refsWithDuplicates": [],
+      "wall": {
+        "lv": 3.083020733574876,
+        "rv": 2.4783361047925396,
+        "ra": 43.5014254794695,
+        "la": 4.840291613392689
+      },
+      "cavity": {
+        "lv": 13.289911150008653,
+        "rv": 10.328935784982466,
+        "ra": 48.65282631538972,
+        "la": 15.123798096854578
+      },
+      "nearestWall": "rv",
+      "nearestCavity": "rv",
+      "votes": {
+        "lv": 4,
+        "rv": 5,
+        "ra": 1,
+        "la": 4
+      },
+      "majority": "rv",
+      "case": 11
+    }
+  ],
+  "browser": [
+    {
+      "case": 1,
+      "reference": "lv",
+      "display": "la",
+      "slider": 0.5,
+      "eye": [
+        0,
+        0.06,
+        1
+      ],
+      "colors": [
+        [
+          201,
+          132,
+          120
+        ],
+        [
+          255,
+          199,
+          158
+        ]
+      ]
+    },
+    {
+      "case": 2,
+      "reference": "lv",
+      "display": "la",
+      "slider": 0.5,
+      "eye": [
+        0,
+        0.06,
+        1
+      ],
+      "colors": [
+        [
+          201,
+          132,
+          120
+        ],
+        [
+          255,
+          199,
+          158
+        ]
+      ]
+    },
+    {
+      "case": 3,
+      "reference": "lv",
+      "display": "la",
+      "slider": 0.5,
+      "eye": [
+        0,
+        0.06,
+        1
+      ],
+      "colors": [
+        [
+          201,
+          132,
+          120
+        ],
+        [
+          255,
+          199,
+          158
+        ]
+      ]
+    },
+    {
+      "case": 4,
+      "reference": "lv",
+      "display": "la",
+      "slider": 0.5,
+      "eye": [
+        0,
+        0.06,
+        1
+      ],
+      "colors": [
+        [
+          201,
+          132,
+          120
+        ],
+        [
+          255,
+          199,
+          158
+        ]
+      ]
+    },
+    {
+      "case": 5,
+      "reference": "lv",
+      "display": "la",
+      "slider": 0.5,
+      "eye": [
+        0.5,
+        0.2,
+        1
+      ],
+      "colors": [
+        [
+          201,
+          132,
+          120
+        ],
+        [
+          255,
+          199,
+          158
+        ]
+      ]
+    },
+    {
+      "case": 6,
+      "reference": "lv",
+      "display": "la",
+      "slider": 0.5,
+      "eye": [
+        -0.5,
+        -0.1,
+        1
+      ],
+      "colors": [
+        [
+          201,
+          132,
+          120
+        ],
+        [
+          255,
+          199,
+          158
+        ]
+      ]
+    },
+    {
+      "case": 7,
+      "reference": "lv",
+      "display": "la",
+      "slider": 0.5,
+      "eye": [
+        -0.5,
+        -0.1,
+        1
+      ],
+      "colors": [
+        [
+          201,
+          132,
+          120
+        ],
+        [
+          255,
+          199,
+          158
+        ]
+      ]
+    },
+    {
+      "case": 8,
+      "reference": "rv",
+      "display": "la",
+      "slider": -0.5,
+      "eye": [
+        0,
+        0.06,
+        1
+      ],
+      "colors": [
+        [
+          201,
+          132,
+          120
+        ],
+        [
+          228,
+          166,
+          139
+        ]
+      ]
+    },
+    {
+      "case": 9,
+      "reference": "rv",
+      "display": "la",
+      "slider": -0.5,
+      "eye": [
+        0,
+        0.06,
+        1
+      ],
+      "colors": [
+        [
+          201,
+          132,
+          120
+        ],
+        [
+          255,
+          199,
+          158
+        ]
+      ]
+    },
+    {
+      "case": 10,
+      "reference": "rv",
+      "display": "la",
+      "slider": -0.5,
+      "eye": [
+        0.5,
+        0.2,
+        1
+      ],
+      "colors": [
+        [
+          201,
+          132,
+          120
+        ],
+        [
+          255,
+          199,
+          158
+        ]
+      ]
+    },
+    {
+      "case": 11,
+      "reference": "rv",
+      "display": "la",
+      "slider": -0.5,
+      "eye": [
+        -0.5,
+        -0.1,
+        1
+      ],
+      "colors": [
+        [
+          201,
+          132,
+          120
+        ],
+        [
+          255,
+          199,
+          158
+        ]
+      ]
+    }
+  ]
+}
