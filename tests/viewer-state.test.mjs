@@ -549,51 +549,65 @@ test('left bundle has a non-degenerate broad sheet and three routes connected to
   assert.equal(mesh.material.side,THREE.DoubleSide,'sheet is visible from either side');
 });
 
-test('pickHit gives the same answer as testing every object and dropping the hidden hits afterwards, with fewer mesh tests in the interior view', () => {
-  const reference = (raycaster, targets, planes, solids) => {
-    // The earlier implementation: raycast everything (hidden or not), then keep the first hit that is shown and not removed.
-    const shown = o => { for (; o; o = o.parent) if (!o.visible) return false; return true; };
-    const idOf = o => { while (o && !o.userData.id) o = o.parent; return o?.userData.id; };
-    const hit = [...raycaster.intersectObjects(targets, true)].find(h => shown(h.object) && planes.every(p => p.distanceToPoint(h.point) >= 0) && idOf(h.object));
-    return hit && { id: idOf(hit.object), distance: hit.distance };
+test('pickHit gives the same answer as the earlier version, which raycast hidden objects too, with fewer mesh tests in the interior view', () => {
+  // A copy of pickHit before it skipped hidden objects. The cut face is taken from pickHit itself with no targets (the
+  // loop is then empty and it returns the cut result), so this copy differs from the current code only in what it raycasts.
+  const shown = o => { for (; o; o = o.parent) if (!o.visible) return false; return true; };
+  const idOf = o => { while (o && !o.userData.id) o = o.parent; return o?.userData.id; };
+  const earlier = (raycaster, targets, planes, solids) => {
+    const cut = pickHit(raycaster, [], planes, solids);
+    for (const hit of raycaster.intersectObjects(targets, true)) {
+      if (cut && cut.distance <= hit.distance) break;
+      if (!shown(hit.object) || !planes.every(plane => plane.distanceToPoint(hit.point) >= 0)) continue;
+      const id = idOf(hit.object);
+      if (id) return { id, distance: hit.distance, onCut: false };
+    }
+    return cut;
   };
   const root = new THREE.Group(), ext = new THREE.Group(), map = new Map(), cond = new THREE.Group();
   root.add(ext); createAnatomy(ext, map, bundle, .033);
   const plane = new THREE.Plane(new THREE.Vector3(0, 0, -1), 0), section = createCrossSection(ext, map, plane, 0xc98478);
   ext.add(cond); createConduction(cond, map, meta.conduction);
-  root.updateMatrixWorld(true);
   const camera = new THREE.PerspectiveCamera(36, 1, .1, 150);
   camera.position.set(0, .06, 1).normalize().multiplyScalar(fitDistance(bounds.radius, 1)).add(bounds.center);
   camera.lookAt(bounds.center); camera.updateMatrixWorld();
-  const targets = [...map.values()].filter(g => g.userData.kind !== 'conduction');
+  const ray = new THREE.Raycaster();
+  ray.params.Line.threshold = .08 / ext.scale.x; // as in src/main.js
   const raycast = THREE.Mesh.prototype.raycast;
   let tested = 0;
   THREE.Mesh.prototype.raycast = function (...args) { tested++; return raycast.apply(this, args); };
   try {
     const counts = {};
-    for (const [name, on, slider] of [['exterior', false, 0], ['interior 0', true, 0], ['interior +0.5', true, .5], ['interior -0.5', true, -.5]]) {
+    // The label rays use the walls and valves only; a click also uses the conduction overlay while it is shown (src/main.js).
+    const cases = [['exterior', false, 0, false], ['exterior, overlay', false, 0, true], ['interior 0, labels', true, 0, false],
+      ['interior 0, overlay', true, 0, true], ['interior +0.5, overlay', true, .5, true], ['interior -0.5, overlay', true, -.5, true]];
+    for (const [name, on, slider, overlay] of cases) {
       plane.constant = -slider;
       section.setEnabled(on);
-      section.update();
+      cond.visible = overlay;
       root.updateMatrixWorld(true);
-      const planes = on ? [plane] : [], solids = on ? section.solids : [], ray = new THREE.Raycaster();
-      let before = 0, after = 0, compared = 0;
-      for (let x = -.6; x <= .6; x += .06) for (let y = -.7; y <= .7; y += .06) {
+      const targets = [...map.values()].filter(g => g.userData.kind !== 'conduction' || overlay);
+      const planes = on ? [plane] : [], solids = on ? section.solids : [];
+      const c = counts[name] = { before: 0, after: 0, rays: 0, onCut: 0, conduction: 0 };
+      for (let x = -.6; x <= .6; x += .08) for (let y = -.7; y <= .7; y += .08) {
         ray.setFromCamera(new THREE.Vector2(x, y), camera);
         tested = 0;
-        const want = reference(ray, targets, planes, solids);
-        before += tested;
+        const want = earlier(ray, targets, planes, solids);
+        c.before += tested;
         tested = 0;
         const got = pickHit(ray, targets, planes, solids);
-        after += tested;
-        if (!on) assert.deepEqual(got && { id: got.id, distance: got.distance }, want, `${name} (${x.toFixed(2)}, ${y.toFixed(2)})`);
-        else if (!got?.onCut) assert.deepEqual(got && { id: got.id, distance: got.distance }, want, `${name} (${x.toFixed(2)}, ${y.toFixed(2)})`);
-        compared++;
+        c.after += tested;
+        assert.deepEqual(got, want, `${name} (${x.toFixed(2)}, ${y.toFixed(2)})`);
+        c.rays++;
+        if (got?.onCut) c.onCut++;
+        if (got && map.get(got.id).userData.kind === 'conduction') c.conduction++;
       }
-      counts[name] = { before, after, compared };
     }
-    // Counts raycast calls per mesh (not triangles): the hidden originals are 10 of 25 meshes but about 44% of the triangles.
-    assert.ok(counts['interior 0'].after < counts['interior 0'].before * .8, JSON.stringify(counts));
+    // The comparison must include cut-face answers and conduction answers, or it would not cover those paths.
+    for (const name of ['interior 0, labels', 'interior 0, overlay', 'interior -0.5, overlay']) assert.ok(counts[name].onCut > 0, JSON.stringify(counts));
+    assert.ok(counts['interior 0, overlay'].conduction > 0, JSON.stringify(counts)); // in the exterior view the walls hide it
+    // Raycast calls per mesh, not triangles: the hidden original walls are 10 of 25 meshes but about 44% of the triangles.
+    assert.ok(counts['interior 0, labels'].after < counts['interior 0, labels'].before * .8, JSON.stringify(counts));
     // Exterior view: the interior parts (valves, papillary muscles) are hidden, so they are skipped too.
     assert.ok(counts.exterior.after < counts.exterior.before, JSON.stringify(counts));
   } finally {
