@@ -1,0 +1,2675 @@
+{
+ "note": "3 consecutive runs of scripts/measure-beat-cost.mjs, same machine",
+ "runs": [
+  {
+   "runtime": {
+    "node": "v22.23.4",
+    "cpu": "Intel(R) Xeon(R) Processor @ 2.10GHz",
+    "cores": 4
+   },
+   "frameBudgetMs": 16.67,
+   "beat": {
+    "period": 800,
+    "slowFactor": 5,
+    "deformedGeometries": 30,
+    "deformedVertices": 39299,
+    "flowParticles": 235
+   },
+   "sliderToPlaneConstant": "constant = -slider (src/main.js applyDepth)",
+   "hitTests": {
+    "rest": {
+     "label": {
+      "n": 1200,
+      "medianMs": 7.314,
+      "p95Ms": 10.623,
+      "maxMs": 28.447
+     },
+     "clickOverlayOff": {
+      "n": 9765,
+      "medianMs": 2.19,
+      "p95Ms": 8.894,
+      "maxMs": 22.286
+     },
+     "clickOverlayOn": {
+      "n": 9765,
+      "medianMs": 2.197,
+      "p95Ms": 9.227,
+      "maxMs": 25.259
+     },
+     "clickOnCutOverlayOff": {
+      "n": 980,
+      "medianMs": 6.811,
+      "p95Ms": 10.072,
+      "maxMs": 15.17
+     }
+    },
+    "atria peak (t=50ms)": {
+     "label": {
+      "n": 1200,
+      "medianMs": 7.525,
+      "p95Ms": 14.215,
+      "maxMs": 18.75
+     },
+     "clickOverlayOff": {
+      "n": 9765,
+      "medianMs": 1.923,
+      "p95Ms": 8.853,
+      "maxMs": 23.655
+     },
+     "clickOverlayOn": {
+      "n": 9765,
+      "medianMs": 1.944,
+      "p95Ms": 9.005,
+      "maxMs": 19.478
+     },
+     "clickOnCutOverlayOff": {
+      "n": 962,
+      "medianMs": 6.935,
+      "p95Ms": 10.2,
+      "maxMs": 15.724
+     }
+    },
+    "ventricles peak (t=370ms)": {
+     "label": {
+      "n": 1200,
+      "medianMs": 7.236,
+      "p95Ms": 11.032,
+      "maxMs": 16.624
+     },
+     "clickOverlayOff": {
+      "n": 9765,
+      "medianMs": 1.733,
+      "p95Ms": 9.19,
+      "maxMs": 19.198
+     },
+     "clickOverlayOn": {
+      "n": 9765,
+      "medianMs": 1.759,
+      "p95Ms": 8.793,
+      "maxMs": 30.308
+     },
+     "clickOnCutOverlayOff": {
+      "n": 915,
+      "medianMs": 7.311,
+      "p95Ms": 11.361,
+      "maxMs": 15.008
+     }
+    }
+   },
+   "perScene": [
+    {
+     "slider": 0,
+     "planeConstant": 0,
+     "eye": [
+      0,
+      0.06,
+      1
+     ],
+     "state": "rest",
+     "contraction": {
+      "atria": 0,
+      "ventricles": 0
+     },
+     "label": {
+      "n": 80,
+      "medianMs": 6.762,
+      "p95Ms": 11.161,
+      "maxMs": 11.723
+     },
+     "click": {
+      "n": 2170,
+      "medianMs": 1.688,
+      "p95Ms": 10.089,
+      "maxMs": 25.259
+     }
+    },
+    {
+     "slider": 0,
+     "planeConstant": 0,
+     "eye": [
+      0,
+      0.06,
+      1
+     ],
+     "state": "atria peak (t=50ms)",
+     "contraction": {
+      "atria": 1,
+      "ventricles": 0
+     },
+     "label": {
+      "n": 80,
+      "medianMs": 7.226,
+      "p95Ms": 13.167,
+      "maxMs": 13.689
+     },
+     "click": {
+      "n": 2170,
+      "medianMs": 1.464,
+      "p95Ms": 9.258,
+      "maxMs": 13.405
+     }
+    },
+    {
+     "slider": 0,
+     "planeConstant": 0,
+     "eye": [
+      0,
+      0.06,
+      1
+     ],
+     "state": "ventricles peak (t=370ms)",
+     "contraction": {
+      "atria": 0,
+      "ventricles": 1
+     },
+     "label": {
+      "n": 80,
+      "medianMs": 7.082,
+      "p95Ms": 7.824,
+      "maxMs": 9.511
+     },
+     "click": {
+      "n": 2170,
+      "medianMs": 1.45,
+      "p95Ms": 9.182,
+      "maxMs": 15.344
+     }
+    },
+    {
+     "slider": 0,
+     "planeConstant": 0,
+     "eye": [
+      0.5,
+      0.2,
+      1
+     ],
+     "state": "rest",
+     "contraction": {
+      "atria": 0,
+      "ventricles": 0
+     },
+     "label": {
+      "n": 80,
+      "medianMs": 7.26,
+      "p95Ms": 12.798,
+      "maxMs": 12.959
+     },
+     "click": {
+      "n": 2170,
+      "medianMs": 2.089,
+      "p95Ms": 9.269,
+      "maxMs": 16.404
+     }
+    },
+    {
+     "slider": 0,
+     "planeConstant": 0,
+     "eye": [
+      0.5,
+      0.2,
+      1
+     ],
+     "state": "atria peak (t=50ms)",
+     "contraction": {
+      "atria": 1,
+      "ventricles": 0
+     },
+     "label": {
+      "n": 80,
+      "medianMs": 8.049,
+      "p95Ms": 15.288,
+      "maxMs": 18.75
+     },
+     "click": {
+      "n": 2170,
+      "medianMs": 2.2,
+      "p95Ms": 9.286,
+      "maxMs": 20.668
+     }
+    },
+    {
+     "slider": 0,
+     "planeConstant": 0,
+     "eye": [
+      0.5,
+      0.2,
+      1
+     ],
+     "state": "ventricles peak (t=370ms)",
+     "contraction": {
+      "atria": 0,
+      "ventricles": 1
+     },
+     "label": {
+      "n": 80,
+      "medianMs": 7.018,
+      "p95Ms": 7.311,
+      "maxMs": 7.4
+     },
+     "click": {
+      "n": 2170,
+      "medianMs": 1.766,
+      "p95Ms": 10.233,
+      "maxMs": 30.308
+     }
+    },
+    {
+     "slider": 0,
+     "planeConstant": 0,
+     "eye": [
+      -0.5,
+      -0.1,
+      1
+     ],
+     "state": "rest",
+     "contraction": {
+      "atria": 0,
+      "ventricles": 0
+     },
+     "label": {
+      "n": 80,
+      "medianMs": 6.868,
+      "p95Ms": 12.23,
+      "maxMs": 12.261
+     },
+     "click": {
+      "n": 2170,
+      "medianMs": 2.466,
+      "p95Ms": 9.164,
+      "maxMs": 19.439
+     }
+    },
+    {
+     "slider": 0,
+     "planeConstant": 0,
+     "eye": [
+      -0.5,
+      -0.1,
+      1
+     ],
+     "state": "atria peak (t=50ms)",
+     "contraction": {
+      "atria": 1,
+      "ventricles": 0
+     },
+     "label": {
+      "n": 80,
+      "medianMs": 6.968,
+      "p95Ms": 12.024,
+      "maxMs": 12.489
+     },
+     "click": {
+      "n": 2170,
+      "medianMs": 2.287,
+      "p95Ms": 9.168,
+      "maxMs": 16.077
+     }
+    },
+    {
+     "slider": 0,
+     "planeConstant": 0,
+     "eye": [
+      -0.5,
+      -0.1,
+      1
+     ],
+     "state": "ventricles peak (t=370ms)",
+     "contraction": {
+      "atria": 0,
+      "ventricles": 1
+     },
+     "label": {
+      "n": 80,
+      "medianMs": 7.026,
+      "p95Ms": 12.139,
+      "maxMs": 12.282
+     },
+     "click": {
+      "n": 2170,
+      "medianMs": 1.963,
+      "p95Ms": 8.801,
+      "maxMs": 17.962
+     }
+    },
+    {
+     "slider": 0.5,
+     "planeConstant": -0.5,
+     "eye": [
+      0,
+      0.06,
+      1
+     ],
+     "state": "rest",
+     "contraction": {
+      "atria": 0,
+      "ventricles": 0
+     },
+     "label": {
+      "n": 40,
+      "medianMs": 2.508,
+      "p95Ms": 2.807,
+      "maxMs": 2.914
+     },
+     "click": {
+      "n": 2170,
+      "medianMs": 1.745,
+      "p95Ms": 7.761,
+      "maxMs": 22.61
+     }
+    },
+    {
+     "slider": 0.5,
+     "planeConstant": -0.5,
+     "eye": [
+      0,
+      0.06,
+      1
+     ],
+     "state": "atria peak (t=50ms)",
+     "contraction": {
+      "atria": 1,
+      "ventricles": 0
+     },
+     "label": {
+      "n": 40,
+      "medianMs": 2.519,
+      "p95Ms": 3.407,
+      "maxMs": 3.787
+     },
+     "click": {
+      "n": 2170,
+      "medianMs": 1.195,
+      "p95Ms": 7.277,
+      "maxMs": 12.479
+     }
+    },
+    {
+     "slider": 0.5,
+     "planeConstant": -0.5,
+     "eye": [
+      0,
+      0.06,
+      1
+     ],
+     "state": "ventricles peak (t=370ms)",
+     "contraction": {
+      "atria": 0,
+      "ventricles": 1
+     },
+     "label": {
+      "n": 40,
+      "medianMs": 2.561,
+      "p95Ms": 3.861,
+      "maxMs": 3.968
+     },
+     "click": {
+      "n": 2170,
+      "medianMs": 1.183,
+      "p95Ms": 7.695,
+      "maxMs": 12.47
+     }
+    },
+    {
+     "slider": 0.5,
+     "planeConstant": -0.5,
+     "eye": [
+      0.5,
+      0.2,
+      1
+     ],
+     "state": "rest",
+     "contraction": {
+      "atria": 0,
+      "ventricles": 0
+     },
+     "label": {
+      "n": 40,
+      "medianMs": 2.481,
+      "p95Ms": 2.724,
+      "maxMs": 4.279
+     },
+     "click": {
+      "n": 2170,
+      "medianMs": 2.017,
+      "p95Ms": 8.414,
+      "maxMs": 20.938
+     }
+    },
+    {
+     "slider": 0.5,
+     "planeConstant": -0.5,
+     "eye": [
+      0.5,
+      0.2,
+      1
+     ],
+     "state": "atria peak (t=50ms)",
+     "contraction": {
+      "atria": 1,
+      "ventricles": 0
+     },
+     "label": {
+      "n": 40,
+      "medianMs": 3.295,
+      "p95Ms": 4.026,
+      "maxMs": 4.035
+     },
+     "click": {
+      "n": 2170,
+      "medianMs": 1.994,
+      "p95Ms": 8.377,
+      "maxMs": 14.319
+     }
+    },
+    {
+     "slider": 0.5,
+     "planeConstant": -0.5,
+     "eye": [
+      0.5,
+      0.2,
+      1
+     ],
+     "state": "ventricles peak (t=370ms)",
+     "contraction": {
+      "atria": 0,
+      "ventricles": 1
+     },
+     "label": {
+      "n": 40,
+      "medianMs": 3.655,
+      "p95Ms": 4.726,
+      "maxMs": 4.76
+     },
+     "click": {
+      "n": 2170,
+      "medianMs": 1.776,
+      "p95Ms": 8.731,
+      "maxMs": 15.457
+     }
+    },
+    {
+     "slider": 0.5,
+     "planeConstant": -0.5,
+     "eye": [
+      -0.5,
+      -0.1,
+      1
+     ],
+     "state": "rest",
+     "contraction": {
+      "atria": 0,
+      "ventricles": 0
+     },
+     "label": {
+      "n": 40,
+      "medianMs": 3.219,
+      "p95Ms": 3.371,
+      "maxMs": 3.725
+     },
+     "click": {
+      "n": 2170,
+      "medianMs": 2.443,
+      "p95Ms": 8.378,
+      "maxMs": 22.286
+     }
+    },
+    {
+     "slider": 0.5,
+     "planeConstant": -0.5,
+     "eye": [
+      -0.5,
+      -0.1,
+      1
+     ],
+     "state": "atria peak (t=50ms)",
+     "contraction": {
+      "atria": 1,
+      "ventricles": 0
+     },
+     "label": {
+      "n": 40,
+      "medianMs": 3.311,
+      "p95Ms": 3.932,
+      "maxMs": 5.413
+     },
+     "click": {
+      "n": 2170,
+      "medianMs": 2.307,
+      "p95Ms": 8.666,
+      "maxMs": 13.991
+     }
+    },
+    {
+     "slider": 0.5,
+     "planeConstant": -0.5,
+     "eye": [
+      -0.5,
+      -0.1,
+      1
+     ],
+     "state": "ventricles peak (t=370ms)",
+     "contraction": {
+      "atria": 0,
+      "ventricles": 1
+     },
+     "label": {
+      "n": 40,
+      "medianMs": 2.536,
+      "p95Ms": 3.091,
+      "maxMs": 3.4
+     },
+     "click": {
+      "n": 2170,
+      "medianMs": 1.959,
+      "p95Ms": 8.307,
+      "maxMs": 13.716
+     }
+    },
+    {
+     "slider": -0.5,
+     "planeConstant": 0.5,
+     "eye": [
+      0,
+      0.06,
+      1
+     ],
+     "state": "rest",
+     "contraction": {
+      "atria": 0,
+      "ventricles": 0
+     },
+     "label": {
+      "n": 280,
+      "medianMs": 7.409,
+      "p95Ms": 8.676,
+      "maxMs": 13.209
+     },
+     "click": {
+      "n": 2170,
+      "medianMs": 1.755,
+      "p95Ms": 7.86,
+      "maxMs": 12.287
+     }
+    },
+    {
+     "slider": -0.5,
+     "planeConstant": 0.5,
+     "eye": [
+      0,
+      0.06,
+      1
+     ],
+     "state": "atria peak (t=50ms)",
+     "contraction": {
+      "atria": 1,
+      "ventricles": 0
+     },
+     "label": {
+      "n": 280,
+      "medianMs": 7.458,
+      "p95Ms": 12.452,
+      "maxMs": 14.159
+     },
+     "click": {
+      "n": 2170,
+      "medianMs": 1.449,
+      "p95Ms": 7.736,
+      "maxMs": 19.275
+     }
+    },
+    {
+     "slider": -0.5,
+     "planeConstant": 0.5,
+     "eye": [
+      0,
+      0.06,
+      1
+     ],
+     "state": "ventricles peak (t=370ms)",
+     "contraction": {
+      "atria": 0,
+      "ventricles": 1
+     },
+     "label": {
+      "n": 280,
+      "medianMs": 7.432,
+      "p95Ms": 14.57,
+      "maxMs": 14.725
+     },
+     "click": {
+      "n": 2170,
+      "medianMs": 1.38,
+      "p95Ms": 9.122,
+      "maxMs": 22.759
+     }
+    },
+    {
+     "slider": -0.5,
+     "planeConstant": 0.5,
+     "eye": [
+      0.5,
+      0.2,
+      1
+     ],
+     "state": "rest",
+     "contraction": {
+      "atria": 0,
+      "ventricles": 0
+     },
+     "label": {
+      "n": 280,
+      "medianMs": 8.973,
+      "p95Ms": 11.452,
+      "maxMs": 28.447
+     },
+     "click": {
+      "n": 2170,
+      "medianMs": 2.199,
+      "p95Ms": 9.481,
+      "maxMs": 16.52
+     }
+    },
+    {
+     "slider": -0.5,
+     "planeConstant": 0.5,
+     "eye": [
+      0.5,
+      0.2,
+      1
+     ],
+     "state": "atria peak (t=50ms)",
+     "contraction": {
+      "atria": 1,
+      "ventricles": 0
+     },
+     "label": {
+      "n": 280,
+      "medianMs": 9.018,
+      "p95Ms": 14.824,
+      "maxMs": 16.726
+     },
+     "click": {
+      "n": 2170,
+      "medianMs": 2.019,
+      "p95Ms": 9.441,
+      "maxMs": 16.738
+     }
+    },
+    {
+     "slider": -0.5,
+     "planeConstant": 0.5,
+     "eye": [
+      0.5,
+      0.2,
+      1
+     ],
+     "state": "ventricles peak (t=370ms)",
+     "contraction": {
+      "atria": 0,
+      "ventricles": 1
+     },
+     "label": {
+      "n": 280,
+      "medianMs": 8.752,
+      "p95Ms": 16.121,
+      "maxMs": 16.624
+     },
+     "click": {
+      "n": 2170,
+      "medianMs": 1.833,
+      "p95Ms": 9.39,
+      "maxMs": 15.07
+     }
+    },
+    {
+     "slider": -0.5,
+     "planeConstant": 0.5,
+     "eye": [
+      -0.5,
+      -0.1,
+      1
+     ],
+     "state": "rest",
+     "contraction": {
+      "atria": 0,
+      "ventricles": 0
+     },
+     "label": {
+      "n": 280,
+      "medianMs": 8.587,
+      "p95Ms": 9.345,
+      "maxMs": 11.978
+     },
+     "click": {
+      "n": 2170,
+      "medianMs": 2.497,
+      "p95Ms": 9.77,
+      "maxMs": 15.862
+     }
+    },
+    {
+     "slider": -0.5,
+     "planeConstant": 0.5,
+     "eye": [
+      -0.5,
+      -0.1,
+      1
+     ],
+     "state": "atria peak (t=50ms)",
+     "contraction": {
+      "atria": 1,
+      "ventricles": 0
+     },
+     "label": {
+      "n": 280,
+      "medianMs": 9.242,
+      "p95Ms": 15.758,
+      "maxMs": 16.453
+     },
+     "click": {
+      "n": 2170,
+      "medianMs": 2.363,
+      "p95Ms": 9.358,
+      "maxMs": 23.655
+     }
+    },
+    {
+     "slider": -0.5,
+     "planeConstant": 0.5,
+     "eye": [
+      -0.5,
+      -0.1,
+      1
+     ],
+     "state": "ventricles peak (t=370ms)",
+     "contraction": {
+      "atria": 0,
+      "ventricles": 1
+     },
+     "label": {
+      "n": 280,
+      "medianMs": 8.548,
+      "p95Ms": 10.01,
+      "maxMs": 12.18
+     },
+     "click": {
+      "n": 2170,
+      "medianMs": 2.158,
+      "p95Ms": 9.019,
+      "maxMs": 15.008
+     }
+    }
+   ],
+   "frame": {
+    "slow": {
+     "advance": {
+      "n": 480,
+      "medianMs": 0.046,
+      "p95Ms": 0.128,
+      "maxMs": 0.43
+     },
+     "beatSet": {
+      "n": 480,
+      "medianMs": 1.784,
+      "p95Ms": 3.29,
+      "maxMs": 3.978
+     },
+     "drawFlow": {
+      "n": 480,
+      "medianMs": 0.321,
+      "p95Ms": 0.526,
+      "maxMs": 1.204
+     },
+     "label": {
+      "n": 480,
+      "medianMs": 6.908,
+      "p95Ms": 8.785,
+      "maxMs": 21.821
+     },
+     "interiorLabel": {
+      "n": 480,
+      "medianMs": 8.635,
+      "p95Ms": 11.432,
+      "maxMs": 24.749
+     },
+     "flowMode": {
+      "n": 480,
+      "medianMs": 2.182,
+      "p95Ms": 3.875,
+      "maxMs": 4.459
+     },
+     "interiorFlowOverlay": {
+      "n": 480,
+      "medianMs": 8.88,
+      "p95Ms": 11.806,
+      "maxMs": 25.033
+     }
+    },
+    "real": {
+     "advance": {
+      "n": 192,
+      "medianMs": 0.161,
+      "p95Ms": 0.457,
+      "maxMs": 0.884
+     },
+     "beatSet": {
+      "n": 192,
+      "medianMs": 1.808,
+      "p95Ms": 1.957,
+      "maxMs": 2.326
+     },
+     "drawFlow": {
+      "n": 192,
+      "medianMs": 0.358,
+      "p95Ms": 0.477,
+      "maxMs": 1.005
+     },
+     "label": {
+      "n": 192,
+      "medianMs": 7.031,
+      "p95Ms": 7.368,
+      "maxMs": 7.642
+     },
+     "interiorLabel": {
+      "n": 192,
+      "medianMs": 8.869,
+      "p95Ms": 9.533,
+      "maxMs": 9.869
+     },
+     "flowMode": {
+      "n": 192,
+      "medianMs": 2.397,
+      "p95Ms": 2.71,
+      "maxMs": 3.058
+     },
+     "interiorFlowOverlay": {
+      "n": 192,
+      "medianMs": 9.129,
+      "p95Ms": 9.899,
+      "maxMs": 10.32
+     }
+    }
+   }
+  },
+  {
+   "runtime": {
+    "node": "v22.23.4",
+    "cpu": "Intel(R) Xeon(R) Processor @ 2.10GHz",
+    "cores": 4
+   },
+   "frameBudgetMs": 16.67,
+   "beat": {
+    "period": 800,
+    "slowFactor": 5,
+    "deformedGeometries": 30,
+    "deformedVertices": 39299,
+    "flowParticles": 235
+   },
+   "sliderToPlaneConstant": "constant = -slider (src/main.js applyDepth)",
+   "hitTests": {
+    "rest": {
+     "label": {
+      "n": 1200,
+      "medianMs": 7.384,
+      "p95Ms": 10.684,
+      "maxMs": 23.293
+     },
+     "clickOverlayOff": {
+      "n": 9765,
+      "medianMs": 2.111,
+      "p95Ms": 8.722,
+      "maxMs": 16.486
+     },
+     "clickOverlayOn": {
+      "n": 9765,
+      "medianMs": 2.208,
+      "p95Ms": 9.052,
+      "maxMs": 24.098
+     },
+     "clickOnCutOverlayOff": {
+      "n": 980,
+      "medianMs": 6.848,
+      "p95Ms": 10.222,
+      "maxMs": 14.892
+     }
+    },
+    "atria peak (t=50ms)": {
+     "label": {
+      "n": 1200,
+      "medianMs": 7.253,
+      "p95Ms": 15.197,
+      "maxMs": 23.927
+     },
+     "clickOverlayOff": {
+      "n": 9765,
+      "medianMs": 1.896,
+      "p95Ms": 8.668,
+      "maxMs": 14.773
+     },
+     "clickOverlayOn": {
+      "n": 9765,
+      "medianMs": 1.838,
+      "p95Ms": 8.965,
+      "maxMs": 17.032
+     },
+     "clickOnCutOverlayOff": {
+      "n": 962,
+      "medianMs": 6.941,
+      "p95Ms": 9.194,
+      "maxMs": 14.552
+     }
+    },
+    "ventricles peak (t=370ms)": {
+     "label": {
+      "n": 1200,
+      "medianMs": 7.518,
+      "p95Ms": 11.81,
+      "maxMs": 16.267
+     },
+     "clickOverlayOff": {
+      "n": 9765,
+      "medianMs": 1.702,
+      "p95Ms": 8.825,
+      "maxMs": 16.262
+     },
+     "clickOverlayOn": {
+      "n": 9765,
+      "medianMs": 1.65,
+      "p95Ms": 8.849,
+      "maxMs": 30.464
+     },
+     "clickOnCutOverlayOff": {
+      "n": 915,
+      "medianMs": 7.018,
+      "p95Ms": 10.459,
+      "maxMs": 16.262
+     }
+    }
+   },
+   "perScene": [
+    {
+     "slider": 0,
+     "planeConstant": 0,
+     "eye": [
+      0,
+      0.06,
+      1
+     ],
+     "state": "rest",
+     "contraction": {
+      "atria": 0,
+      "ventricles": 0
+     },
+     "label": {
+      "n": 80,
+      "medianMs": 6.773,
+      "p95Ms": 7.759,
+      "maxMs": 8.873
+     },
+     "click": {
+      "n": 2170,
+      "medianMs": 1.686,
+      "p95Ms": 8.038,
+      "maxMs": 24.098
+     }
+    },
+    {
+     "slider": 0,
+     "planeConstant": 0,
+     "eye": [
+      0,
+      0.06,
+      1
+     ],
+     "state": "atria peak (t=50ms)",
+     "contraction": {
+      "atria": 1,
+      "ventricles": 0
+     },
+     "label": {
+      "n": 80,
+      "medianMs": 7.09,
+      "p95Ms": 7.394,
+      "maxMs": 7.787
+     },
+     "click": {
+      "n": 2170,
+      "medianMs": 1.286,
+      "p95Ms": 8.897,
+      "maxMs": 13.795
+     }
+    },
+    {
+     "slider": 0,
+     "planeConstant": 0,
+     "eye": [
+      0,
+      0.06,
+      1
+     ],
+     "state": "ventricles peak (t=370ms)",
+     "contraction": {
+      "atria": 0,
+      "ventricles": 1
+     },
+     "label": {
+      "n": 80,
+      "medianMs": 7.092,
+      "p95Ms": 8.012,
+      "maxMs": 8.907
+     },
+     "click": {
+      "n": 2170,
+      "medianMs": 1.21,
+      "p95Ms": 8.176,
+      "maxMs": 15.265
+     }
+    },
+    {
+     "slider": 0,
+     "planeConstant": 0,
+     "eye": [
+      0.5,
+      0.2,
+      1
+     ],
+     "state": "rest",
+     "contraction": {
+      "atria": 0,
+      "ventricles": 0
+     },
+     "label": {
+      "n": 80,
+      "medianMs": 7.211,
+      "p95Ms": 7.742,
+      "maxMs": 8.679
+     },
+     "click": {
+      "n": 2170,
+      "medianMs": 2.075,
+      "p95Ms": 9.175,
+      "maxMs": 17.949
+     }
+    },
+    {
+     "slider": 0,
+     "planeConstant": 0,
+     "eye": [
+      0.5,
+      0.2,
+      1
+     ],
+     "state": "atria peak (t=50ms)",
+     "contraction": {
+      "atria": 1,
+      "ventricles": 0
+     },
+     "label": {
+      "n": 80,
+      "medianMs": 7.992,
+      "p95Ms": 9.308,
+      "maxMs": 10.657
+     },
+     "click": {
+      "n": 2170,
+      "medianMs": 1.991,
+      "p95Ms": 8.878,
+      "maxMs": 13.219
+     }
+    },
+    {
+     "slider": 0,
+     "planeConstant": 0,
+     "eye": [
+      0.5,
+      0.2,
+      1
+     ],
+     "state": "ventricles peak (t=370ms)",
+     "contraction": {
+      "atria": 0,
+      "ventricles": 1
+     },
+     "label": {
+      "n": 80,
+      "medianMs": 7.221,
+      "p95Ms": 9.875,
+      "maxMs": 10.853
+     },
+     "click": {
+      "n": 2170,
+      "medianMs": 1.773,
+      "p95Ms": 9.636,
+      "maxMs": 15.724
+     }
+    },
+    {
+     "slider": 0,
+     "planeConstant": 0,
+     "eye": [
+      -0.5,
+      -0.1,
+      1
+     ],
+     "state": "rest",
+     "contraction": {
+      "atria": 0,
+      "ventricles": 0
+     },
+     "label": {
+      "n": 80,
+      "medianMs": 7.095,
+      "p95Ms": 21.552,
+      "maxMs": 23.293
+     },
+     "click": {
+      "n": 2170,
+      "medianMs": 2.457,
+      "p95Ms": 9.315,
+      "maxMs": 16.486
+     }
+    },
+    {
+     "slider": 0,
+     "planeConstant": 0,
+     "eye": [
+      -0.5,
+      -0.1,
+      1
+     ],
+     "state": "atria peak (t=50ms)",
+     "contraction": {
+      "atria": 1,
+      "ventricles": 0
+     },
+     "label": {
+      "n": 80,
+      "medianMs": 7.051,
+      "p95Ms": 7.153,
+      "maxMs": 7.289
+     },
+     "click": {
+      "n": 2170,
+      "medianMs": 2.305,
+      "p95Ms": 8.713,
+      "maxMs": 14.749
+     }
+    },
+    {
+     "slider": 0,
+     "planeConstant": 0,
+     "eye": [
+      -0.5,
+      -0.1,
+      1
+     ],
+     "state": "ventricles peak (t=370ms)",
+     "contraction": {
+      "atria": 0,
+      "ventricles": 1
+     },
+     "label": {
+      "n": 80,
+      "medianMs": 7.182,
+      "p95Ms": 11.446,
+      "maxMs": 11.741
+     },
+     "click": {
+      "n": 2170,
+      "medianMs": 2.049,
+      "p95Ms": 9.531,
+      "maxMs": 14.936
+     }
+    },
+    {
+     "slider": 0.5,
+     "planeConstant": -0.5,
+     "eye": [
+      0,
+      0.06,
+      1
+     ],
+     "state": "rest",
+     "contraction": {
+      "atria": 0,
+      "ventricles": 0
+     },
+     "label": {
+      "n": 40,
+      "medianMs": 2.522,
+      "p95Ms": 2.731,
+      "maxMs": 2.812
+     },
+     "click": {
+      "n": 2170,
+      "medianMs": 1.74,
+      "p95Ms": 7.608,
+      "maxMs": 12.471
+     }
+    },
+    {
+     "slider": 0.5,
+     "planeConstant": -0.5,
+     "eye": [
+      0,
+      0.06,
+      1
+     ],
+     "state": "atria peak (t=50ms)",
+     "contraction": {
+      "atria": 1,
+      "ventricles": 0
+     },
+     "label": {
+      "n": 40,
+      "medianMs": 2.472,
+      "p95Ms": 2.548,
+      "maxMs": 2.577
+     },
+     "click": {
+      "n": 2170,
+      "medianMs": 1.197,
+      "p95Ms": 7.268,
+      "maxMs": 11.952
+     }
+    },
+    {
+     "slider": 0.5,
+     "planeConstant": -0.5,
+     "eye": [
+      0,
+      0.06,
+      1
+     ],
+     "state": "ventricles peak (t=370ms)",
+     "contraction": {
+      "atria": 0,
+      "ventricles": 1
+     },
+     "label": {
+      "n": 40,
+      "medianMs": 2.442,
+      "p95Ms": 2.583,
+      "maxMs": 2.632
+     },
+     "click": {
+      "n": 2170,
+      "medianMs": 1.279,
+      "p95Ms": 7.933,
+      "maxMs": 14.677
+     }
+    },
+    {
+     "slider": 0.5,
+     "planeConstant": -0.5,
+     "eye": [
+      0.5,
+      0.2,
+      1
+     ],
+     "state": "rest",
+     "contraction": {
+      "atria": 0,
+      "ventricles": 0
+     },
+     "label": {
+      "n": 40,
+      "medianMs": 2.506,
+      "p95Ms": 3.546,
+      "maxMs": 5.07
+     },
+     "click": {
+      "n": 2170,
+      "medianMs": 2.027,
+      "p95Ms": 8.467,
+      "maxMs": 16.04
+     }
+    },
+    {
+     "slider": 0.5,
+     "planeConstant": -0.5,
+     "eye": [
+      0.5,
+      0.2,
+      1
+     ],
+     "state": "atria peak (t=50ms)",
+     "contraction": {
+      "atria": 1,
+      "ventricles": 0
+     },
+     "label": {
+      "n": 40,
+      "medianMs": 2.625,
+      "p95Ms": 2.828,
+      "maxMs": 2.9
+     },
+     "click": {
+      "n": 2170,
+      "medianMs": 2.036,
+      "p95Ms": 8.79,
+      "maxMs": 14.703
+     }
+    },
+    {
+     "slider": 0.5,
+     "planeConstant": -0.5,
+     "eye": [
+      0.5,
+      0.2,
+      1
+     ],
+     "state": "ventricles peak (t=370ms)",
+     "contraction": {
+      "atria": 0,
+      "ventricles": 1
+     },
+     "label": {
+      "n": 40,
+      "medianMs": 4.252,
+      "p95Ms": 4.412,
+      "maxMs": 4.494
+     },
+     "click": {
+      "n": 2170,
+      "medianMs": 1.721,
+      "p95Ms": 8.318,
+      "maxMs": 13.35
+     }
+    },
+    {
+     "slider": 0.5,
+     "planeConstant": -0.5,
+     "eye": [
+      -0.5,
+      -0.1,
+      1
+     ],
+     "state": "rest",
+     "contraction": {
+      "atria": 0,
+      "ventricles": 0
+     },
+     "label": {
+      "n": 40,
+      "medianMs": 3.219,
+      "p95Ms": 3.545,
+      "maxMs": 5.541
+     },
+     "click": {
+      "n": 2170,
+      "medianMs": 2.385,
+      "p95Ms": 8.109,
+      "maxMs": 13.978
+     }
+    },
+    {
+     "slider": 0.5,
+     "planeConstant": -0.5,
+     "eye": [
+      -0.5,
+      -0.1,
+      1
+     ],
+     "state": "atria peak (t=50ms)",
+     "contraction": {
+      "atria": 1,
+      "ventricles": 0
+     },
+     "label": {
+      "n": 40,
+      "medianMs": 3.237,
+      "p95Ms": 3.396,
+      "maxMs": 3.523
+     },
+     "click": {
+      "n": 2170,
+      "medianMs": 2.447,
+      "p95Ms": 9.953,
+      "maxMs": 17.032
+     }
+    },
+    {
+     "slider": 0.5,
+     "planeConstant": -0.5,
+     "eye": [
+      -0.5,
+      -0.1,
+      1
+     ],
+     "state": "ventricles peak (t=370ms)",
+     "contraction": {
+      "atria": 0,
+      "ventricles": 1
+     },
+     "label": {
+      "n": 40,
+      "medianMs": 4.51,
+      "p95Ms": 4.542,
+      "maxMs": 4.565
+     },
+     "click": {
+      "n": 2170,
+      "medianMs": 2.085,
+      "p95Ms": 8.732,
+      "maxMs": 30.464
+     }
+    },
+    {
+     "slider": -0.5,
+     "planeConstant": 0.5,
+     "eye": [
+      0,
+      0.06,
+      1
+     ],
+     "state": "rest",
+     "contraction": {
+      "atria": 0,
+      "ventricles": 0
+     },
+     "label": {
+      "n": 280,
+      "medianMs": 7.463,
+      "p95Ms": 11.429,
+      "maxMs": 15.073
+     },
+     "click": {
+      "n": 2170,
+      "medianMs": 1.779,
+      "p95Ms": 8.637,
+      "maxMs": 14.003
+     }
+    },
+    {
+     "slider": -0.5,
+     "planeConstant": 0.5,
+     "eye": [
+      0,
+      0.06,
+      1
+     ],
+     "state": "atria peak (t=50ms)",
+     "contraction": {
+      "atria": 1,
+      "ventricles": 0
+     },
+     "label": {
+      "n": 280,
+      "medianMs": 7.424,
+      "p95Ms": 9.268,
+      "maxMs": 23.927
+     },
+     "click": {
+      "n": 2170,
+      "medianMs": 1.408,
+      "p95Ms": 8.978,
+      "maxMs": 13.519
+     }
+    },
+    {
+     "slider": -0.5,
+     "planeConstant": 0.5,
+     "eye": [
+      0,
+      0.06,
+      1
+     ],
+     "state": "ventricles peak (t=370ms)",
+     "contraction": {
+      "atria": 0,
+      "ventricles": 1
+     },
+     "label": {
+      "n": 280,
+      "medianMs": 7.708,
+      "p95Ms": 11.707,
+      "maxMs": 14.319
+     },
+     "click": {
+      "n": 2170,
+      "medianMs": 1.223,
+      "p95Ms": 8.811,
+      "maxMs": 16.262
+     }
+    },
+    {
+     "slider": -0.5,
+     "planeConstant": 0.5,
+     "eye": [
+      0.5,
+      0.2,
+      1
+     ],
+     "state": "rest",
+     "contraction": {
+      "atria": 0,
+      "ventricles": 0
+     },
+     "label": {
+      "n": 280,
+      "medianMs": 8.936,
+      "p95Ms": 12.147,
+      "maxMs": 14.04
+     },
+     "click": {
+      "n": 2170,
+      "medianMs": 2.138,
+      "p95Ms": 9.677,
+      "maxMs": 15.208
+     }
+    },
+    {
+     "slider": -0.5,
+     "planeConstant": 0.5,
+     "eye": [
+      0.5,
+      0.2,
+      1
+     ],
+     "state": "atria peak (t=50ms)",
+     "contraction": {
+      "atria": 1,
+      "ventricles": 0
+     },
+     "label": {
+      "n": 280,
+      "medianMs": 9.915,
+      "p95Ms": 15.665,
+      "maxMs": 19.802
+     },
+     "click": {
+      "n": 2170,
+      "medianMs": 2.024,
+      "p95Ms": 8.907,
+      "maxMs": 14.773
+     }
+    },
+    {
+     "slider": -0.5,
+     "planeConstant": 0.5,
+     "eye": [
+      0.5,
+      0.2,
+      1
+     ],
+     "state": "ventricles peak (t=370ms)",
+     "contraction": {
+      "atria": 0,
+      "ventricles": 1
+     },
+     "label": {
+      "n": 280,
+      "medianMs": 8.937,
+      "p95Ms": 13.459,
+      "maxMs": 15.909
+     },
+     "click": {
+      "n": 2170,
+      "medianMs": 1.767,
+      "p95Ms": 8.834,
+      "maxMs": 13.556
+     }
+    },
+    {
+     "slider": -0.5,
+     "planeConstant": 0.5,
+     "eye": [
+      -0.5,
+      -0.1,
+      1
+     ],
+     "state": "rest",
+     "contraction": {
+      "atria": 0,
+      "ventricles": 0
+     },
+     "label": {
+      "n": 280,
+      "medianMs": 8.663,
+      "p95Ms": 9.641,
+      "maxMs": 10.299
+     },
+     "click": {
+      "n": 2170,
+      "medianMs": 2.499,
+      "p95Ms": 9.313,
+      "maxMs": 16.484
+     }
+    },
+    {
+     "slider": -0.5,
+     "planeConstant": 0.5,
+     "eye": [
+      -0.5,
+      -0.1,
+      1
+     ],
+     "state": "atria peak (t=50ms)",
+     "contraction": {
+      "atria": 1,
+      "ventricles": 0
+     },
+     "label": {
+      "n": 280,
+      "medianMs": 8.602,
+      "p95Ms": 9.733,
+      "maxMs": 11.894
+     },
+     "click": {
+      "n": 2170,
+      "medianMs": 2.298,
+      "p95Ms": 8.951,
+      "maxMs": 13.69
+     }
+    },
+    {
+     "slider": -0.5,
+     "planeConstant": 0.5,
+     "eye": [
+      -0.5,
+      -0.1,
+      1
+     ],
+     "state": "ventricles peak (t=370ms)",
+     "contraction": {
+      "atria": 0,
+      "ventricles": 1
+     },
+     "label": {
+      "n": 280,
+      "medianMs": 8.903,
+      "p95Ms": 13.725,
+      "maxMs": 16.267
+     },
+     "click": {
+      "n": 2170,
+      "medianMs": 2.178,
+      "p95Ms": 9.034,
+      "maxMs": 15.169
+     }
+    }
+   ],
+   "frame": {
+    "slow": {
+     "advance": {
+      "n": 480,
+      "medianMs": 0.046,
+      "p95Ms": 0.14,
+      "maxMs": 0.491
+     },
+     "beatSet": {
+      "n": 480,
+      "medianMs": 1.859,
+      "p95Ms": 3.424,
+      "maxMs": 6.735
+     },
+     "drawFlow": {
+      "n": 480,
+      "medianMs": 0.297,
+      "p95Ms": 0.648,
+      "maxMs": 1.212
+     },
+     "label": {
+      "n": 480,
+      "medianMs": 6.895,
+      "p95Ms": 11.21,
+      "maxMs": 12.474
+     },
+     "interiorLabel": {
+      "n": 480,
+      "medianMs": 8.615,
+      "p95Ms": 14.254,
+      "maxMs": 16.205
+     },
+     "flowMode": {
+      "n": 480,
+      "medianMs": 2.227,
+      "p95Ms": 4.061,
+      "maxMs": 7.508
+     },
+     "interiorFlowOverlay": {
+      "n": 480,
+      "medianMs": 8.995,
+      "p95Ms": 14.998,
+      "maxMs": 16.927
+     }
+    },
+    "real": {
+     "advance": {
+      "n": 192,
+      "medianMs": 0.167,
+      "p95Ms": 0.462,
+      "maxMs": 2.097
+     },
+     "beatSet": {
+      "n": 192,
+      "medianMs": 1.888,
+      "p95Ms": 2.571,
+      "maxMs": 3.593
+     },
+     "drawFlow": {
+      "n": 192,
+      "medianMs": 0.284,
+      "p95Ms": 0.495,
+      "maxMs": 4.507
+     },
+     "label": {
+      "n": 192,
+      "medianMs": 6.992,
+      "p95Ms": 8.841,
+      "maxMs": 10.915
+     },
+     "interiorLabel": {
+      "n": 192,
+      "medianMs": 8.907,
+      "p95Ms": 11.079,
+      "maxMs": 12.804
+     },
+     "flowMode": {
+      "n": 192,
+      "medianMs": 2.398,
+      "p95Ms": 3.48,
+      "maxMs": 6.6
+     },
+     "interiorFlowOverlay": {
+      "n": 192,
+      "medianMs": 9.189,
+      "p95Ms": 11.548,
+      "maxMs": 15.586
+     }
+    }
+   }
+  },
+  {
+   "runtime": {
+    "node": "v22.23.4",
+    "cpu": "Intel(R) Xeon(R) Processor @ 2.10GHz",
+    "cores": 4
+   },
+   "frameBudgetMs": 16.67,
+   "beat": {
+    "period": 800,
+    "slowFactor": 5,
+    "deformedGeometries": 30,
+    "deformedVertices": 39299,
+    "flowParticles": 235
+   },
+   "sliderToPlaneConstant": "constant = -slider (src/main.js applyDepth)",
+   "hitTests": {
+    "rest": {
+     "label": {
+      "n": 1200,
+      "medianMs": 7.243,
+      "p95Ms": 10.512,
+      "maxMs": 20.246
+     },
+     "clickOverlayOff": {
+      "n": 9765,
+      "medianMs": 2.167,
+      "p95Ms": 8.766,
+      "maxMs": 15.789
+     },
+     "clickOverlayOn": {
+      "n": 9765,
+      "medianMs": 2.271,
+      "p95Ms": 9.02,
+      "maxMs": 22.565
+     },
+     "clickOnCutOverlayOff": {
+      "n": 980,
+      "medianMs": 6.901,
+      "p95Ms": 9.781,
+      "maxMs": 14.804
+     }
+    },
+    "atria peak (t=50ms)": {
+     "label": {
+      "n": 1200,
+      "medianMs": 7.44,
+      "p95Ms": 12.86,
+      "maxMs": 38.712
+     },
+     "clickOverlayOff": {
+      "n": 9765,
+      "medianMs": 1.931,
+      "p95Ms": 9.425,
+      "maxMs": 21.737
+     },
+     "clickOverlayOn": {
+      "n": 9765,
+      "medianMs": 1.978,
+      "p95Ms": 9.465,
+      "maxMs": 38.795
+     },
+     "clickOnCutOverlayOff": {
+      "n": 962,
+      "medianMs": 7.111,
+      "p95Ms": 12.285,
+      "maxMs": 21.737
+     }
+    },
+    "ventricles peak (t=370ms)": {
+     "label": {
+      "n": 1200,
+      "medianMs": 7.314,
+      "p95Ms": 10.681,
+      "maxMs": 20.439
+     },
+     "clickOverlayOff": {
+      "n": 9765,
+      "medianMs": 1.731,
+      "p95Ms": 9.04,
+      "maxMs": 23.533
+     },
+     "clickOverlayOn": {
+      "n": 9765,
+      "medianMs": 1.739,
+      "p95Ms": 9.252,
+      "maxMs": 22.648
+     },
+     "clickOnCutOverlayOff": {
+      "n": 915,
+      "medianMs": 7.115,
+      "p95Ms": 11.667,
+      "maxMs": 16.778
+     }
+    }
+   },
+   "perScene": [
+    {
+     "slider": 0,
+     "planeConstant": 0,
+     "eye": [
+      0,
+      0.06,
+      1
+     ],
+     "state": "rest",
+     "contraction": {
+      "atria": 0,
+      "ventricles": 0
+     },
+     "label": {
+      "n": 80,
+      "medianMs": 6.597,
+      "p95Ms": 8.14,
+      "maxMs": 10.07
+     },
+     "click": {
+      "n": 2170,
+      "medianMs": 1.657,
+      "p95Ms": 7.977,
+      "maxMs": 13.761
+     }
+    },
+    {
+     "slider": 0,
+     "planeConstant": 0,
+     "eye": [
+      0,
+      0.06,
+      1
+     ],
+     "state": "atria peak (t=50ms)",
+     "contraction": {
+      "atria": 1,
+      "ventricles": 0
+     },
+     "label": {
+      "n": 80,
+      "medianMs": 7.092,
+      "p95Ms": 8.356,
+      "maxMs": 12.078
+     },
+     "click": {
+      "n": 2170,
+      "medianMs": 1.455,
+      "p95Ms": 9.335,
+      "maxMs": 38.795
+     }
+    },
+    {
+     "slider": 0,
+     "planeConstant": 0,
+     "eye": [
+      0,
+      0.06,
+      1
+     ],
+     "state": "ventricles peak (t=370ms)",
+     "contraction": {
+      "atria": 0,
+      "ventricles": 1
+     },
+     "label": {
+      "n": 80,
+      "medianMs": 6.918,
+      "p95Ms": 12.42,
+      "maxMs": 13.402
+     },
+     "click": {
+      "n": 2170,
+      "medianMs": 1.299,
+      "p95Ms": 9.203,
+      "maxMs": 22.648
+     }
+    },
+    {
+     "slider": 0,
+     "planeConstant": 0,
+     "eye": [
+      0.5,
+      0.2,
+      1
+     ],
+     "state": "rest",
+     "contraction": {
+      "atria": 0,
+      "ventricles": 0
+     },
+     "label": {
+      "n": 80,
+      "medianMs": 7.062,
+      "p95Ms": 7.519,
+      "maxMs": 8.028
+     },
+     "click": {
+      "n": 2170,
+      "medianMs": 2.268,
+      "p95Ms": 9.871,
+      "maxMs": 16.533
+     }
+    },
+    {
+     "slider": 0,
+     "planeConstant": 0,
+     "eye": [
+      0.5,
+      0.2,
+      1
+     ],
+     "state": "atria peak (t=50ms)",
+     "contraction": {
+      "atria": 1,
+      "ventricles": 0
+     },
+     "label": {
+      "n": 80,
+      "medianMs": 8.024,
+      "p95Ms": 10.509,
+      "maxMs": 12.898
+     },
+     "click": {
+      "n": 2170,
+      "medianMs": 2.042,
+      "p95Ms": 10.736,
+      "maxMs": 17.102
+     }
+    },
+    {
+     "slider": 0,
+     "planeConstant": 0,
+     "eye": [
+      0.5,
+      0.2,
+      1
+     ],
+     "state": "ventricles peak (t=370ms)",
+     "contraction": {
+      "atria": 0,
+      "ventricles": 1
+     },
+     "label": {
+      "n": 80,
+      "medianMs": 7.096,
+      "p95Ms": 7.327,
+      "maxMs": 7.448
+     },
+     "click": {
+      "n": 2170,
+      "medianMs": 1.742,
+      "p95Ms": 9.145,
+      "maxMs": 17.227
+     }
+    },
+    {
+     "slider": 0,
+     "planeConstant": 0,
+     "eye": [
+      -0.5,
+      -0.1,
+      1
+     ],
+     "state": "rest",
+     "contraction": {
+      "atria": 0,
+      "ventricles": 0
+     },
+     "label": {
+      "n": 80,
+      "medianMs": 7.113,
+      "p95Ms": 7.224,
+      "maxMs": 7.279
+     },
+     "click": {
+      "n": 2170,
+      "medianMs": 2.456,
+      "p95Ms": 8.807,
+      "maxMs": 16.475
+     }
+    },
+    {
+     "slider": 0,
+     "planeConstant": 0,
+     "eye": [
+      -0.5,
+      -0.1,
+      1
+     ],
+     "state": "atria peak (t=50ms)",
+     "contraction": {
+      "atria": 1,
+      "ventricles": 0
+     },
+     "label": {
+      "n": 80,
+      "medianMs": 7.135,
+      "p95Ms": 8.762,
+      "maxMs": 12.536
+     },
+     "click": {
+      "n": 2170,
+      "medianMs": 2.225,
+      "p95Ms": 8.733,
+      "maxMs": 15.459
+     }
+    },
+    {
+     "slider": 0,
+     "planeConstant": 0,
+     "eye": [
+      -0.5,
+      -0.1,
+      1
+     ],
+     "state": "ventricles peak (t=370ms)",
+     "contraction": {
+      "atria": 0,
+      "ventricles": 1
+     },
+     "label": {
+      "n": 80,
+      "medianMs": 7.141,
+      "p95Ms": 9.058,
+      "maxMs": 10.096
+     },
+     "click": {
+      "n": 2170,
+      "medianMs": 2.063,
+      "p95Ms": 10.498,
+      "maxMs": 16.639
+     }
+    },
+    {
+     "slider": 0.5,
+     "planeConstant": -0.5,
+     "eye": [
+      0,
+      0.06,
+      1
+     ],
+     "state": "rest",
+     "contraction": {
+      "atria": 0,
+      "ventricles": 0
+     },
+     "label": {
+      "n": 40,
+      "medianMs": 2.988,
+      "p95Ms": 4.287,
+      "maxMs": 4.627
+     },
+     "click": {
+      "n": 2170,
+      "medianMs": 1.737,
+      "p95Ms": 7.542,
+      "maxMs": 15.432
+     }
+    },
+    {
+     "slider": 0.5,
+     "planeConstant": -0.5,
+     "eye": [
+      0,
+      0.06,
+      1
+     ],
+     "state": "atria peak (t=50ms)",
+     "contraction": {
+      "atria": 1,
+      "ventricles": 0
+     },
+     "label": {
+      "n": 40,
+      "medianMs": 2.481,
+      "p95Ms": 2.592,
+      "maxMs": 2.759
+     },
+     "click": {
+      "n": 2170,
+      "medianMs": 1.503,
+      "p95Ms": 9.131,
+      "maxMs": 16.973
+     }
+    },
+    {
+     "slider": 0.5,
+     "planeConstant": -0.5,
+     "eye": [
+      0,
+      0.06,
+      1
+     ],
+     "state": "ventricles peak (t=370ms)",
+     "contraction": {
+      "atria": 0,
+      "ventricles": 1
+     },
+     "label": {
+      "n": 40,
+      "medianMs": 2.49,
+      "p95Ms": 3.58,
+      "maxMs": 3.71
+     },
+     "click": {
+      "n": 2170,
+      "medianMs": 1.255,
+      "p95Ms": 8.333,
+      "maxMs": 14.705
+     }
+    },
+    {
+     "slider": 0.5,
+     "planeConstant": -0.5,
+     "eye": [
+      0.5,
+      0.2,
+      1
+     ],
+     "state": "rest",
+     "contraction": {
+      "atria": 0,
+      "ventricles": 0
+     },
+     "label": {
+      "n": 40,
+      "medianMs": 2.667,
+      "p95Ms": 3.351,
+      "maxMs": 3.582
+     },
+     "click": {
+      "n": 2170,
+      "medianMs": 2.042,
+      "p95Ms": 8.764,
+      "maxMs": 14.813
+     }
+    },
+    {
+     "slider": 0.5,
+     "planeConstant": -0.5,
+     "eye": [
+      0.5,
+      0.2,
+      1
+     ],
+     "state": "atria peak (t=50ms)",
+     "contraction": {
+      "atria": 1,
+      "ventricles": 0
+     },
+     "label": {
+      "n": 40,
+      "medianMs": 2.485,
+      "p95Ms": 3.538,
+      "maxMs": 3.553
+     },
+     "click": {
+      "n": 2170,
+      "medianMs": 1.961,
+      "p95Ms": 8.515,
+      "maxMs": 21.737
+     }
+    },
+    {
+     "slider": 0.5,
+     "planeConstant": -0.5,
+     "eye": [
+      0.5,
+      0.2,
+      1
+     ],
+     "state": "ventricles peak (t=370ms)",
+     "contraction": {
+      "atria": 0,
+      "ventricles": 1
+     },
+     "label": {
+      "n": 40,
+      "medianMs": 2.581,
+      "p95Ms": 4.177,
+      "maxMs": 4.239
+     },
+     "click": {
+      "n": 2170,
+      "medianMs": 1.796,
+      "p95Ms": 8.671,
+      "maxMs": 23.533
+     }
+    },
+    {
+     "slider": 0.5,
+     "planeConstant": -0.5,
+     "eye": [
+      -0.5,
+      -0.1,
+      1
+     ],
+     "state": "rest",
+     "contraction": {
+      "atria": 0,
+      "ventricles": 0
+     },
+     "label": {
+      "n": 40,
+      "medianMs": 3.286,
+      "p95Ms": 3.789,
+      "maxMs": 4.242
+     },
+     "click": {
+      "n": 2170,
+      "medianMs": 2.404,
+      "p95Ms": 8.291,
+      "maxMs": 13.329
+     }
+    },
+    {
+     "slider": 0.5,
+     "planeConstant": -0.5,
+     "eye": [
+      -0.5,
+      -0.1,
+      1
+     ],
+     "state": "atria peak (t=50ms)",
+     "contraction": {
+      "atria": 1,
+      "ventricles": 0
+     },
+     "label": {
+      "n": 40,
+      "medianMs": 3.229,
+      "p95Ms": 3.448,
+      "maxMs": 3.489
+     },
+     "click": {
+      "n": 2170,
+      "medianMs": 2.285,
+      "p95Ms": 9.393,
+      "maxMs": 14.395
+     }
+    },
+    {
+     "slider": 0.5,
+     "planeConstant": -0.5,
+     "eye": [
+      -0.5,
+      -0.1,
+      1
+     ],
+     "state": "ventricles peak (t=370ms)",
+     "contraction": {
+      "atria": 0,
+      "ventricles": 1
+     },
+     "label": {
+      "n": 40,
+      "medianMs": 2.51,
+      "p95Ms": 2.787,
+      "maxMs": 2.8
+     },
+     "click": {
+      "n": 2170,
+      "medianMs": 1.966,
+      "p95Ms": 8.364,
+      "maxMs": 15.983
+     }
+    },
+    {
+     "slider": -0.5,
+     "planeConstant": 0.5,
+     "eye": [
+      0,
+      0.06,
+      1
+     ],
+     "state": "rest",
+     "contraction": {
+      "atria": 0,
+      "ventricles": 0
+     },
+     "label": {
+      "n": 280,
+      "medianMs": 7.459,
+      "p95Ms": 13.371,
+      "maxMs": 16.007
+     },
+     "click": {
+      "n": 2170,
+      "medianMs": 1.759,
+      "p95Ms": 8.546,
+      "maxMs": 15.789
+     }
+    },
+    {
+     "slider": -0.5,
+     "planeConstant": 0.5,
+     "eye": [
+      0,
+      0.06,
+      1
+     ],
+     "state": "atria peak (t=50ms)",
+     "contraction": {
+      "atria": 1,
+      "ventricles": 0
+     },
+     "label": {
+      "n": 280,
+      "medianMs": 7.533,
+      "p95Ms": 9.147,
+      "maxMs": 16.572
+     },
+     "click": {
+      "n": 2170,
+      "medianMs": 1.589,
+      "p95Ms": 11.373,
+      "maxMs": 15.623
+     }
+    },
+    {
+     "slider": -0.5,
+     "planeConstant": 0.5,
+     "eye": [
+      0,
+      0.06,
+      1
+     ],
+     "state": "ventricles peak (t=370ms)",
+     "contraction": {
+      "atria": 0,
+      "ventricles": 1
+     },
+     "label": {
+      "n": 280,
+      "medianMs": 7.423,
+      "p95Ms": 8.797,
+      "maxMs": 9.247
+     },
+     "click": {
+      "n": 2170,
+      "medianMs": 1.302,
+      "p95Ms": 8.781,
+      "maxMs": 15.59
+     }
+    },
+    {
+     "slider": -0.5,
+     "planeConstant": 0.5,
+     "eye": [
+      0.5,
+      0.2,
+      1
+     ],
+     "state": "rest",
+     "contraction": {
+      "atria": 0,
+      "ventricles": 0
+     },
+     "label": {
+      "n": 280,
+      "medianMs": 8.901,
+      "p95Ms": 10.808,
+      "maxMs": 20.246
+     },
+     "click": {
+      "n": 2170,
+      "medianMs": 2.297,
+      "p95Ms": 9.109,
+      "maxMs": 16.053
+     }
+    },
+    {
+     "slider": -0.5,
+     "planeConstant": 0.5,
+     "eye": [
+      0.5,
+      0.2,
+      1
+     ],
+     "state": "atria peak (t=50ms)",
+     "contraction": {
+      "atria": 1,
+      "ventricles": 0
+     },
+     "label": {
+      "n": 280,
+      "medianMs": 9.111,
+      "p95Ms": 14.915,
+      "maxMs": 38.712
+     },
+     "click": {
+      "n": 2170,
+      "medianMs": 2.124,
+      "p95Ms": 9.835,
+      "maxMs": 15.903
+     }
+    },
+    {
+     "slider": -0.5,
+     "planeConstant": 0.5,
+     "eye": [
+      0.5,
+      0.2,
+      1
+     ],
+     "state": "ventricles peak (t=370ms)",
+     "contraction": {
+      "atria": 0,
+      "ventricles": 1
+     },
+     "label": {
+      "n": 280,
+      "medianMs": 8.825,
+      "p95Ms": 11.115,
+      "maxMs": 20.439
+     },
+     "click": {
+      "n": 2170,
+      "medianMs": 1.846,
+      "p95Ms": 9.592,
+      "maxMs": 16.778
+     }
+    },
+    {
+     "slider": -0.5,
+     "planeConstant": 0.5,
+     "eye": [
+      -0.5,
+      -0.1,
+      1
+     ],
+     "state": "rest",
+     "contraction": {
+      "atria": 0,
+      "ventricles": 0
+     },
+     "label": {
+      "n": 280,
+      "medianMs": 8.634,
+      "p95Ms": 9.746,
+      "maxMs": 14.403
+     },
+     "click": {
+      "n": 2170,
+      "medianMs": 2.47,
+      "p95Ms": 9.285,
+      "maxMs": 22.565
+     }
+    },
+    {
+     "slider": -0.5,
+     "planeConstant": 0.5,
+     "eye": [
+      -0.5,
+      -0.1,
+      1
+     ],
+     "state": "atria peak (t=50ms)",
+     "contraction": {
+      "atria": 1,
+      "ventricles": 0
+     },
+     "label": {
+      "n": 280,
+      "medianMs": 8.499,
+      "p95Ms": 15.339,
+      "maxMs": 15.821
+     },
+     "click": {
+      "n": 2170,
+      "medianMs": 2.425,
+      "p95Ms": 9.158,
+      "maxMs": 21.182
+     }
+    },
+    {
+     "slider": -0.5,
+     "planeConstant": 0.5,
+     "eye": [
+      -0.5,
+      -0.1,
+      1
+     ],
+     "state": "ventricles peak (t=370ms)",
+     "contraction": {
+      "atria": 0,
+      "ventricles": 1
+     },
+     "label": {
+      "n": 280,
+      "medianMs": 8.883,
+      "p95Ms": 14.458,
+      "maxMs": 17.518
+     },
+     "click": {
+      "n": 2170,
+      "medianMs": 2.191,
+      "p95Ms": 9.605,
+      "maxMs": 15.558
+     }
+    }
+   ],
+   "frame": {
+    "slow": {
+     "advance": {
+      "n": 480,
+      "medianMs": 0.045,
+      "p95Ms": 0.127,
+      "maxMs": 0.719
+     },
+     "beatSet": {
+      "n": 480,
+      "medianMs": 1.761,
+      "p95Ms": 2.646,
+      "maxMs": 4.047
+     },
+     "drawFlow": {
+      "n": 480,
+      "medianMs": 0.299,
+      "p95Ms": 0.53,
+      "maxMs": 2.349
+     },
+     "label": {
+      "n": 480,
+      "medianMs": 6.919,
+      "p95Ms": 8.687,
+      "maxMs": 14.267
+     },
+     "interiorLabel": {
+      "n": 480,
+      "medianMs": 8.549,
+      "p95Ms": 10.9,
+      "maxMs": 16.381
+     },
+     "flowMode": {
+      "n": 480,
+      "medianMs": 2.141,
+      "p95Ms": 3.188,
+      "maxMs": 4.792
+     },
+     "interiorFlowOverlay": {
+      "n": 480,
+      "medianMs": 8.931,
+      "p95Ms": 11.359,
+      "maxMs": 18.169
+     }
+    },
+    "real": {
+     "advance": {
+      "n": 192,
+      "medianMs": 0.166,
+      "p95Ms": 0.534,
+      "maxMs": 1.141
+     },
+     "beatSet": {
+      "n": 192,
+      "medianMs": 1.794,
+      "p95Ms": 3.372,
+      "maxMs": 4.415
+     },
+     "drawFlow": {
+      "n": 192,
+      "medianMs": 0.287,
+      "p95Ms": 0.542,
+      "maxMs": 1.404
+     },
+     "label": {
+      "n": 192,
+      "medianMs": 6.908,
+      "p95Ms": 12.151,
+      "maxMs": 12.727
+     },
+     "interiorLabel": {
+      "n": 192,
+      "medianMs": 8.733,
+      "p95Ms": 15.443,
+      "maxMs": 16.433
+     },
+     "flowMode": {
+      "n": 192,
+      "medianMs": 2.327,
+      "p95Ms": 4.144,
+      "maxMs": 5.433
+     },
+     "interiorFlowOverlay": {
+      "n": 192,
+      "medianMs": 9.018,
+      "p95Ms": 15.924,
+      "maxMs": 17.145
+     }
+    }
+   }
+  }
+ ]
+}
