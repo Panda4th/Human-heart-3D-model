@@ -1,0 +1,1086 @@
+{
+  "commit": "e110a290c34f3542ee138b301a422e05f93337aa",
+  "indexHtmlSha256": "21173c36fe81a61ced7791d3172afe80dc1fef6fa126cfd5b534a9194816690c",
+  "environment": {
+    "node": "v24.22.1",
+    "chromium": "153.0.8010.0",
+    "cpu": "INTEL(R) XEON(R) PLATINUM 8573C",
+    "kernel": "6.18.57"
+  },
+  "viewport": {
+    "width": 1280,
+    "height": 800
+  },
+  "warmupFrames": 24,
+  "measuredFrames": 96,
+  "runs": [
+    [
+      {
+        "id": "interior-av",
+        "renderer": "ANGLE (Google, Vulkan 1.3.0 (SwiftShader Device (Subzero) (0x0000C0DE)), SwiftShader driver)",
+        "drawingBuffer": [
+          950,
+          470
+        ],
+        "phases": [
+          0,
+          1,
+          2
+        ],
+        "raysPerFrame": 0,
+        "ms": {
+          "renderMs": {
+            "n": 96,
+            "median": 5.4,
+            "p95": 9.9,
+            "max": 11
+          },
+          "rafIntervalMs": {
+            "n": 96,
+            "median": 116.8,
+            "p95": 183.3,
+            "max": 233.3
+          },
+          "rendererRenderMs": {
+            "n": 96,
+            "median": 0.9,
+            "p95": 2,
+            "max": 2.4
+          },
+          "updateLabelsMs": {
+            "n": 96,
+            "median": 0.1,
+            "p95": 0.4,
+            "max": 1.1
+          },
+          "labelRayMs": null,
+          "flowAdvanceMs": {
+            "n": 96,
+            "median": 1.5,
+            "p95": 2.4,
+            "max": 5.1
+          },
+          "beatSetMs": {
+            "n": 96,
+            "median": 2.7,
+            "p95": 5.1,
+            "max": 7.3
+          },
+          "drawFlowMs": null
+        }
+      },
+      {
+        "id": "interior-sa",
+        "renderer": "ANGLE (Google, Vulkan 1.3.0 (SwiftShader Device (Subzero) (0x0000C0DE)), SwiftShader driver)",
+        "drawingBuffer": [
+          950,
+          470
+        ],
+        "phases": [
+          0,
+          1,
+          2
+        ],
+        "raysPerFrame": 1,
+        "ms": {
+          "renderMs": {
+            "n": 96,
+            "median": 11.6,
+            "p95": 19.1,
+            "max": 42
+          },
+          "rafIntervalMs": {
+            "n": 96,
+            "median": 133.4,
+            "p95": 350,
+            "max": 783.3
+          },
+          "rendererRenderMs": {
+            "n": 96,
+            "median": 1,
+            "p95": 3.5,
+            "max": 13.9
+          },
+          "updateLabelsMs": {
+            "n": 96,
+            "median": 5.2,
+            "p95": 7.7,
+            "max": 23.4
+          },
+          "labelRayMs": {
+            "n": 96,
+            "median": 5,
+            "p95": 7.5,
+            "max": 23.4
+          },
+          "flowAdvanceMs": {
+            "n": 96,
+            "median": 1.7,
+            "p95": 4.8,
+            "max": 8.2
+          },
+          "beatSetMs": {
+            "n": 96,
+            "median": 3.1,
+            "p95": 5.3,
+            "max": 7.4
+          },
+          "drawFlowMs": null
+        }
+      },
+      {
+        "id": "interior-atria",
+        "renderer": "ANGLE (Google, Vulkan 1.3.0 (SwiftShader Device (Subzero) (0x0000C0DE)), SwiftShader driver)",
+        "drawingBuffer": [
+          950,
+          470
+        ],
+        "phases": [
+          0,
+          1,
+          2
+        ],
+        "raysPerFrame": 1,
+        "ms": {
+          "renderMs": {
+            "n": 96,
+            "median": 14.3,
+            "p95": 27,
+            "max": 60.1
+          },
+          "rafIntervalMs": {
+            "n": 96,
+            "median": 150,
+            "p95": 516.6,
+            "max": 650
+          },
+          "rendererRenderMs": {
+            "n": 96,
+            "median": 0.7,
+            "p95": 2.2,
+            "max": 13.7
+          },
+          "updateLabelsMs": {
+            "n": 96,
+            "median": 9.2,
+            "p95": 15.1,
+            "max": 18.5
+          },
+          "labelRayMs": {
+            "n": 96,
+            "median": 9,
+            "p95": 14,
+            "max": 18
+          },
+          "flowAdvanceMs": {
+            "n": 96,
+            "median": 1.5,
+            "p95": 5.5,
+            "max": 19.8
+          },
+          "beatSetMs": {
+            "n": 96,
+            "median": 2.2,
+            "p95": 6.3,
+            "max": 9.9
+          },
+          "drawFlowMs": null
+        }
+      },
+      {
+        "id": "interior-av-flow",
+        "renderer": "ANGLE (Google, Vulkan 1.3.0 (SwiftShader Device (Subzero) (0x0000C0DE)), SwiftShader driver)",
+        "drawingBuffer": [
+          950,
+          470
+        ],
+        "phases": [
+          0,
+          1,
+          2
+        ],
+        "raysPerFrame": 0,
+        "ms": {
+          "renderMs": {
+            "n": 96,
+            "median": 6.8,
+            "p95": 11.6,
+            "max": 15.1
+          },
+          "rafIntervalMs": {
+            "n": 96,
+            "median": 150,
+            "p95": 283.2,
+            "max": 383.4
+          },
+          "rendererRenderMs": {
+            "n": 96,
+            "median": 1.1,
+            "p95": 2.4,
+            "max": 4.8
+          },
+          "updateLabelsMs": {
+            "n": 96,
+            "median": 0.1,
+            "p95": 0.5,
+            "max": 0.8
+          },
+          "labelRayMs": null,
+          "flowAdvanceMs": {
+            "n": 96,
+            "median": 1.6,
+            "p95": 3.8,
+            "max": 6.8
+          },
+          "beatSetMs": {
+            "n": 96,
+            "median": 3.1,
+            "p95": 5.1,
+            "max": 6.4
+          },
+          "drawFlowMs": {
+            "n": 96,
+            "median": 0.6,
+            "p95": 1.6,
+            "max": 2.3
+          }
+        }
+      },
+      {
+        "id": "interior-atria-flow",
+        "renderer": "ANGLE (Google, Vulkan 1.3.0 (SwiftShader Device (Subzero) (0x0000C0DE)), SwiftShader driver)",
+        "drawingBuffer": [
+          950,
+          470
+        ],
+        "phases": [
+          0,
+          1,
+          2
+        ],
+        "raysPerFrame": 1,
+        "ms": {
+          "renderMs": {
+            "n": 96,
+            "median": 23.1,
+            "p95": 33.9,
+            "max": 54.2
+          },
+          "rafIntervalMs": {
+            "n": 96,
+            "median": 150,
+            "p95": 316.8,
+            "max": 783.4
+          },
+          "rendererRenderMs": {
+            "n": 96,
+            "median": 1.1,
+            "p95": 1.9,
+            "max": 3.4
+          },
+          "updateLabelsMs": {
+            "n": 96,
+            "median": 15.5,
+            "p95": 21.8,
+            "max": 46.3
+          },
+          "labelRayMs": {
+            "n": 96,
+            "median": 15.3,
+            "p95": 21.5,
+            "max": 46.2
+          },
+          "flowAdvanceMs": {
+            "n": 96,
+            "median": 2,
+            "p95": 4.8,
+            "max": 11.6
+          },
+          "beatSetMs": {
+            "n": 96,
+            "median": 3.5,
+            "p95": 5.5,
+            "max": 10.8
+          },
+          "drawFlowMs": {
+            "n": 96,
+            "median": 0.6,
+            "p95": 1.4,
+            "max": 2.3
+          }
+        }
+      },
+      {
+        "id": "flow",
+        "renderer": "ANGLE (Google, Vulkan 1.3.0 (SwiftShader Device (Subzero) (0x0000C0DE)), SwiftShader driver)",
+        "drawingBuffer": [
+          950,
+          470
+        ],
+        "phases": [
+          0,
+          1,
+          2
+        ],
+        "raysPerFrame": 0,
+        "ms": {
+          "renderMs": {
+            "n": 96,
+            "median": 6.8,
+            "p95": 10.5,
+            "max": 11.5
+          },
+          "rafIntervalMs": {
+            "n": 96,
+            "median": 116.7,
+            "p95": 183.3,
+            "max": 266.6
+          },
+          "rendererRenderMs": {
+            "n": 96,
+            "median": 1.1,
+            "p95": 2.4,
+            "max": 2.8
+          },
+          "updateLabelsMs": {
+            "n": 96,
+            "median": 0.1,
+            "p95": 0.4,
+            "max": 0.5
+          },
+          "labelRayMs": null,
+          "flowAdvanceMs": {
+            "n": 96,
+            "median": 1.3,
+            "p95": 2.8,
+            "max": 3.4
+          },
+          "beatSetMs": {
+            "n": 96,
+            "median": 3.4,
+            "p95": 5.7,
+            "max": 6.7
+          },
+          "drawFlowMs": {
+            "n": 96,
+            "median": 0.5,
+            "p95": 1,
+            "max": 3.5
+          }
+        }
+      }
+    ],
+    [
+      {
+        "id": "interior-atria",
+        "renderer": "ANGLE (Google, Vulkan 1.3.0 (SwiftShader Device (Subzero) (0x0000C0DE)), SwiftShader driver)",
+        "drawingBuffer": [
+          950,
+          470
+        ],
+        "phases": [
+          0,
+          1,
+          2
+        ],
+        "raysPerFrame": 1,
+        "ms": {
+          "renderMs": {
+            "n": 96,
+            "median": 21.2,
+            "p95": 27.3,
+            "max": 38.5
+          },
+          "rafIntervalMs": {
+            "n": 96,
+            "median": 133.3,
+            "p95": 300,
+            "max": 333.3
+          },
+          "rendererRenderMs": {
+            "n": 96,
+            "median": 0.9,
+            "p95": 2.2,
+            "max": 3.3
+          },
+          "updateLabelsMs": {
+            "n": 96,
+            "median": 14.5,
+            "p95": 19.5,
+            "max": 29
+          },
+          "labelRayMs": {
+            "n": 96,
+            "median": 14.3,
+            "p95": 19.4,
+            "max": 23.2
+          },
+          "flowAdvanceMs": {
+            "n": 96,
+            "median": 1.6,
+            "p95": 4.1,
+            "max": 4.8
+          },
+          "beatSetMs": {
+            "n": 96,
+            "median": 3.4,
+            "p95": 5.7,
+            "max": 6.5
+          },
+          "drawFlowMs": null
+        }
+      },
+      {
+        "id": "interior-av-flow",
+        "renderer": "ANGLE (Google, Vulkan 1.3.0 (SwiftShader Device (Subzero) (0x0000C0DE)), SwiftShader driver)",
+        "drawingBuffer": [
+          950,
+          470
+        ],
+        "phases": [
+          0,
+          1,
+          2
+        ],
+        "raysPerFrame": 0,
+        "ms": {
+          "renderMs": {
+            "n": 96,
+            "median": 7.5,
+            "p95": 12.5,
+            "max": 18.5
+          },
+          "rafIntervalMs": {
+            "n": 96,
+            "median": 150,
+            "p95": 283.3,
+            "max": 366.7
+          },
+          "rendererRenderMs": {
+            "n": 96,
+            "median": 1.1,
+            "p95": 2.1,
+            "max": 3.9
+          },
+          "updateLabelsMs": {
+            "n": 96,
+            "median": 0.1,
+            "p95": 0.4,
+            "max": 0.8
+          },
+          "labelRayMs": null,
+          "flowAdvanceMs": {
+            "n": 96,
+            "median": 1.8,
+            "p95": 4.7,
+            "max": 9.6
+          },
+          "beatSetMs": {
+            "n": 96,
+            "median": 3.6,
+            "p95": 6.2,
+            "max": 6.7
+          },
+          "drawFlowMs": {
+            "n": 96,
+            "median": 0.6,
+            "p95": 1.3,
+            "max": 3.1
+          }
+        }
+      },
+      {
+        "id": "interior-atria-flow",
+        "renderer": "ANGLE (Google, Vulkan 1.3.0 (SwiftShader Device (Subzero) (0x0000C0DE)), SwiftShader driver)",
+        "drawingBuffer": [
+          950,
+          470
+        ],
+        "phases": [
+          0,
+          1,
+          2
+        ],
+        "raysPerFrame": 1,
+        "ms": {
+          "renderMs": {
+            "n": 96,
+            "median": 24.9,
+            "p95": 34.3,
+            "max": 38.6
+          },
+          "rafIntervalMs": {
+            "n": 96,
+            "median": 150,
+            "p95": 366.6,
+            "max": 516.7
+          },
+          "rendererRenderMs": {
+            "n": 96,
+            "median": 1.2,
+            "p95": 3.3,
+            "max": 5.9
+          },
+          "updateLabelsMs": {
+            "n": 96,
+            "median": 16,
+            "p95": 21.5,
+            "max": 28.2
+          },
+          "labelRayMs": {
+            "n": 96,
+            "median": 15.9,
+            "p95": 20.9,
+            "max": 27.9
+          },
+          "flowAdvanceMs": {
+            "n": 96,
+            "median": 1.9,
+            "p95": 4.7,
+            "max": 9.3
+          },
+          "beatSetMs": {
+            "n": 96,
+            "median": 3.7,
+            "p95": 6,
+            "max": 7.9
+          },
+          "drawFlowMs": {
+            "n": 96,
+            "median": 0.7,
+            "p95": 2.5,
+            "max": 3.4
+          }
+        }
+      },
+      {
+        "id": "flow",
+        "renderer": "ANGLE (Google, Vulkan 1.3.0 (SwiftShader Device (Subzero) (0x0000C0DE)), SwiftShader driver)",
+        "drawingBuffer": [
+          950,
+          470
+        ],
+        "phases": [
+          0,
+          1,
+          2
+        ],
+        "raysPerFrame": 0,
+        "ms": {
+          "renderMs": {
+            "n": 96,
+            "median": 6.7,
+            "p95": 9.6,
+            "max": 12
+          },
+          "rafIntervalMs": {
+            "n": 96,
+            "median": 133.2,
+            "p95": 266.8,
+            "max": 300.1
+          },
+          "rendererRenderMs": {
+            "n": 96,
+            "median": 1.1,
+            "p95": 1.6,
+            "max": 2.4
+          },
+          "updateLabelsMs": {
+            "n": 96,
+            "median": 0.1,
+            "p95": 0.3,
+            "max": 0.6
+          },
+          "labelRayMs": null,
+          "flowAdvanceMs": {
+            "n": 96,
+            "median": 1.4,
+            "p95": 3,
+            "max": 4.6
+          },
+          "beatSetMs": {
+            "n": 96,
+            "median": 3.1,
+            "p95": 4.8,
+            "max": 6
+          },
+          "drawFlowMs": {
+            "n": 96,
+            "median": 0.5,
+            "p95": 1.2,
+            "max": 4
+          }
+        }
+      },
+      {
+        "id": "interior-av",
+        "renderer": "ANGLE (Google, Vulkan 1.3.0 (SwiftShader Device (Subzero) (0x0000C0DE)), SwiftShader driver)",
+        "drawingBuffer": [
+          950,
+          470
+        ],
+        "phases": [
+          0,
+          1,
+          2
+        ],
+        "raysPerFrame": 0,
+        "ms": {
+          "renderMs": {
+            "n": 96,
+            "median": 5.5,
+            "p95": 10.3,
+            "max": 48
+          },
+          "rafIntervalMs": {
+            "n": 96,
+            "median": 116.8,
+            "p95": 250,
+            "max": 349.9
+          },
+          "rendererRenderMs": {
+            "n": 96,
+            "median": 1,
+            "p95": 4.1,
+            "max": 9.2
+          },
+          "updateLabelsMs": {
+            "n": 96,
+            "median": 0.1,
+            "p95": 0.4,
+            "max": 0.7
+          },
+          "labelRayMs": null,
+          "flowAdvanceMs": {
+            "n": 96,
+            "median": 1.4,
+            "p95": 2.9,
+            "max": 16.7
+          },
+          "beatSetMs": {
+            "n": 96,
+            "median": 2.6,
+            "p95": 5.2,
+            "max": 20.7
+          },
+          "drawFlowMs": null
+        }
+      },
+      {
+        "id": "interior-sa",
+        "renderer": "ANGLE (Google, Vulkan 1.3.0 (SwiftShader Device (Subzero) (0x0000C0DE)), SwiftShader driver)",
+        "drawingBuffer": [
+          950,
+          470
+        ],
+        "phases": [
+          0,
+          1,
+          2
+        ],
+        "raysPerFrame": 1,
+        "ms": {
+          "renderMs": {
+            "n": 96,
+            "median": 11.5,
+            "p95": 17.3,
+            "max": 28.1
+          },
+          "rafIntervalMs": {
+            "n": 96,
+            "median": 116.8,
+            "p95": 216.7,
+            "max": 266.6
+          },
+          "rendererRenderMs": {
+            "n": 96,
+            "median": 1,
+            "p95": 3.4,
+            "max": 7.4
+          },
+          "updateLabelsMs": {
+            "n": 96,
+            "median": 5.5,
+            "p95": 7.4,
+            "max": 9.5
+          },
+          "labelRayMs": {
+            "n": 96,
+            "median": 5.3,
+            "p95": 7.1,
+            "max": 9.2
+          },
+          "flowAdvanceMs": {
+            "n": 96,
+            "median": 1.5,
+            "p95": 3.3,
+            "max": 4.3
+          },
+          "beatSetMs": {
+            "n": 96,
+            "median": 3.2,
+            "p95": 4.9,
+            "max": 8.1
+          },
+          "drawFlowMs": null
+        }
+      }
+    ],
+    [
+      {
+        "id": "interior-atria-flow",
+        "renderer": "ANGLE (Google, Vulkan 1.3.0 (SwiftShader Device (Subzero) (0x0000C0DE)), SwiftShader driver)",
+        "drawingBuffer": [
+          950,
+          470
+        ],
+        "phases": [
+          0,
+          1,
+          2
+        ],
+        "raysPerFrame": 1,
+        "ms": {
+          "renderMs": {
+            "n": 96,
+            "median": 23.3,
+            "p95": 33,
+            "max": 55.8
+          },
+          "rafIntervalMs": {
+            "n": 96,
+            "median": 150,
+            "p95": 383.2,
+            "max": 583.4
+          },
+          "rendererRenderMs": {
+            "n": 96,
+            "median": 1,
+            "p95": 3.7,
+            "max": 5.9
+          },
+          "updateLabelsMs": {
+            "n": 96,
+            "median": 15.6,
+            "p95": 21.7,
+            "max": 32
+          },
+          "labelRayMs": {
+            "n": 96,
+            "median": 15.5,
+            "p95": 21.7,
+            "max": 31.8
+          },
+          "flowAdvanceMs": {
+            "n": 96,
+            "median": 1.9,
+            "p95": 4.3,
+            "max": 7.7
+          },
+          "beatSetMs": {
+            "n": 96,
+            "median": 3.5,
+            "p95": 5.5,
+            "max": 16.8
+          },
+          "drawFlowMs": {
+            "n": 96,
+            "median": 0.6,
+            "p95": 1.5,
+            "max": 2.4
+          }
+        }
+      },
+      {
+        "id": "flow",
+        "renderer": "ANGLE (Google, Vulkan 1.3.0 (SwiftShader Device (Subzero) (0x0000C0DE)), SwiftShader driver)",
+        "drawingBuffer": [
+          950,
+          470
+        ],
+        "phases": [
+          0,
+          1,
+          2
+        ],
+        "raysPerFrame": 0,
+        "ms": {
+          "renderMs": {
+            "n": 96,
+            "median": 6.5,
+            "p95": 9.1,
+            "max": 11.8
+          },
+          "rafIntervalMs": {
+            "n": 96,
+            "median": 116.7,
+            "p95": 233.3,
+            "max": 283.4
+          },
+          "rendererRenderMs": {
+            "n": 96,
+            "median": 1.1,
+            "p95": 1.9,
+            "max": 2.3
+          },
+          "updateLabelsMs": {
+            "n": 96,
+            "median": 0.1,
+            "p95": 0.3,
+            "max": 2.9
+          },
+          "labelRayMs": null,
+          "flowAdvanceMs": {
+            "n": 96,
+            "median": 1.4,
+            "p95": 3.1,
+            "max": 3.7
+          },
+          "beatSetMs": {
+            "n": 96,
+            "median": 3.1,
+            "p95": 4.4,
+            "max": 5.3
+          },
+          "drawFlowMs": {
+            "n": 96,
+            "median": 0.5,
+            "p95": 1,
+            "max": 1.3
+          }
+        }
+      },
+      {
+        "id": "interior-av",
+        "renderer": "ANGLE (Google, Vulkan 1.3.0 (SwiftShader Device (Subzero) (0x0000C0DE)), SwiftShader driver)",
+        "drawingBuffer": [
+          950,
+          470
+        ],
+        "phases": [
+          0,
+          1,
+          2
+        ],
+        "raysPerFrame": 0,
+        "ms": {
+          "renderMs": {
+            "n": 96,
+            "median": 4.8,
+            "p95": 10.1,
+            "max": 12.3
+          },
+          "rafIntervalMs": {
+            "n": 96,
+            "median": 133.3,
+            "p95": 283.3,
+            "max": 716.7
+          },
+          "rendererRenderMs": {
+            "n": 96,
+            "median": 0.9,
+            "p95": 2.3,
+            "max": 6.8
+          },
+          "updateLabelsMs": {
+            "n": 96,
+            "median": 0.2,
+            "p95": 0.6,
+            "max": 1.9
+          },
+          "labelRayMs": null,
+          "flowAdvanceMs": {
+            "n": 96,
+            "median": 1.1,
+            "p95": 4,
+            "max": 6
+          },
+          "beatSetMs": {
+            "n": 96,
+            "median": 2.3,
+            "p95": 4.8,
+            "max": 5.4
+          },
+          "drawFlowMs": null
+        }
+      },
+      {
+        "id": "interior-sa",
+        "renderer": "ANGLE (Google, Vulkan 1.3.0 (SwiftShader Device (Subzero) (0x0000C0DE)), SwiftShader driver)",
+        "drawingBuffer": [
+          950,
+          470
+        ],
+        "phases": [
+          0,
+          1,
+          2
+        ],
+        "raysPerFrame": 1,
+        "ms": {
+          "renderMs": {
+            "n": 96,
+            "median": 10.9,
+            "p95": 17,
+            "max": 24.9
+          },
+          "rafIntervalMs": {
+            "n": 96,
+            "median": 133.3,
+            "p95": 533.2,
+            "max": 916.6
+          },
+          "rendererRenderMs": {
+            "n": 96,
+            "median": 1,
+            "p95": 3,
+            "max": 5.8
+          },
+          "updateLabelsMs": {
+            "n": 96,
+            "median": 4.9,
+            "p95": 6.7,
+            "max": 11.3
+          },
+          "labelRayMs": {
+            "n": 96,
+            "median": 4.6,
+            "p95": 6.4,
+            "max": 11.1
+          },
+          "flowAdvanceMs": {
+            "n": 96,
+            "median": 1.7,
+            "p95": 4.9,
+            "max": 17.3
+          },
+          "beatSetMs": {
+            "n": 96,
+            "median": 2.9,
+            "p95": 5.1,
+            "max": 7.1
+          },
+          "drawFlowMs": null
+        }
+      },
+      {
+        "id": "interior-atria",
+        "renderer": "ANGLE (Google, Vulkan 1.3.0 (SwiftShader Device (Subzero) (0x0000C0DE)), SwiftShader driver)",
+        "drawingBuffer": [
+          950,
+          470
+        ],
+        "phases": [
+          0,
+          1,
+          2
+        ],
+        "raysPerFrame": 1,
+        "ms": {
+          "renderMs": {
+            "n": 96,
+            "median": 21.1,
+            "p95": 32,
+            "max": 50.3
+          },
+          "rafIntervalMs": {
+            "n": 96,
+            "median": 133.3,
+            "p95": 250,
+            "max": 383.3
+          },
+          "rendererRenderMs": {
+            "n": 96,
+            "median": 1,
+            "p95": 4,
+            "max": 7.2
+          },
+          "updateLabelsMs": {
+            "n": 96,
+            "median": 15,
+            "p95": 20.9,
+            "max": 31.3
+          },
+          "labelRayMs": {
+            "n": 96,
+            "median": 14.7,
+            "p95": 20.2,
+            "max": 30.6
+          },
+          "flowAdvanceMs": {
+            "n": 96,
+            "median": 1.3,
+            "p95": 3.5,
+            "max": 6.8
+          },
+          "beatSetMs": {
+            "n": 96,
+            "median": 3.3,
+            "p95": 5.9,
+            "max": 14.1
+          },
+          "drawFlowMs": null
+        }
+      },
+      {
+        "id": "interior-av-flow",
+        "renderer": "ANGLE (Google, Vulkan 1.3.0 (SwiftShader Device (Subzero) (0x0000C0DE)), SwiftShader driver)",
+        "drawingBuffer": [
+          950,
+          470
+        ],
+        "phases": [
+          0,
+          1,
+          2
+        ],
+        "raysPerFrame": 0,
+        "ms": {
+          "renderMs": {
+            "n": 96,
+            "median": 5.9,
+            "p95": 11.8,
+            "max": 51.1
+          },
+          "rafIntervalMs": {
+            "n": 96,
+            "median": 150,
+            "p95": 366.8,
+            "max": 866.7
+          },
+          "rendererRenderMs": {
+            "n": 96,
+            "median": 0.9,
+            "p95": 3,
+            "max": 5.2
+          },
+          "updateLabelsMs": {
+            "n": 96,
+            "median": 0.1,
+            "p95": 0.5,
+            "max": 1.2
+          },
+          "labelRayMs": null,
+          "flowAdvanceMs": {
+            "n": 96,
+            "median": 1.3,
+            "p95": 3.5,
+            "max": 32.3
+          },
+          "beatSetMs": {
+            "n": 96,
+            "median": 2.8,
+            "p95": 6.5,
+            "max": 31.5
+          },
+          "drawFlowMs": {
+            "n": 96,
+            "median": 0.5,
+            "p95": 1.1,
+            "max": 2.3
+          }
+        }
+      }
+    ]
+  ]
+}
