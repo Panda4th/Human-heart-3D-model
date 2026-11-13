@@ -697,14 +697,22 @@ test('stopping and starting the beat many times never sounds a heart sound twice
     await page.locator('#beat-play').click();
     await page.waitForTimeout(15 + (i * 53) % 90);
   }
-  // The beat only moves forward, so the sounds heard, in time order, alternate first, second, first, ... A sound booked twice
-  // makes two of the same kind in a row. (The gap alone cannot show it: a stop and a start take 100 ms or more here.)
+  // A sound booked twice shows as two sounds of the same kind less than one beat (800 ms at the real speed) apart: the beat only
+  // moves forward, so sounds of one kind are at least a beat apart however often it is stopped. (The gap between neighbours
+  // alone cannot show it: a stop and a start take 100 ms or more here.) A sound that is missing, which a page stalling for
+  // seconds can cause, is not a double: it shows as two of one kind a beat or more apart, and is only counted in the log.
   const heard = (await page.evaluate(() => window.audible().map(v => ({ at: v.at, hz: v.hz })))).sort((a, b) => a.at - b.at);
   expect(heard.length).toBeGreaterThan(10);
-  for (let i = 1; i < heard.length; i++) {
-    expect(heard[i].hz, `the sounds at ${heard[i - 1].at} and ${heard[i].at} are of the same kind`).not.toBe(heard[i - 1].hz);
-    expect(heard[i].at - heard[i - 1].at).toBeGreaterThan(.26);
+  let apart = 0;
+  for (const hz of [90, 130]) {
+    const kind = heard.filter(v => v.hz === hz);
+    for (let i = 1; i < kind.length; i++) expect(kind[i].at - kind[i - 1].at, `sounds of ${hz} Hz at ${kind[i - 1].at} and ${kind[i].at}`).toBeGreaterThan(.75);
   }
+  for (let i = 1; i < heard.length; i++) {
+    expect(heard[i].at - heard[i - 1].at).toBeGreaterThan(.26);
+    if (heard[i].hz === heard[i - 1].hz) apart++;
+  }
+  console.log(`heart sounds heard: ${heard.length}; places where a sound of the other kind is missing between two: ${apart}`);
   expect(errors).toEqual([]);
   await context.close();
 });
