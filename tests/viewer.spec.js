@@ -575,6 +575,150 @@ test('with reduced motion the beat plays once and returns to rest', async ({ bro
   await context.close();
 });
 
+// The synthetic heart sound (Issue #31). Headless Chromium cannot be listened to, so the page gets an AudioContext that keeps
+// what is booked: its clock is the real clock, and each oscillator's start time and pitch (90 Hz first sound, 130 Hz second
+// sound) are recorded. This checks the booking against the beat, not what a speaker plays.
+const fakeAudio = () => {
+  window.voices = []; window.stops = []; window.contexts = 0;
+  const born = performance.now();
+  const param = () => ({ value: 1, setValueAtTime() {}, linearRampToValueAtTime() {}, exponentialRampToValueAtTime() {}, setTargetAtTime() {}, cancelScheduledValues() {} });
+  window.AudioContext = class {
+    constructor() { this.state = 'suspended'; this.destination = {}; this.baseLatency = 0; this.outputLatency = 0; window.contexts++; this.listeners = []; window.lastContext = this; }
+    get currentTime() { return (performance.now() - born) / 1000; }
+    resume() { this.state = 'running'; return Promise.resolve(); }
+    addEventListener(type, fn) { this.listeners.push(fn); }
+    interrupt() { this.state = 'interrupted'; this.listeners.forEach(fn => fn()); }
+    createGain() { return { gain: param(), connect() {}, disconnect() {} }; }
+    createOscillator() {
+      const oscillator = { frequency: param(), connect() {}, start(t) { window.voices.push({ hz: oscillator.frequency.first, at: t }); }, stop(t) { window.stops.push(t); } };
+      const set = oscillator.frequency.setValueAtTime;
+      oscillator.frequency.setValueAtTime = v => { oscillator.frequency.first = v; set(); };
+      return oscillator;
+    }
+  };
+};
+test('the heart sound is off at first, books the two sounds on the beat clock and stops with the beat', async ({ browser }) => {
+  const context = await browser.newContext({ viewport: { width: 1440, height: 900 } });
+  const page = await context.newPage(), errors = [];
+  page.on('pageerror', e => errors.push(e.message));
+  await page.addInitScript(fakeAudio);
+  await page.goto(url);
+  await expect(page.locator('html')).toHaveAttribute('data-ready', 'true');
+  await expect(page.locator('#heart-sound')).toHaveAttribute('aria-pressed', 'false');
+  await expect(page.locator('#sound-note')).toContainText('説明用の合成心音');
+  expect(await page.evaluate(() => window.contexts), 'no audio context before the tap').toBe(0);
+  await page.locator('#beat-play').click();
+  await page.waitForTimeout(600);
+  await page.locator('#heart-sound').click();
+  await expect(page.locator('#heart-sound')).toHaveAttribute('aria-pressed', 'true');
+  expect(await page.evaluate(() => window.contexts)).toBe(1);
+  // Turning the sound on does not send the beat back to its start. The tap came 0.6 to 1 s into the slow beat (120 to 200 ms of
+  // the cycle), after the first sound's 100 ms, so the first sound booked is the second one (370 ms), not a first sound
+  // 0.5 s after the tap.
+  await page.waitForTimeout(10500);
+  const voices = await page.evaluate(() => window.voices);
+  const hz = voices.map(v => v.hz);
+  expect(hz.length).toBeGreaterThanOrEqual(5);
+  expect(hz.slice(0, 3)).toEqual([130, 90, 130]);
+  for (let i = 1; i < voices.length; i++) {
+    const gap = voices[i].at - voices[i - 1].at;
+    // Slow speed: 270 ms of the cycle between the first and the second sound is 1.35 s, 530 ms to the next first is 2.65 s.
+    expect(Math.abs(gap - (voices[i].hz === 130 ? 1.35 : 2.65))).toBeLessThan(.002);
+  }
+  // Switching the speed books the real-speed intervals from the current position, with no double sound.
+  const count = (await page.evaluate(() => window.voices)).length;
+  await page.locator('#beat-speed').click();
+  await page.waitForTimeout(2500);
+  const faster = await page.evaluate(n => window.voices.slice(n), count);
+  expect(faster.length).toBeGreaterThanOrEqual(3);
+  for (let i = 1; i < faster.length; i++) expect(faster[i].at - faster[i - 1].at).toBeGreaterThan(.26);
+  // Stopping the beat books no more sounds.
+  await page.locator('#beat-play').click();
+  await expect(page.locator('#beat-play')).toHaveText('拍動を再生');
+  const stopped = await page.evaluate(() => window.voices.length);
+  await page.waitForTimeout(1500);
+  expect(await page.evaluate(() => window.voices.length)).toBe(stopped);
+  // Starting again, turning the sound off keeps the beat running and books nothing; on again books from the current position.
+  await page.locator('#beat-play').click();
+  await page.locator('#heart-sound').click();
+  await expect(page.locator('#heart-sound')).toHaveAttribute('aria-pressed', 'false');
+  const off = await page.evaluate(() => window.voices.length);
+  const phase = await page.locator('#beat-phase-name').textContent();
+  const seen = new Set([phase]);
+  for (let i = 0; i < 12; i++) { seen.add(await page.locator('#beat-phase-name').textContent()); await page.waitForTimeout(200); }
+  expect(seen.size, 'the beat goes on without the sound').toBeGreaterThanOrEqual(2);
+  expect(await page.evaluate(() => window.voices.length)).toBe(off);
+  expect(await page.evaluate(() => window.contexts), 'the context is reused').toBe(1);
+  // A hidden page stops the beat and the sounds together.
+  await page.locator('#heart-sound').click();
+  await page.evaluate(() => { Object.defineProperty(document, 'hidden', { value: true, configurable: true }); document.dispatchEvent(new Event('visibilitychange')); });
+  const hidden = await page.evaluate(() => window.voices.length);
+  const hiddenPhase = await page.locator('#beat-phase-name').textContent();
+  await page.waitForTimeout(2500);
+  expect(await page.evaluate(() => window.voices.length)).toBe(hidden);
+  expect(await page.locator('#beat-phase-name').textContent()).toBe(hiddenPhase);
+  await page.evaluate(() => { Object.defineProperty(document, 'hidden', { value: false, configurable: true }); document.dispatchEvent(new Event('visibilitychange')); });
+  await page.waitForTimeout(6000);
+  expect(await page.evaluate(() => window.voices.length)).toBeGreaterThan(hidden);
+  // An interrupted audio context turns the sound off, says so, and the beat goes on.
+  await page.evaluate(() => window.lastContext.interrupt());
+  await expect(page.locator('#heart-sound')).toHaveAttribute('aria-pressed', 'false');
+  await expect(page.locator('#sound-status')).toContainText('中断');
+  expect(errors).toEqual([]);
+  await context.close();
+});
+
+// With "reduce motion" the beat plays once per press; its sounds stop with it.
+test('with reduced motion one press books one first sound and one second sound, and none after the beat has ended', async ({ browser }) => {
+  const context = await browser.newContext({ viewport: { width: 1440, height: 900 }, reducedMotion: 'reduce' });
+  const page = await context.newPage(), errors = [];
+  page.on('pageerror', e => errors.push(e.message));
+  await page.addInitScript(fakeAudio);
+  await page.goto(url);
+  await expect(page.locator('html')).toHaveAttribute('data-ready', 'true');
+  await page.locator('#heart-sound').click();
+  await page.locator('#beat-play').click();
+  await expect(page.locator('#beat-play')).toHaveText('拍動を1回再生', { timeout: 15000 });
+  await page.waitForTimeout(1500);
+  expect((await page.evaluate(() => window.voices)).map(v => v.hz)).toEqual([90, 130]);
+  // Pressing again plays one more beat from its start.
+  await page.locator('#beat-play').click();
+  await expect(page.locator('#beat-play')).toHaveText('拍動を1回再生', { timeout: 15000 });
+  await page.waitForTimeout(1500);
+  expect((await page.evaluate(() => window.voices)).map(v => v.hz)).toEqual([90, 130, 90, 130]);
+  expect(errors).toEqual([]);
+  await context.close();
+});
+
+test('the heart sound cannot start where the page has no audio, and the page still works', async ({ browser }) => {
+  const context = await browser.newContext({ viewport: { width: 390, height: 844 }, hasTouch: true, isMobile: true });
+  const page = await context.newPage(), errors = [];
+  page.on('pageerror', e => errors.push(e.message));
+  await page.addInitScript(() => { delete window.AudioContext; delete window.webkitAudioContext; });
+  await page.goto(url);
+  await expect(page.locator('html')).toHaveAttribute('data-ready', 'true');
+  await expect(page.locator('#heart-sound')).toBeHidden();
+  await page.locator('#beat-play').click();
+  await expect(page.locator('#beat-play')).toHaveText('拍動を止める');
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+  expect(errors).toEqual([]);
+  await context.close();
+});
+
+test('the heart sound controls fit a phone screen', async ({ browser }) => {
+  const context = await browser.newContext({ viewport: { width: 390, height: 844 }, hasTouch: true, isMobile: true });
+  const page = await context.newPage();
+  await page.addInitScript(fakeAudio);
+  await page.goto(url);
+  await expect(page.locator('html')).toHaveAttribute('data-ready', 'true');
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+  for (const id of ['#heart-sound', '#heart-volume']) {
+    const box = await page.locator(id).boundingBox();
+    expect(box && box.x >= 0 && box.x + box.width <= 390, `${id} inside the screen`).toBe(true);
+  }
+  await context.close();
+});
+
 // The blood-flow view draws particles (blue on the right-heart routes, red on the left-heart routes) inside walls drawn at
 // opacity 0.12. A lit particle is not a pure colour, so these rules were found by measuring (Chromium/SwiftShader, at rest,
 // pixels counted at 1440 px width / 390 px width): the red rule (red - green > 120, red > 170, blue < 110) matched 0 / 0 in the
