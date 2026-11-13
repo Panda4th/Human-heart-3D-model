@@ -146,9 +146,17 @@ function cutFace(ray, plane, solids) {
 // meshes whose cut face is drawn on the plane; that face is nearer than anything it covers.
 // The result also gives the distance along the ray to the drawn surface and whether it is the cut face (onCut,
 // with the point on the plane). The chamber named for the cut face is the first wall surface beyond it, an estimate.
+// Raycasting also tests hidden objects, and the cross-section keeps the original walls (hidden) next to the drawn copies,
+// so the same triangles were tested twice and the hidden half was thrown away by isShown below. Test only what is shown.
+function shownObjects(targets) {
+  const out = [];
+  const visit = object => { if (object.visible) { out.push(object); object.children.forEach(visit); } };
+  for (const target of targets) if (isShown(target)) visit(target);
+  return out;
+}
 export function pickHit(raycaster, targets, planes = [], solids = []) {
   const cut = planes.length && solids.length ? cutFace(raycaster.ray, planes[0], solids) : undefined;
-  for (const hit of raycaster.intersectObjects(targets, true)) {
+  for (const hit of raycaster.intersectObjects(shownObjects(targets), false)) {
     if (cut && cut.distance <= hit.distance) break;
     if (!isShown(hit.object) || !planes.every(plane => plane.distanceToPoint(hit.point) >= 0)) continue;
     const id = idOf(hit.object);
