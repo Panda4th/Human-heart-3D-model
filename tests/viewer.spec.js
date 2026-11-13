@@ -575,6 +575,269 @@ test('with reduced motion the beat plays once and returns to rest', async ({ bro
   await context.close();
 });
 
+// The synthetic heart sound (Issue #31). Headless Chromium cannot be listened to, so the page gets an AudioContext that keeps
+// what is booked: its clock is the real clock, and each oscillator's start time and pitch (90 Hz first sound, 130 Hz second
+// sound) are recorded. This checks the booking against the beat, not what a speaker plays.
+const fakeAudio = () => {
+  window.voices = []; window.cancels = []; window.contexts = 0; let order = 0;
+  const born = performance.now();
+  window.audioBorn = born;
+  // What a listener would hear: a sound booked before a cancel that lies before its start is silenced by that cancel (`order` is the
+  // sequence of bookings and cancels, which a clock reading cannot give: they can fall in the same millisecond).
+  window.audible = () => window.voices.filter(v => !window.cancels.some(c => c.order > v.order && v.at > c.t));
+  const param = () => ({ value: 1, setValueAtTime() {}, linearRampToValueAtTime() {}, exponentialRampToValueAtTime() {}, setTargetAtTime() {}, cancelScheduledValues: t => window.cancels.push({ t, order: order++ }) });
+  window.AudioContext = class {
+    constructor() { this.state = 'suspended'; this.destination = {}; this.baseLatency = 0; this.outputLatency = 0; window.contexts++; this.listeners = []; window.lastContext = this; }
+    get currentTime() { return (performance.now() - born) / 1000; }
+    resume() { this.state = 'running'; return Promise.resolve(); }
+    addEventListener(type, fn) { this.listeners.push(fn); }
+    interrupt() { this.state = 'interrupted'; this.listeners.forEach(fn => fn()); }
+    createGain() { return { gain: param(), connect() {}, disconnect() {} }; }
+    createOscillator() {
+      const context = this;
+      const oscillator = { frequency: param(), connect() {}, start(t) { window.voices.push({ hz: oscillator.frequency.first, at: t, order: order++ }); }, stop() {} };
+      const set = oscillator.frequency.setValueAtTime;
+      oscillator.frequency.setValueAtTime = v => { oscillator.frequency.first = v; set(); };
+      return oscillator;
+    }
+  };
+};
+test('the heart sound is off at first, books the two sounds on the beat clock and stops with the beat', async ({ browser }) => {
+  const context = await browser.newContext({ viewport: { width: 1440, height: 900 } });
+  const page = await context.newPage(), errors = [];
+  page.on('pageerror', e => errors.push(e.message));
+  await page.addInitScript(fakeAudio);
+  await page.goto(url);
+  await expect(page.locator('html')).toHaveAttribute('data-ready', 'true');
+  // The moment the page starts the beat, taken in the page just before its own handler runs.
+  await page.evaluate(() => document.getElementById('beat-play').addEventListener('click', () => { window.beatStartedAt = performance.now(); }, true));
+  await expect(page.locator('#heart-sound')).toHaveAttribute('aria-pressed', 'false');
+  await expect(page.locator('#sound-note')).toContainText('説明用の合成心音');
+  expect(await page.evaluate(() => window.contexts), 'no audio context before the tap').toBe(0);
+  await page.locator('#beat-play').click();
+  await page.waitForTimeout(600);
+  await page.locator('#heart-sound').click();
+  await expect(page.locator('#heart-sound')).toHaveAttribute('aria-pressed', 'true');
+  expect(await page.evaluate(() => window.contexts)).toBe(1);
+  // Turning the sound on does not send the beat back to its start: every sound sits on the grid of the beat that began at the
+  // press of "拍動を再生" (slow speed: first sound 0.5 s, second sound 1.85 s into each 4 s beat), not on a grid that begins at
+  // the tap. The sounds are checked as booked, so how late the tap came does not matter. None may be missing between the first
+  // and the last one heard.
+  await expect.poll(async () => (await page.evaluate(() => window.audible())).length, { timeout: 40000 }).toBeGreaterThanOrEqual(5);
+  const grid = await page.evaluate(() => ({ start: (window.beatStartedAt - window.audioBorn) / 1000, voices: window.audible() }));
+  let previous = null;
+  for (const v of grid.voices) {
+    const t = v.at - grid.start, beat = Math.floor(t / 4), within = t - 4 * beat;
+    expect(Math.abs(within - (v.hz === 130 ? 1.85 : .5)), `sound at ${t.toFixed(3)} s`).toBeLessThan(.03);
+    const slot = 2 * beat + (v.hz === 130 ? 1 : 0);
+    if (previous !== null) expect(slot - previous, 'a sound is missing or doubled').toBe(1);
+    previous = slot;
+  }
+  // Switching the speed books the real-speed intervals from the current position, with no double sound.
+  const count = (await page.evaluate(() => window.audible())).length;
+  await page.locator('#beat-speed').click();
+  await page.waitForTimeout(2500);
+  const faster = (await page.evaluate(() => window.audible())).slice(count);
+  expect(faster.length).toBeGreaterThanOrEqual(3);
+  for (let i = 1; i < faster.length; i++) expect(faster[i].at - faster[i - 1].at).toBeGreaterThan(.26);
+  // Stopping the beat books no more sounds.
+  await page.locator('#beat-play').click();
+  await expect(page.locator('#beat-play')).toHaveText('拍動を再生');
+  const stopped = await page.evaluate(() => window.audible().length);
+  await page.waitForTimeout(1500);
+  expect(await page.evaluate(() => window.audible().length)).toBe(stopped);
+  // Starting again, turning the sound off keeps the beat running and books nothing; on again books from the current position.
+  await page.locator('#beat-play').click();
+  await page.locator('#heart-sound').click();
+  await expect(page.locator('#heart-sound')).toHaveAttribute('aria-pressed', 'false');
+  const off = await page.evaluate(() => window.audible().length);
+  const phase = await page.locator('#beat-phase-name').textContent();
+  const seen = new Set([phase]);
+  for (let i = 0; i < 12; i++) { seen.add(await page.locator('#beat-phase-name').textContent()); await page.waitForTimeout(200); }
+  expect(seen.size, 'the beat goes on without the sound').toBeGreaterThanOrEqual(2);
+  expect(await page.evaluate(() => window.audible().length)).toBe(off);
+  expect(await page.evaluate(() => window.contexts), 'the context is reused').toBe(1);
+  // A hidden page stops the beat and the sounds together.
+  await page.locator('#heart-sound').click();
+  await page.evaluate(() => { Object.defineProperty(document, 'hidden', { value: true, configurable: true }); document.dispatchEvent(new Event('visibilitychange')); });
+  const hidden = await page.evaluate(() => window.audible().length);
+  const hiddenPhase = await page.locator('#beat-phase-name').textContent();
+  await page.waitForTimeout(2500);
+  expect(await page.evaluate(() => window.audible().length)).toBe(hidden);
+  expect(await page.locator('#beat-phase-name').textContent()).toBe(hiddenPhase);
+  await page.evaluate(() => { Object.defineProperty(document, 'hidden', { value: false, configurable: true }); document.dispatchEvent(new Event('visibilitychange')); });
+  await page.waitForTimeout(6000);
+  expect(await page.evaluate(() => window.audible().length)).toBeGreaterThan(hidden);
+  // An interrupted audio context turns the sound off, says so, and the beat goes on.
+  await page.evaluate(() => window.lastContext.interrupt());
+  await expect(page.locator('#heart-sound')).toHaveAttribute('aria-pressed', 'false');
+  await expect(page.locator('#sound-status')).toContainText('中断');
+  expect(errors).toEqual([]);
+  await context.close();
+});
+
+// Review of PR #44: stopping wound the clock back to the last drawn frame, so a sound that had started after that frame was booked
+// again on restart. Frames take 100 ms or more here, so stops often come between a sound and the next frame. At the real speed
+// (first sound to second sound 270 ms) two sounds never come closer than 0.27 s; a doubled sound would.
+test('stopping and starting the beat many times never sounds a heart sound twice', async ({ browser }) => {
+  const context = await browser.newContext({ viewport: { width: 1440, height: 900 } });
+  const page = await context.newPage(), errors = [];
+  page.on('pageerror', e => errors.push(e.message));
+  await page.addInitScript(fakeAudio);
+  await page.goto(url);
+  await expect(page.locator('html')).toHaveAttribute('data-ready', 'true');
+  // The cut view draws slowly in this environment (about 150 ms a frame), so the last frame is often far behind the clock.
+  await page.locator('#mode-interior').click();
+  await page.locator('#beat-speed').click();
+  await page.locator('#heart-sound').click();
+  await expect(page.locator('#heart-sound')).toHaveAttribute('aria-pressed', 'true');
+  for (let i = 0; i < 40; i++) {
+    await page.locator('#beat-play').click();
+    await page.waitForTimeout(60 + (i * 37) % 260);
+    await page.locator('#beat-play').click();
+    await page.waitForTimeout(15 + (i * 53) % 90);
+  }
+  // A sound booked twice shows as two sounds of the same kind less than one beat (800 ms at the real speed) apart: the beat only
+  // moves forward, so sounds of one kind are at least a beat apart however often it is stopped. (The gap between neighbours
+  // alone cannot show it: a stop and a start take 100 ms or more here.) A sound that is missing, which a page stalling for
+  // seconds can cause, is not a double: it shows as two of one kind a beat or more apart, and is only counted in the log.
+  const heard = (await page.evaluate(() => window.audible().map(v => ({ at: v.at, hz: v.hz })))).sort((a, b) => a.at - b.at);
+  expect(heard.length).toBeGreaterThan(10);
+  let apart = 0;
+  for (const hz of [90, 130]) {
+    const kind = heard.filter(v => v.hz === hz);
+    for (let i = 1; i < kind.length; i++) expect(kind[i].at - kind[i - 1].at, `sounds of ${hz} Hz at ${kind[i - 1].at} and ${kind[i].at}`).toBeGreaterThan(.75);
+  }
+  for (let i = 1; i < heard.length; i++) {
+    expect(heard[i].at - heard[i - 1].at).toBeGreaterThan(.26);
+    if (heard[i].hz === heard[i - 1].hz) apart++;
+  }
+  console.log(`heart sounds heard: ${heard.length}; places where a sound of the other kind is missing between two: ${apart}`);
+  expect(errors).toEqual([]);
+  await context.close();
+});
+
+// Review of PR #44, in a fixed order: the time is the page's fake clock, stopped with pauseAt() once the page has loaded (install()
+// alone lets real time run between two commands) and moved only by runFor(), so every run is the same. At the real speed the sounds are
+// at 100 and 370 ms of each 800 ms beat. The beat is stopped 5 ms after each of the first four sounds started, which is after the
+// last frame drawn before the stop in most cases (frames are 16 ms apart). A clock wound back to the last frame booked such a
+// sound again on restart. The sounds heard must be exactly those the beat has passed, once each.
+for (const how of ['stop button', 'hidden page']) test(`a sound that started just before the beat was stopped is not booked again (${how})`, async ({ page }) => {
+  const errors = [];
+  page.on('pageerror', e => errors.push(e.message));
+  await page.addInitScript(fakeAudio);
+  await page.clock.install({ time: 0 });
+  await page.goto(url);
+  await expect(page.locator('html')).toHaveAttribute('data-ready', 'true');
+  await page.clock.pauseAt(60000);
+  const click = id => page.evaluate(i => document.getElementById(i).click(), id);
+  const now = () => page.evaluate(() => performance.now());
+  const hide = hidden => page.evaluate(h => { Object.defineProperty(document, 'hidden', { value: h, configurable: true }); document.dispatchEvent(new Event('visibilitychange')); }, hidden);
+  await click('beat-speed');
+  await click('heart-sound');
+  await expect(page.locator('#heart-sound')).toHaveAttribute('aria-pressed', 'true');
+  // `running` is the time the beat has run, from the page's own clock, not from what this test intends: every stop must fall at
+  // the planned beat time, so that the 5 ms after each sound is real.
+  let running = 0, since = await now();
+  await click('beat-play');
+  // Beat time of each stop: 5 ms after the sounds at 100, 370, 900 and 1170 ms.
+  for (const stopAt of [105, 375, 905, 1175]) {
+    await page.clock.runFor(stopAt - running);
+    const stoppedAt = await now();
+    running += stoppedAt - since;
+    expect(running, 'the stop falls at the planned beat time').toBe(stopAt);
+    if (how === 'stop button') await click('beat-play'); else await hide(true);
+    await page.clock.runFor(10);
+    since = await now();
+    if (how === 'stop button') await click('beat-play'); else await hide(false);
+  }
+  await page.clock.runFor(125);
+  expect(await now(), 'time moved only by runFor').toBe(60000 + 105 + 270 + 530 + 270 + 4 * 10 + 125);
+  // The beat has run 1300 ms: the sounds at 100, 370, 900 and 1170 ms, once each (the next one, at 1700 ms, is booked ahead
+  // but not heard).
+  const heard = await page.evaluate(() => window.audible().filter(v => v.at <= window.lastContext.currentTime).map(v => v.hz));
+  expect(heard).toEqual([90, 130, 90, 130]);
+  expect(errors).toEqual([]);
+});
+
+// Review of PR #44: after the WebGL context was lost, the sounds went on being booked and could not be stopped from the page.
+test('when the 3D view is lost the beat and the heart sounds stop', async ({ browser }) => {
+  const context = await browser.newContext({ viewport: { width: 1440, height: 900 } });
+  const page = await context.newPage(), errors = [];
+  page.on('pageerror', e => errors.push(e.message));
+  await page.addInitScript(fakeAudio);
+  await page.goto(url);
+  await expect(page.locator('html')).toHaveAttribute('data-ready', 'true');
+  await page.locator('#beat-speed').click();
+  await page.locator('#beat-play').click();
+  await page.locator('#heart-sound').click();
+  await expect.poll(() => page.evaluate(() => window.audible().length), { timeout: 10000 }).toBeGreaterThan(2);
+  await page.locator('canvas').evaluate(c => c.dispatchEvent(new Event('webglcontextlost', { cancelable: true })));
+  await expect(page.locator('#error')).toContainText('再読み込み');
+  const after = await page.evaluate(() => window.audible().length);
+  await page.waitForTimeout(2500);
+  expect(await page.evaluate(() => window.audible().length), 'no sound is booked after the loss').toBe(after);
+  await expect(page.locator('#heart-sound')).toHaveAttribute('aria-pressed', 'false');
+  // Coming back to the page does not restart the sounds either.
+  await page.evaluate(() => { Object.defineProperty(document, 'hidden', { value: true, configurable: true }); document.dispatchEvent(new Event('visibilitychange')); });
+  await page.evaluate(() => { Object.defineProperty(document, 'hidden', { value: false, configurable: true }); document.dispatchEvent(new Event('visibilitychange')); });
+  await page.waitForTimeout(1500);
+  expect(await page.evaluate(() => window.audible().length)).toBe(after);
+  expect(errors).toEqual([]);
+  await context.close();
+});
+
+// With "reduce motion" the beat plays once per press; its sounds stop with it.
+test('with reduced motion one press books one first sound and one second sound, and none after the beat has ended', async ({ browser }) => {
+  const context = await browser.newContext({ viewport: { width: 1440, height: 900 }, reducedMotion: 'reduce' });
+  const page = await context.newPage(), errors = [];
+  page.on('pageerror', e => errors.push(e.message));
+  await page.addInitScript(fakeAudio);
+  await page.goto(url);
+  await expect(page.locator('html')).toHaveAttribute('data-ready', 'true');
+  await page.locator('#heart-sound').click();
+  await page.locator('#beat-play').click();
+  await expect(page.locator('#beat-play')).toHaveText('拍動を1回再生', { timeout: 15000 });
+  await page.waitForTimeout(1500);
+  expect((await page.evaluate(() => window.audible())).map(v => v.hz)).toEqual([90, 130]);
+  // Pressing again plays one more beat from its start.
+  await page.locator('#beat-play').click();
+  await expect(page.locator('#beat-play')).toHaveText('拍動を1回再生', { timeout: 15000 });
+  await page.waitForTimeout(1500);
+  expect((await page.evaluate(() => window.audible())).map(v => v.hz)).toEqual([90, 130, 90, 130]);
+  expect(errors).toEqual([]);
+  await context.close();
+});
+
+test('the heart sound cannot start where the page has no audio, and the page still works', async ({ browser }) => {
+  const context = await browser.newContext({ viewport: { width: 390, height: 844 }, hasTouch: true, isMobile: true });
+  const page = await context.newPage(), errors = [];
+  page.on('pageerror', e => errors.push(e.message));
+  await page.addInitScript(() => { delete window.AudioContext; delete window.webkitAudioContext; });
+  await page.goto(url);
+  await expect(page.locator('html')).toHaveAttribute('data-ready', 'true');
+  await expect(page.locator('#heart-sound')).toBeHidden();
+  await page.locator('#beat-play').click();
+  await expect(page.locator('#beat-play')).toHaveText('拍動を止める');
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+  expect(errors).toEqual([]);
+  await context.close();
+});
+
+test('the heart sound controls fit a phone screen', async ({ browser }) => {
+  const context = await browser.newContext({ viewport: { width: 390, height: 844 }, hasTouch: true, isMobile: true });
+  const page = await context.newPage();
+  await page.addInitScript(fakeAudio);
+  await page.goto(url);
+  await expect(page.locator('html')).toHaveAttribute('data-ready', 'true');
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+  for (const id of ['#heart-sound', '#heart-volume']) {
+    const box = await page.locator(id).boundingBox();
+    expect(box && box.x >= 0 && box.x + box.width <= 390, `${id} inside the screen`).toBe(true);
+  }
+  await context.close();
+});
+
 // The blood-flow view draws particles (blue on the right-heart routes, red on the left-heart routes) inside walls drawn at
 // opacity 0.12. A lit particle is not a pure colour, so these rules were found by measuring (Chromium/SwiftShader, at rest,
 // pixels counted at 1440 px width / 390 px width): the red rule (red - green > 120, red > 170, blue < 110) matched 0 / 0 in the

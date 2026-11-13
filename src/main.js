@@ -3,7 +3,8 @@ import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { createConduction } from './conduction.mjs';
 import { createAnatomy } from './anatomy.mjs';
 import { createFlow } from './flow.mjs';
-import { contraction, createBeat, phaseAt, phases, slowFactor, stepBeat } from './heartbeat.mjs';
+import { contraction, createBeat, period, phaseAt, phases, stepBeat } from './heartbeat.mjs';
+import { createHeartSound, createPlayback, createSoundScheduler } from './heartsound.mjs';
 import anatomyData from './data/bodyparts3d-heart.bin';
 import { createCrossSection, fitDistance, modelSphere, pickHit, removedByCut, selectableIn, TapGesture } from './viewer-state.mjs';
 
@@ -135,8 +136,12 @@ try {
   };
   controls.target.copy(bounds.center);
   let mode = 'exterior', selected = 'lv', frame = 0, previousTime = 0, failed = false, overlay = false, flowOverlay = false, pick = null;
-  // beatTime is the time within the heartbeat in real milliseconds; it advances only while beating.
+  // beatTime is the time within the heartbeat in real milliseconds, as last drawn; it advances only while beating. `playback` is
+  // the clock it is read from, and the heart sounds are booked from the same clock (heartsound.mjs).
   let beating = false, realSpeed = false, beatTime = 0, shownPhase = -1;
+  const playback = createPlayback(() => performance.now() / 1000), scheduler = createSoundScheduler();
+  const sound = createHeartSound(globalThis.AudioContext || globalThis.webkitAudioContext);
+  let soundOn = false, pump = 0;
   // With the system setting "reduce motion" the beat plays once per press and stops at rest, instead of looping.
   const reduceMotion = matchMedia('(prefers-reduced-motion: reduce)');
   const playLabel = () => reduceMotion.matches ? '拍動を1回再生' : '拍動を再生';
@@ -206,25 +211,88 @@ try {
     // are closed (README, 血流の模式弁尖); the text says so instead of describing the whole period.
     $('beat-phase-valves').textContent = phase.valves + (mode === 'flow' && index > 0 ? ` この画面の弁尖が4つとも閉じるのは、この時期のうち約${index === 1 ? '0.01' : '0.02'}秒だけです。` : '');
   }
+  // Heart sounds. The sounds are booked a short time ahead from the playback clock; whenever the clock changes (play, stop,
+  // speed, hidden page, sound on or off) the booked sounds are cancelled and booked again from the current position, so a
+  // sound is never played twice or after a stop, and past sounds are never played back.
+  const soundLimit = () => reduceMotion.matches ? period : Infinity;
+  function bookSounds() {
+    if (soundOn && playback.running && !failed) sound.schedule(scheduler.take(playback, sound.now(), { latency: sound.latency(), limit: soundLimit() }));
+  }
+  function resyncSounds() {
+    sound.cancel();
+    clearInterval(pump);
+    pump = 0;
+    if (!soundOn || !playback.running) { scheduler.stop(); return; }
+    scheduler.start(playback, sound.now(), sound.latency());
+    bookSounds();
+    // A timer keeps the booking going while frames are late; the audio context plays what is booked on its own clock.
+    pump = setInterval(bookSounds, 50);
+  }
+  function setSoundButton() {
+    $('heart-sound').setAttribute('aria-pressed', String(soundOn));
+  }
+  function say(text) {
+    $('sound-status').hidden = !text;
+    $('sound-status').textContent = text;
+  }
+  // Sound off: the beat goes on from the same position on the page's own clock.
+  // After an interruption the audio clock has stopped, so the position is where it stopped; the page's clock takes over from there.
+  function soundOff(message = '') {
+    const at = playback.position();
+    soundOn = false;
+    playback.useSource(() => performance.now() / 1000, at);
+    resyncSounds();
+    setSoundButton();
+    say(message);
+  }
+  let watching = false;
+  $('heart-sound').onclick = async () => {
+    if (soundOn) { soundOff(); return; }
+    say('');
+    // Sound can start only from a tap: the context is created and resumed here, before anything is awaited.
+    try { await sound.open(); } catch { /* handled by the state check below */ }
+    if (sound.state !== 'running') { say('音声を開始できませんでした。もう一度押してください。端末が消音になっていないかも確認してください。'); return; }
+    if (!soundOn) {
+      if (!watching) {
+        watching = true;
+        sound.onStateChange(() => { if (soundOn && sound.state !== 'running') soundOff('音声が中断されたため、心音を切りました。もう一度押すと再開します。'); });
+      }
+      // The audio clock takes over at the current position, so the beat does not jump when the sound is turned on.
+      playback.useSource(() => sound.now());
+      soundOn = true;
+      resyncSounds();
+      setSoundButton();
+    }
+  };
+  $('heart-volume').oninput = () => sound.setVolume(Number($('heart-volume').value));
+  // Bring the drawn state (the walls, the particles, the phase text) to the state the clock is at. The beat is drawn at the clock's
+  // position, so a slow frame never delays it (or the sounds booked from the same clock). It is also done just before the clock
+  // stops (stop button, hidden page), so that the clock keeps its position: sounds up to that position have been booked, and a
+  // clock wound back to the last frame would book them again when it restarts. A pause stops the clock; it does not jump ahead
+  // afterwards. The particles catch up by at most one beat, which is enough for the ring to settle; a longer stall does not
+  // turn into a long run of steps.
+  function advanceBeat() {
+    // The particles advance to the same limited time as the beat: a frame that crosses the end of a one-beat play must not
+    // move them into the next beat.
+    const { next, done } = stepBeat(beatTime, Math.max(0, playback.position() - beatTime), reduceMotion.matches);
+    flow.advance(Math.max(beatTime, next - period), next);
+    flowStale = true;
+    beatTime = next;
+    if (done) {
+      beating = false;
+      beatTime = 0;
+      playback.pause();
+      playback.seek(0);
+      resyncSounds();
+      $('beat-play').textContent = playLabel();
+    }
+    beat.set(contraction(beatTime));
+    showPhase();
+  }
   function render(time) {
     const elapsed = previousTime ? (time - previousTime) / 1000 : 0;
     if (controls.autoRotate) controls.update(Math.min(elapsed, .05));
-    // The beat keeps to the clock on a slow device too; a long pause (previousTime reset to 0) does not jump ahead.
-    if (beating) {
-      // The particles advance to the same limited time as the beat: a frame that crosses the end of a one-beat play must not
-      // move them into the next beat.
-      const { next, done } = stepBeat(beatTime, Math.min(elapsed, .25) * 1000 / (realSpeed ? 1 : slowFactor), reduceMotion.matches);
-      flow.advance(beatTime, next);
-      flowStale = true;
-      beatTime = next;
-      if (done) {
-        beating = false;
-        beatTime = 0;
-        $('beat-play').textContent = playLabel();
-      }
-      beat.set(contraction(beatTime));
-      showPhase();
-    }
+    if (beating) advanceBeat();
     if (dots.visible && flowStale) drawFlow();
     renderer.render(scene, camera);
     updateLabels();
@@ -432,6 +500,9 @@ try {
   // Stopping keeps the current shape and phase, so a moment of the beat can be looked at.
   $('beat-play').onclick = () => {
     beating = !beating;
+    if (beating) playback.play();
+    else { advanceBeat(); playback.pause(); }
+    resyncSounds();
     $('beat-play').textContent = beating ? '拍動を止める' : playLabel();
     previousTime = 0;
     showPhase();
@@ -439,8 +510,11 @@ try {
   };
   $('beat-speed').onclick = () => {
     realSpeed = !realSpeed;
+    playback.setSlow(!realSpeed);
+    resyncSounds();
     $('beat-speed').setAttribute('aria-pressed', String(realSpeed));
   };
+  if (!sound.supported) { $('heart-sound').hidden = true; $('heart-volume-label').hidden = true; }
   function zoom(factor) {
     const offset = camera.position.clone().sub(controls.target).multiplyScalar(factor).clampLength(controls.minDistance, controls.maxDistance);
     camera.position.copy(controls.target).add(offset);
@@ -490,7 +564,12 @@ try {
       stopRotation();
       cancelAnimationFrame(frame);
       frame = 0;
-    } else requestRender();
+      // The beat and the sounds stop together and go on from the same position when the page is shown again.
+      if (beating) { advanceBeat(); playback.pause(); resyncSounds(); }
+    } else {
+      if (beating) { playback.play(); resyncSounds(); }
+      requestRender();
+    }
   });
   canvas.addEventListener('webglcontextlost', event => {
     event.preventDefault();
@@ -498,6 +577,12 @@ try {
     stopRotation();
     cancelAnimationFrame(frame);
     frame = 0;
+    // Nothing is drawn any more and the controls are disabled, so the beat and the sounds stop here too: they could not be
+    // stopped from the page afterwards.
+    beating = false;
+    playback.pause();
+    if (soundOn) soundOff(); else resyncSounds();
+    $('beat-play').textContent = playLabel();
     showError('3D表示が中断しました。ページを再読み込みしてください。説明と参考リンクは引き続き読めます。');
   });
   new ResizeObserver(resize).observe(canvas);
