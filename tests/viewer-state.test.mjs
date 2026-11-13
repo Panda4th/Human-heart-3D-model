@@ -1,9 +1,9 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import * as THREE from 'three';
-import { createCrossSection, fitDistance, modelSphere, pickHit, pickPart, removedByCut, selectableIn, TapGesture, wallIds } from '../src/viewer-state.mjs';
+import { createCrossSection, fitDistance, modelSphere, pickHit, removedByCut, selectableIn, TapGesture, wallIds, cutColor, fieldOfView } from '../src/viewer-state.mjs';
 import { createConduction, conductionDefinitions } from '../src/conduction.mjs';
-import { createAnatomy, decodeAnatomy, anatomyDefinitions, anatomyFormat, interiorDefinitions } from '../src/anatomy.mjs';
+import { createAnatomy, decodeAnatomy, anatomyDefinitions, anatomyFormat, interiorDefinitions, modelScale } from '../src/anatomy.mjs';
 import { readFileSync, mkdtempSync, writeFileSync } from 'node:fs';
 import { spawnSync } from 'node:child_process';
 import { tmpdir } from 'node:os';
@@ -20,10 +20,12 @@ test('tap selects, but drag out-and-back, pinch, cancel and mismatched pointer d
 });
 
 const bundle = readFileSync(new URL('../src/data/bodyparts3d-heart.bin', import.meta.url));
+// The id of the part pickHit finds, if any.
+const pickPart = (...args) => pickHit(...args)?.id;
 // Same structure as src/main.js.
 const heart = new THREE.Group(), exterior = new THREE.Group(), conduction = new THREE.Group(), parts = new Map();
 heart.add(exterior);
-const meta = createAnatomy(exterior, parts, bundle, .033);
+const meta = createAnatomy(exterior, parts, bundle, modelScale);
 exterior.add(conduction);
 createConduction(conduction, parts, meta.conduction);
 const bounds = modelSphere(heart);
@@ -39,7 +41,7 @@ test('model geometry is finite and each selectable group has geometry', () => {
 });
 for (const aspect of [.5, .8, 1, 1.6, 2.4]) test(`all model vertices fit reset views at aspect ${aspect}`, () => {
   for (const dir of [[0,.06,1], [0,.06,-1], [1,.06,0]]) {
-    const camera = new THREE.PerspectiveCamera(36, aspect, .1, 150);
+    const camera = new THREE.PerspectiveCamera(fieldOfView, aspect, .1, 150);
     camera.position.copy(bounds.center).add(new THREE.Vector3(...dir).normalize().multiplyScalar(fitDistance(bounds.radius, aspect)));
     camera.lookAt(bounds.center); camera.updateMatrixWorld();
     heart.traverse(o => {
@@ -104,12 +106,12 @@ test('the conduction overlay makes conduction selectable only on the cross-secti
 function sectionScene(constant) {
   const root = new THREE.Group(), ext = new THREE.Group(), map = new Map();
   root.add(ext);
-  createAnatomy(ext, map, bundle, .033);
+  createAnatomy(ext, map, bundle, modelScale);
   const plane = new THREE.Plane(new THREE.Vector3(0, 0, -1), constant);
-  const section = createCrossSection(ext, map, plane, 0xc98478);
+  const section = createCrossSection(ext, map, plane, cutColor);
   section.setEnabled(true);
   root.updateMatrixWorld(true);
-  const camera = new THREE.PerspectiveCamera(36, 1, .1, 150);
+  const camera = new THREE.PerspectiveCamera(fieldOfView, 1, .1, 150);
   camera.position.set(0, .06, 1).normalize().multiplyScalar(fitDistance(bounds.radius, 1)).add(bounds.center);
   camera.lookAt(bounds.center); camera.updateMatrixWorld();
   return { map, plane, section, camera, targets: [...map.values()] };
@@ -371,7 +373,7 @@ test('the right and left bundle branches are separate parts with their own colou
 
 test('removedByCut agrees with a vertex-by-vertex check for every part at several cut depths', () => {
   const root = new THREE.Group(), ext = new THREE.Group(), map = new Map(), cond = new THREE.Group();
-  root.add(ext); createAnatomy(ext, map, bundle, .033); ext.add(cond); createConduction(cond, map, meta.conduction);
+  root.add(ext); createAnatomy(ext, map, bundle, modelScale); ext.add(cond); createConduction(cond, map, meta.conduction);
   root.updateMatrixWorld(true);
   let gone = 0, kept = 0;
   for (const depth of [-1.8, -.6, 0, .3, .9, 1.5, 1.8]) {
@@ -397,12 +399,12 @@ test('removedByCut agrees with a vertex-by-vertex check for every part at severa
 
 test('a conduction label can sit behind an opaque wall in the interior view (the His bundle at slider -0.3, seen from the front)', () => {
   const root = new THREE.Group(), ext = new THREE.Group(), map = new Map(), cond = new THREE.Group();
-  root.add(ext); createAnatomy(ext, map, bundle, .033);
-  const plane = new THREE.Plane(new THREE.Vector3(0, 0, -1), .3), section = createCrossSection(ext, map, plane, 0xc98478); // slider -0.3
+  root.add(ext); createAnatomy(ext, map, bundle, modelScale);
+  const plane = new THREE.Plane(new THREE.Vector3(0, 0, -1), .3), section = createCrossSection(ext, map, plane, cutColor); // slider -0.3
   section.setEnabled(true);
   ext.add(cond); const anchors = createConduction(cond, map, meta.conduction);
   root.updateMatrixWorld(true);
-  const camera = new THREE.PerspectiveCamera(36, 1, .1, 150);
+  const camera = new THREE.PerspectiveCamera(fieldOfView, 1, .1, 150);
   camera.position.set(0, .06, 1).normalize().multiplyScalar(fitDistance(bounds.radius, 1)).add(bounds.center);
   camera.lookAt(bounds.center); camera.updateMatrixWorld();
   const occluders = [...map.values()].filter(g => g.userData.kind !== 'conduction');
@@ -497,7 +499,7 @@ test('His intervals are separately selectable, differently coloured, and share o
     assert.ok(new THREE.Vector3(...anchors.get(id)).distanceTo(curve.getPointAt(.5)) < 1e-6, id + ' anchor is on its own curve');
   }
   heart.updateMatrixWorld(true);
-  const camera = new THREE.PerspectiveCamera(36, 1, .1, 150);
+  const camera = new THREE.PerspectiveCamera(fieldOfView, 1, .1, 150);
   camera.position.set(0, .06, 1).normalize().multiplyScalar(fitDistance(bounds.radius, 1)).add(bounds.center);
   camera.lookAt(bounds.center); camera.updateMatrixWorld();
   for (const id of ['his', 'bhis']) {
@@ -565,10 +567,10 @@ test('pickHit gives the same answer as the earlier version, which raycast hidden
     return cut;
   };
   const root = new THREE.Group(), ext = new THREE.Group(), map = new Map(), cond = new THREE.Group();
-  root.add(ext); createAnatomy(ext, map, bundle, .033);
-  const plane = new THREE.Plane(new THREE.Vector3(0, 0, -1), 0), section = createCrossSection(ext, map, plane, 0xc98478);
+  root.add(ext); createAnatomy(ext, map, bundle, modelScale);
+  const plane = new THREE.Plane(new THREE.Vector3(0, 0, -1), 0), section = createCrossSection(ext, map, plane, cutColor);
   ext.add(cond); createConduction(cond, map, meta.conduction);
-  const camera = new THREE.PerspectiveCamera(36, 1, .1, 150);
+  const camera = new THREE.PerspectiveCamera(fieldOfView, 1, .1, 150);
   camera.position.set(0, .06, 1).normalize().multiplyScalar(fitDistance(bounds.radius, 1)).add(bounds.center);
   camera.lookAt(bounds.center); camera.updateMatrixWorld();
   const ray = new THREE.Raycaster();

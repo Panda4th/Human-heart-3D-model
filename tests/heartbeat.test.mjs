@@ -2,16 +2,16 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import * as THREE from 'three';
 import { readFileSync } from 'node:fs';
-import { createAnatomy } from '../src/anatomy.mjs';
+import { createAnatomy, modelScale } from '../src/anatomy.mjs';
 import { createConduction } from '../src/conduction.mjs';
-import { createCrossSection } from '../src/viewer-state.mjs';
+import { createCrossSection, cutColor } from '../src/viewer-state.mjs';
 import { contraction, createBeat, cycle, isovolumic, period, phaseAt, phases, valvesAt } from '../src/heartbeat.mjs';
 
 // Same structure as src/main.js: the beat is created after the cross-section and the conduction overlay.
 const heart = new THREE.Group(), exterior = new THREE.Group(), conduction = new THREE.Group(), parts = new Map();
 heart.add(exterior);
-const meta = createAnatomy(exterior, parts, readFileSync(new URL('../src/data/bodyparts3d-heart.bin', import.meta.url)), .033);
-createCrossSection(exterior, parts, new THREE.Plane(new THREE.Vector3(0, 0, -1), .6), 0xc98478);
+const meta = createAnatomy(exterior, parts, readFileSync(new URL('../src/data/bodyparts3d-heart.bin', import.meta.url)), modelScale);
+createCrossSection(exterior, parts, new THREE.Plane(new THREE.Vector3(0, 0, -1), .6), cutColor);
 exterior.add(conduction);
 createConduction(conduction, parts, meta.conduction);
 const meshOf = id => parts.get(id).children.find(o => o.isMesh);

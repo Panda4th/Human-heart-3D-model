@@ -18,7 +18,7 @@ export const soundBeats = { first: cycle.atrialSystole, second: cycle.atrialSyst
 export const lookahead = 2;
 // A sound that should already have started more than this many seconds ago is dropped, never played late or in a bunch.
 export const lateLimit = .04;
-export const maxLatency = .5;
+const maxLatency = .5;
 
 // Sounds whose beat time lies in [from, to), in order. The beat repeats every `period`.
 export function soundsBetween(from, to) {
@@ -44,7 +44,6 @@ export function createPlayback(source) {
   return {
     get running() { return running; },
     get slow() { return slow; },
-    now: () => read(),
     position: (at = read()) => position(at),
     // Source time at which the clock reaches `beat` (only while running).
     sourceTime: beat => anchorSource + (beat - anchorBeat) / msPerSecond(),
@@ -65,7 +64,6 @@ export function createPlayback(source) {
 export function createSoundScheduler() {
   let until = null;
   return {
-    get active() { return until !== null; },
     // Begin booking at the current position of the clock. Sounds that would have to be booked in the past (within `latency`
     // of the position) are skipped: they are already on their way to the listener, or cannot be early. Booking them again
     // after a stop would sound them twice.
@@ -103,7 +101,6 @@ export function createHeartSound(Context) {
   };
   return {
     supported,
-    get context() { return context; },
     get state() { return context ? context.state : 'closed'; },
     // Create the context, if needed, and ask it to run. Call it inside the tap that turns the sound on.
     open() {

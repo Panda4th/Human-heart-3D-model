@@ -1,12 +1,12 @@
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { createConduction } from './conduction.mjs';
-import { createAnatomy } from './anatomy.mjs';
+import { createAnatomy, modelScale } from './anatomy.mjs';
 import { createFlow } from './flow.mjs';
 import { contraction, createBeat, period, phaseAt, phases, stepBeat } from './heartbeat.mjs';
 import { createHeartSound, createPlayback, createSoundScheduler } from './heartsound.mjs';
 import anatomyData from './data/bodyparts3d-heart.bin';
-import { createCrossSection, fitDistance, modelSphere, pickHit, removedByCut, selectableIn, TapGesture } from './viewer-state.mjs';
+import { createCrossSection, cutColor, fieldOfView, fitDistance, modelSphere, pickHit, removedByCut, selectableIn, TapGesture } from './viewer-state.mjs';
 
 const canvas = document.querySelector('canvas');
 const $ = id => document.getElementById(id);
@@ -37,7 +37,7 @@ try {
   renderer.setClearColor(0x000000, 0);
   renderer.localClippingEnabled = true;
   const scene = new THREE.Scene();
-  const camera = new THREE.PerspectiveCamera(36, 1, .1, 150);
+  const camera = new THREE.PerspectiveCamera(fieldOfView, 1, .1, 150);
   const controls = new OrbitControls(camera, canvas);
   // On-demand rendering avoids spending battery while the model is still.
   controls.enableDamping = false;
@@ -53,11 +53,11 @@ try {
   const heart = new THREE.Group(), exterior = new THREE.Group(), conduction = new THREE.Group(), parts = new Map();
   scene.add(heart);
   heart.add(exterior);
-  const meta = createAnatomy(exterior, parts, anatomyData, .033);
+  const meta = createAnatomy(exterior, parts, anatomyData, modelScale);
   // Interior view: a front-to-back cut fixed to the heart. Points with z > constant are removed.
   // Read the slider so a value restored by the browser matches the drawn cut.
   const cutPlane = new THREE.Plane(new THREE.Vector3(0, 0, -1), -Number($('cut-depth').value));
-  const crossSection = createCrossSection(exterior, parts, cutPlane, 0xc98478);
+  const crossSection = createCrossSection(exterior, parts, cutPlane, cutColor);
   exterior.add(conduction);
   const labelAnchors = createConduction(conduction, parts, meta.conduction);
   // Created after the cross-section and the conduction overlay so that it deforms their geometry too.
@@ -94,12 +94,12 @@ try {
   exterior.add(dots);
   // Schematic valve leaflets (valves.mjs) of the flow view. They open and close with the particles' valve windows and are
   // moved by the same displacement as the particles. The valves of the source data are not drawn in this view.
-  const leafletColors = { tricuspid: 0xd8c39d, mitral: 0xead2b0, aortic: 0xf3e1c4, pulmonary: 0xbfd6d0 };
+  const leafletPart = { tricuspid: 'tv', mitral: 'mv', aortic: 'aov', pulmonary: 'pov' }; // the colours are those of the source valves
   const leaflets = Object.entries(flow.valves).map(([name, valve]) => {
     const geometry = new THREE.BufferGeometry();
     geometry.setAttribute('position', new THREE.BufferAttribute(new Float32Array(valve.vertexCount * 3), 3));
     geometry.setIndex(new THREE.BufferAttribute(valve.indices, 1));
-    const mesh = new THREE.Mesh(geometry, new THREE.MeshStandardMaterial({ color: leafletColors[name], roughness: .6, metalness: 0, side: THREE.DoubleSide }));
+    const mesh = new THREE.Mesh(geometry, new THREE.MeshStandardMaterial({ color: parts.get(leafletPart[name]).userData.color, roughness: .6, metalness: 0, side: THREE.DoubleSide }));
     mesh.userData.helper = true;
     mesh.frustumCulled = false;
     mesh.visible = false;
@@ -135,7 +135,7 @@ try {
     flow: ['04 / FLOW', '血のめぐりを、追う。', 'lv'],
   };
   controls.target.copy(bounds.center);
-  let mode = 'exterior', selected = 'lv', frame = 0, previousTime = 0, failed = false, overlay = false, flowOverlay = false, pick = null;
+  let mode = 'exterior', selected = 'lv', frame = 0, previousTime = 0, failed = false, conductionOverlay = false, flowOverlay = false, pick = null;
   // beatTime is the time within the heartbeat in real milliseconds, as last drawn; it advances only while beating. `playback` is
   // the clock it is read from, and the heart sounds are booked from the same clock (heartsound.mjs).
   let beating = false, realSpeed = false, beatTime = 0, shownPhase = -1;
@@ -144,10 +144,10 @@ try {
   let soundOn = false, pump = 0;
   // With the system setting "reduce motion" the beat plays once per press and stops at rest, instead of looping.
   const reduceMotion = matchMedia('(prefers-reduced-motion: reduce)');
-  const playLabel = () => reduceMotion.matches ? '拍動を1回再生' : '拍動を再生';
-  $('beat-play').textContent = playLabel();
-  reduceMotion.addEventListener('change', () => { if (!beating) $('beat-play').textContent = playLabel(); });
-  const selectable = group => selectableIn(group.userData, mode, overlay);
+  const setPlayButton = () => { $('beat-play').textContent = beating ? '拍動を止める' : reduceMotion.matches ? '拍動を1回再生' : '拍動を再生'; };
+  setPlayButton();
+  reduceMotion.addEventListener('change', setPlayButton);
+  const selectable = group => selectableIn(group.userData, mode, conductionOverlay);
   let fittedDistance = 12, userZoom = 1;
   const gesture = new TapGesture();
   const ray = new THREE.Raycaster();
@@ -174,26 +174,26 @@ try {
     const hit = pickHit(ray, occluders, [cutPlane], crossSection.solids);
     return Boolean(hit) && hit.distance < distance - .04; // .04 viewer units is about 1.2 mm: the anchor sits on a cavity surface
   }
+  // Put an element at the screen position of a world point (percent of the canvas). Returns whether the point is outside the view.
+  function placeOnScreen(el, world) {
+    const p = world.clone().project(camera);
+    el.style.left = `${(p.x + 1) * 50}%`;
+    el.style.top = `${(1 - p.y) * 50}%`;
+    return Math.abs(p.x) > 1 || Math.abs(p.y) > 1 || Math.abs(p.z) > 1;
+  }
   function updateLabels() {
     for (const [id, anchor] of labelAnchors) {
       const world = conduction.localToWorld(new THREE.Vector3(...beat.displace(anchor)));
-      const p = world.clone().project(camera);
-      const el = labels.get(id);
+      const el = labels.get(id), offScreen = placeOnScreen(el, world);
       // Show one selected label to avoid overlaps in small viewports, and none for a point the cut removed.
       const cutAway = mode === 'interior' && cutPlane.distanceToPoint(world) < 0;
-      el.hidden = !conduction.visible || cutAway || selected !== id || Math.abs(p.x) > 1 || Math.abs(p.y) > 1 || Math.abs(p.z) > 1;
+      el.hidden = !conduction.visible || cutAway || selected !== id || offScreen;
       el.classList.toggle('behind', !el.hidden && behindSurface(world));
-      el.style.left = `${(p.x + 1) * 50}%`;
-      el.style.top = `${(1 - p.y) * 50}%`;
     }
     // The ring where the cut face was clicked.
     const mark = $('pick-mark');
-    if (pick) {
-      const p = pick.point.clone().project(camera);
-      mark.hidden = Math.abs(p.x) > 1 || Math.abs(p.y) > 1 || Math.abs(p.z) > 1;
-      mark.style.left = `${(p.x + 1) * 50}%`;
-      mark.style.top = `${(1 - p.y) * 50}%`;
-    } else mark.hidden = true;
+    if (pick) mark.hidden = placeOnScreen(mark, pick.point);
+    else mark.hidden = true;
   }
   function requestRender() {
     if (!frame && !document.hidden && !failed) frame = requestAnimationFrame(render);
@@ -284,10 +284,17 @@ try {
       playback.pause();
       playback.seek(0);
       resyncSounds();
-      $('beat-play').textContent = playLabel();
+      setPlayButton();
     }
     beat.set(contraction(beatTime));
     showPhase();
+  }
+  // Stop the beat clock where the picture is: draw the beat at the clock's position, stop the clock, and book the sounds again.
+  // The order matters (see advanceBeat).
+  function pauseBeat() {
+    advanceBeat();
+    playback.pause();
+    resyncSounds();
   }
   function render(time) {
     const elapsed = previousTime ? (time - previousTime) / 1000 : 0;
@@ -309,13 +316,14 @@ try {
     $('rotate').setAttribute('aria-pressed', 'false');
     previousTime = 0;
   }
+  const setOrientation = name => { $('orientation').textContent = `${name} ／ 左右の名称は身体を基準`; };
   function setView(view = 'front') {
     stopRotation();
     const direction = view === 'back' ? [0, .06, -1] : view === 'left' ? [1, .06, 0] : [0, .06, 1];
     camera.position.copy(controls.target).add(new THREE.Vector3(...direction).normalize().multiplyScalar(fittedDistance));
     userZoom = 1;
     controls.update();
-    $('orientation').textContent = ({front: '前面', back: '背面', left: '身体の左側'})[view] + ' ／ 左右の名称は身体を基準';
+    setOrientation(({ front: '前面', back: '背面', left: '身体の左側' })[view]);
     requestRender();
   }
   function resize() {
@@ -378,9 +386,10 @@ try {
     $('description').textContent = data.desc;
     // The description box scrolls on its own on a phone; a new part must start at its top.
     document.querySelector('.detail').scrollTop = 0;
-    $('step-count').textContent = mode === 'conduction' ? `${stageOrder.indexOf(id) + 1} / ${stageOrder.length}` : '';
-    $('previous').disabled = stageOrder.indexOf(id) <= 0;
-    $('next').disabled = stageOrder.indexOf(id) >= stageOrder.length - 1;
+    const step = stageOrder.indexOf(id);
+    $('step-count').textContent = mode === 'conduction' ? `${step + 1} / ${stageOrder.length}` : '';
+    $('previous').disabled = step <= 0;
+    $('next').disabled = step >= stageOrder.length - 1;
     updateCutNotice();
     requestRender();
   }
@@ -403,11 +412,11 @@ try {
   // Conduction is shown in its own view, and on the cross-section when the overlay is on.
   function showConduction() {
     const interior = mode === 'interior';
-    conduction.visible = mode === 'conduction' || (interior && overlay);
+    conduction.visible = mode === 'conduction' || (interior && conductionOverlay);
     conductionCut.constant = interior ? cutPlane.constant : keepAll;
     for (const group of parts.values()) group.userData.button.hidden = !selectable(group);
     $('conduction-note').hidden = !conduction.visible;
-    $('interior-conduction').setAttribute('aria-pressed', String(overlay));
+    $('interior-conduction').setAttribute('aria-pressed', String(conductionOverlay));
     updateCutNotice();
   }
   // Particles are shown in the flow view, and on the cross-section when their overlay is on (the leaflets of the source data stay).
@@ -426,7 +435,7 @@ try {
     crossSection.setEnabled(interior);
     showConduction();
     // The walls are almost transparent where something inside them is shown: the conduction system and the blood.
-    const conductionView = mode === 'conduction' || mode === 'flow';
+    const seeThrough = mode === 'conduction' || mode === 'flow';
     showFlowOverlay();
     shownPhase = -1;
     if (!$('beat-phase').hidden) showPhase();
@@ -434,10 +443,10 @@ try {
     for (const group of parts.values()) {
       if (group.userData.kind !== 'exterior') continue;
       group.traverse(object => {
-        if (!object.isMesh || object.userData.crossSection || object.material.transparent === conductionView) return;
-        object.material.transparent = conductionView;
-        object.material.opacity = conductionView ? .12 : 1;
-        object.material.depthWrite = !conductionView;
+        if (!object.isMesh || object.userData.crossSection || object.material.transparent === seeThrough) return;
+        object.material.transparent = seeThrough;
+        object.material.opacity = seeThrough ? .12 : 1;
+        object.material.depthWrite = !seeThrough;
         object.material.needsUpdate = true;
       });
     }
@@ -474,7 +483,7 @@ try {
     applyDepth();
   };
   $('interior-conduction').onclick = () => {
-    overlay = !overlay;
+    conductionOverlay = !conductionOverlay;
     showConduction();
     // Turning the overlay off must not leave a hidden conduction part selected.
     if (!selectable(parts.get(selected))) select(modeText.interior[2]);
@@ -485,14 +494,14 @@ try {
     showFlowOverlay();
     requestRender();
   };
-    $('previous').onclick = () => select(stageOrder[Math.max(0, stageOrder.indexOf(selected) - 1)]);
+  $('previous').onclick = () => select(stageOrder[Math.max(0, stageOrder.indexOf(selected) - 1)]);
   $('next').onclick = () => select(stageOrder[Math.min(stageOrder.length - 1, stageOrder.indexOf(selected) + 1)]);
   for (const view of ['front', 'back', 'left']) $(`view-${view}`).onclick = () => setView(view);
   $('reset').onclick = () => setView('front');
   $('rotate').onclick = () => {
     controls.autoRotate = !controls.autoRotate;
     // The camera now moves away from any named view, so the label must not keep naming one.
-    if (controls.autoRotate) $('orientation').textContent = '自由視点 ／ 左右の名称は身体を基準';
+    if (controls.autoRotate) setOrientation('自由視点');
     $('rotate').setAttribute('aria-pressed', String(controls.autoRotate));
     previousTime = 0;
     requestRender();
@@ -500,11 +509,9 @@ try {
   // Stopping keeps the current shape and phase, so a moment of the beat can be looked at.
   $('beat-play').onclick = () => {
     beating = !beating;
-    if (beating) playback.play();
-    else { advanceBeat(); playback.pause(); }
-    resyncSounds();
-    $('beat-play').textContent = beating ? '拍動を止める' : playLabel();
-    previousTime = 0;
+    if (beating) { playback.play(); resyncSounds(); }
+    else pauseBeat();
+    setPlayButton();
     showPhase();
     requestRender();
   };
@@ -535,12 +542,13 @@ try {
     ray.setFromCamera(new THREE.Vector2((event.clientX - rect.left) / rect.width * 2 - 1, -(event.clientY - rect.top) / rect.height * 2 + 1), camera);
     // Outside the conduction view, unselectable vessels stay in the targets so they still block clicks.
     const targets = mode === 'conduction' ? conduction.children : [...parts.values()].filter(g => g.userData.kind !== 'conduction' || conduction.visible);
-    const hit = pickHit(ray, targets, mode === 'interior' ? [cutPlane] : [], mode === 'interior' ? crossSection.solids : []);
+    const cutView = mode === 'interior';
+    const hit = pickHit(ray, targets, cutView ? [cutPlane] : [], cutView ? crossSection.solids : []);
     if (hit) select(hit.id, hit);
   });
   controls.addEventListener('start', () => {
     stopRotation();
-    $('orientation').textContent = '自由視点 ／ 左右の名称は身体を基準';
+    setOrientation('自由視点');
   });
   canvas.addEventListener('keydown', event => {
     if (!['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', '+', '-', '=', 'Home'].includes(event.key)) return;
@@ -557,7 +565,7 @@ try {
     spherical.makeSafe();
     camera.position.copy(controls.target).add(new THREE.Vector3().setFromSpherical(spherical));
     controls.update();
-    $('orientation').textContent = '自由視点 ／ 左右の名称は身体を基準';
+    setOrientation('自由視点');
   });
   document.addEventListener('visibilitychange', () => {
     if (document.hidden) {
@@ -565,7 +573,7 @@ try {
       cancelAnimationFrame(frame);
       frame = 0;
       // The beat and the sounds stop together and go on from the same position when the page is shown again.
-      if (beating) { advanceBeat(); playback.pause(); resyncSounds(); }
+      if (beating) pauseBeat();
     } else {
       if (beating) { playback.play(); resyncSounds(); }
       requestRender();
@@ -582,7 +590,7 @@ try {
     beating = false;
     playback.pause();
     if (soundOn) soundOff(); else resyncSounds();
-    $('beat-play').textContent = playLabel();
+    setPlayButton();
     showError('3D表示が中断しました。ページを再読み込みしてください。説明と参考リンクは引き続き読めます。');
   });
   new ResizeObserver(resize).observe(canvas);
