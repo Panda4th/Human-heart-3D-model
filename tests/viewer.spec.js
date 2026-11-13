@@ -717,7 +717,8 @@ test('stopping and starting the beat many times never sounds a heart sound twice
   await context.close();
 });
 
-// Review of PR #44, in a fixed order: the time is the page's fake clock, so every run is the same. At the real speed the sounds are
+// Review of PR #44, in a fixed order: the time is the page's fake clock, stopped with pauseAt() once the page has loaded (install()
+// alone lets real time run between two commands) and moved only by runFor(), so every run is the same. At the real speed the sounds are
 // at 100 and 370 ms of each 800 ms beat. The beat is stopped 5 ms after each of the first four sounds started, which is after the
 // last frame drawn before the stop in most cases (frames are 16 ms apart). A clock wound back to the last frame booked such a
 // sound again on restart. The sounds heard must be exactly those the beat has passed, once each.
@@ -728,22 +729,30 @@ for (const how of ['stop button', 'hidden page']) test(`a sound that started jus
   await page.clock.install({ time: 0 });
   await page.goto(url);
   await expect(page.locator('html')).toHaveAttribute('data-ready', 'true');
+  await page.clock.pauseAt(60000);
   const click = id => page.evaluate(i => document.getElementById(i).click(), id);
+  const now = () => page.evaluate(() => performance.now());
   const hide = hidden => page.evaluate(h => { Object.defineProperty(document, 'hidden', { value: h, configurable: true }); document.dispatchEvent(new Event('visibilitychange')); }, hidden);
   await click('beat-speed');
   await click('heart-sound');
   await expect(page.locator('#heart-sound')).toHaveAttribute('aria-pressed', 'true');
+  // `running` is the time the beat has run, from the page's own clock, not from what this test intends: every stop must fall at
+  // the planned beat time, so that the 5 ms after each sound is real.
+  let running = 0, since = await now();
   await click('beat-play');
   // Beat time of each stop: 5 ms after the sounds at 100, 370, 900 and 1170 ms.
-  let position = 0;
   for (const stopAt of [105, 375, 905, 1175]) {
-    await page.clock.runFor(stopAt - position);
-    position = stopAt;
+    await page.clock.runFor(stopAt - running);
+    const stoppedAt = await now();
+    running += stoppedAt - since;
+    expect(running, 'the stop falls at the planned beat time').toBe(stopAt);
     if (how === 'stop button') await click('beat-play'); else await hide(true);
     await page.clock.runFor(10);
+    since = await now();
     if (how === 'stop button') await click('beat-play'); else await hide(false);
   }
   await page.clock.runFor(125);
+  expect(await now(), 'time moved only by runFor').toBe(60000 + 105 + 270 + 530 + 270 + 4 * 10 + 125);
   // The beat has run 1300 ms: the sounds at 100, 370, 900 and 1170 ms, once each (the next one, at 1700 ms, is booked ahead
   // but not heard).
   const heard = await page.evaluate(() => window.audible().filter(v => v.at <= window.lastContext.currentTime).map(v => v.hz));
