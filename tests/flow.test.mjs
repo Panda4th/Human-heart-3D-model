@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import * as THREE from 'three';
 import { readFileSync } from 'node:fs';
-import { anatomyDefinitions, createAnatomy, decodeAnatomy, interiorDefinitions } from '../src/anatomy.mjs';
+import { anatomyDefinitions, createAnatomy, decodeAnatomy, interiorDefinitions, modelScale } from '../src/anatomy.mjs';
 import { contraction, createBeat, period } from '../src/heartbeat.mjs';
 import { createFlow } from '../src/flow.mjs';
 import { leafletDistance, valveNames, valveSettings } from '../src/valves.mjs';
@@ -192,7 +192,7 @@ test('route points are evenly spaced and bend gently', () => {
 test('moved by the heartbeat displacement together with the cavities and vessels, the routes stay inside; left at rest they do not', () => {
   const heart = new THREE.Group(), exterior = new THREE.Group(), parts = new Map();
   heart.add(exterior);
-  createAnatomy(exterior, parts, new Uint8Array(bytes), .033);
+  createAnatomy(exterior, parts, new Uint8Array(bytes), modelScale);
   const beat = createBeat(exterior, parts);
   const moveMesh = m => { const positions = []; for (let i = 0; i < m.positions.length; i += 3) positions.push(...beat.displace([m.positions[i], m.positions[i + 1], m.positions[i + 2]])); return { positions, indices: m.indices }; };
   // The peaks, and the halfway states the particles pass through (the displacement is not linear in position, so the peaks do not cover them).
@@ -224,7 +224,7 @@ test('moved by the heartbeat displacement together with the cavities and vessels
 test('moved by the heartbeat displacement together, no particle comes within a particle radius of a leaflet', () => {
   const heart = new THREE.Group(), exterior = new THREE.Group(), parts = new Map();
   heart.add(exterior);
-  createAnatomy(exterior, parts, new Uint8Array(bytes), .033);
+  createAnatomy(exterior, parts, new Uint8Array(bytes), modelScale);
   const beat = createBeat(exterior, parts);
   const flowState = createFlow(flow), out = [0, 0, 0], at = [0, 0, 0];
   const rest = Object.fromEntries(valveNames.map(name => [name, new Float64Array(flowState.valves[name].vertexCount * 3)]));

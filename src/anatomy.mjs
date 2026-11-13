@@ -45,7 +45,10 @@ export const interiorDefinitions = [
   ['pov', '肺動脈弁', 'Pulmonary valve', '右心室と肺動脈の間の弁。半月形の3枚の弁尖からなり、右心室が緩むときに肺動脈から血液が戻るのを防ぎます。', 0xbfd6d0],
   ['pm', '乳頭筋', 'Papillary muscles', '心室の内壁から突き出た筋肉。腱索を介して僧帽弁と三尖弁の弁尖を支え、心室が縮むときに弁尖が心房側へ反り返るのを防ぎます。元データにあるのは右心室の3つと、左心室の外側乳頭筋（前外側の頭を含む）だけです。左心室にはふつう前と後ろの2つがありますが、後ろの乳頭筋は元データにないため表示していません。', 0xd27a6c],
 ];
-const chambers = ['lv', 'rv', 'ra', 'la'];
+// The four heart chambers (the parts whose walls the cross-section fills and the beat moves).
+export const chambers = ['lv', 'rv', 'ra', 'la'];
+// Viewer units per millimetre of the BodyParts3D meshes.
+export const modelScale = .033;
 
 export function createAnatomy(parent, parts, bytes, scale) {
   const { meta, parts: meshes } = decodeAnatomy(bytes);

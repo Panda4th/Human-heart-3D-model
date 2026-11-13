@@ -1,5 +1,5 @@
-import { cycle, isovolumic, period, valvesAt } from './heartbeat.mjs';
-import { createValves, leafletDistance, partnerValve, valveKind, valveNames, valveOfRoute } from './valves.mjs';
+import { cycle, isovolumic, period, timeInBeat, valvesAt } from './heartbeat.mjs';
+import { createValves, leafletDistance, partnerValve, valveKind, valveKinds, valveNames, valveOfRoute } from './valves.mjs';
 
 // Schematic blood-flow particles. Kept free of WebGL so Node tests can check it.
 //
@@ -23,6 +23,8 @@ import { createValves, leafletDistance, partnerValve, valveKind, valveNames, val
 export const flowSettings = { gap: 4, ejectionFraction: .6, atrialShare: .25, spacing: 6.5, step: 4, warmUp: 4, ramp: 10 };
 
 const clamp01 = x => Math.min(1, Math.max(0, x));
+// Position within the route of the unwrapped position u (the route is a closed ring of the given length).
+const wrap = (u, length) => u - Math.floor(u / length) * length;
 const ejection = { from: cycle.atrialSystole + isovolumic.contraction, to: cycle.atrialSystole + cycle.ventricularSystole };
 const filling = { from: ejection.to + isovolumic.relaxation, to: period };
 // Times within a beat at which a valve opens or closes or the atrial speed changes. An integration step never crosses one, so
@@ -73,7 +75,7 @@ function prepareRoute(route, settings, valves) {
   // waits for a closed valve, one clearance (valves.mjs, zoneUp) upstream of that plane along the valve's axis. Both are the
   // crossing of the route with a plane perpendicular to the axis that lies nearest to the centre of the valve's opening.
   const zone = {}, valve = {};
-  for (const kind of ['atrioventricular', 'arterial']) {
+  for (const kind of valveKinds) {
     valve[kind] = valveOfRoute(route.side, kind);
     const v = valves[valve[kind]], near = arcNearest(points, cum, v.center).arc;
     zone[kind] = { center: arcAtAxial(points, cum, v, 0, near), lo: arcAtAxial(points, cum, v, -(v.zoneUp + .1), near), hi: arcAtAxial(points, cum, v, v.lift + v.zoneUp, near) };
@@ -94,23 +96,18 @@ function prepareRoute(route, settings, valves) {
 // Through a valve's zone (the stretch the leaflets reach, from the wall in front of it to `hi`) a particle is never slower than
 // in the ejection: blood speeds up through the opening (a display value), and the zone is cleared soon after the valve's window
 // ends, so that the leaflets can close without waiting for the slow flow behind it.
-function speedAt(r, p, ms, valves) {
-  const base = baseSpeedAt(r, p, ms, valves);
-  for (const kind of ['atrioventricular', 'arterial']) if (p >= r.zone[kind].lo && p <= r.zone[kind].hi) return Math.max(base, r.speed.ejection);
+function speedAt(r, p, ms, open) {
+  const base = baseSpeedAt(r, p, ms, open);
+  for (const kind of valveKinds) if (p >= r.zone[kind].lo && p <= r.zone[kind].hi) return Math.max(base, r.speed.ejection);
   return base;
 }
-function baseSpeedAt(r, p, ms, valves) {
+// Speed of a particle in the ventricle's inflow: the atrium's push while the atrium contracts, otherwise the passive filling.
+const inflowSpeed = (r, ms) => timeInBeat(ms) < cycle.atrialSystole ? r.speed.atrial : r.speed.passive;
+function baseSpeedAt(r, p, ms, open) {
   // While the arterial valve is open the column of blood in the artery is pushed on at the speed of the ejection.
-  if (p >= r.arterial) return valves.arterial ? r.speed.ejection : r.speed.stream;
-  if (p >= r.av) {
-    if (valves.arterial) return r.speed.ejection;
-    const t = ((ms % period) + period) % period;
-    return t < cycle.atrialSystole ? r.speed.atrial : r.speed.passive;
-  }
-  if (p >= r.atrium && valves.atrioventricular) {
-    const t = ((ms % period) + period) % period;
-    return t < cycle.atrialSystole ? r.speed.atrial : r.speed.passive;
-  }
+  if (p >= r.arterial) return open.arterial ? r.speed.ejection : r.speed.stream;
+  if (p >= r.av) return open.arterial ? r.speed.ejection : inflowSpeed(r, ms);
+  if (p >= r.atrium && open.atrioventricular) return inflowSpeed(r, ms);
   return r.speed.stream;
 }
 
@@ -131,9 +128,9 @@ export function createFlow(flow, overrides = {}) {
   // closed: a wall at the zone's start in every lap, in front of which the particles wait. A particle already inside a zone is
   // not held (the zone is cleared before the leaflets move).
   const gate = (r, u, next, admit, inside) => {
-    const p = u - Math.floor(u / r.length) * r.length, base = u - p;
+    const p = wrap(u, r.length), base = u - p;
     let limit = next;
-    for (const kind of ['atrioventricular', 'arterial']) {
+    for (const kind of valveKinds) {
       // The atrioventricular valve also keeps the ventricular column out of its zone: a particle goes in only if, with the column
       // packed against the closed arterial valve at the gap, it would still come to rest beyond the zone. Otherwise the last
       // particle of a full column rests inside the zone, and the leaflets cannot close until the ejection has moved it on.
@@ -155,11 +152,11 @@ export function createFlow(flow, overrides = {}) {
   const reach = 14, pose = {}, spot = [0, 0, 0];
   function keepsClearance(name, e) {
     const valve = valves[name], positions = valve.pose(e, pose[name] ??= new Float64Array(valve.vertexCount * 3));
-    for (const r of state) for (const kind of ['atrioventricular', 'arterial']) {
+    for (const r of state) for (const kind of valveKinds) {
       if (r.valve[kind] !== name) continue;
       const centre = r.zone[kind].center;
       for (let i = 0; i < r.n; i++) {
-        const p = r.u[i] - Math.floor(r.u[i] / r.length) * r.length;
+        const p = wrap(r.u[i], r.length);
         if (Math.abs(p - centre) > reach) continue;
         if (leafletDistance(valve, positions, pointAt(r, p, spot)) < valve.zoneUp) return false;
       }
@@ -169,10 +166,10 @@ export function createFlow(flow, overrides = {}) {
   // Whether a particle is on the upstream side of the valve's plane, between the wall and the plane. It is moving on towards the
   // leaflets, so the leaflets must not close until it is through.
   function upstreamOccupied(name) {
-    for (const r of state) for (const kind of ['atrioventricular', 'arterial']) {
+    for (const r of state) for (const kind of valveKinds) {
       if (r.valve[kind] !== name) continue;
       const { lo, center } = r.zone[kind];
-      for (let i = 0; i < r.n; i++) { const p = r.u[i] - Math.floor(r.u[i] / r.length) * r.length; if (p >= lo && p < center) return true; }
+      for (let i = 0; i < r.n; i++) { const p = wrap(r.u[i], r.length); if (p >= lo && p < center) return true; }
     }
     return false;
   }
@@ -196,12 +193,12 @@ export function createFlow(flow, overrides = {}) {
     const binary = valvesAt(ms + dt / 2);
     for (const r of state) {
       // Admission is judged on the leaflets as they are at the start of the step.
-      const admit = Object.fromEntries(['atrioventricular', 'arterial'].map(kind => [kind, binary[kind] && openness[r.valve[kind]] >= 1]));
+      const admit = Object.fromEntries(valveKinds.map(kind => [kind, binary[kind] && openness[r.valve[kind]] >= 1]));
       // How many particles are in the ventricular column: past the atrioventricular wall and not past the arterial wall.
       let inside = 0;
-      for (let i = 0; i < r.n; i++) { const p = r.u[i] - Math.floor(r.u[i] / r.length) * r.length; if (p > r.zone.atrioventricular.lo && p <= r.zone.arterial.lo + 1e-3) inside++; }
+      for (let i = 0; i < r.n; i++) { const p = wrap(r.u[i], r.length); if (p > r.zone.atrioventricular.lo && p <= r.zone.arterial.lo + 1e-3) inside++; }
       for (let i = 0; i < r.n; i++) {
-        const u = r.u[i], p = u - Math.floor(u / r.length) * r.length;
+        const u = r.u[i], p = wrap(u, r.length);
         let next = u + speedAt(r, p, ms + dt / 2, binary) * dt;
         next = gate(r, u, next, admit, inside);
         const leader = i === 0 ? r.u[r.n - 1] + r.length : r.u[i - 1];
@@ -214,7 +211,7 @@ export function createFlow(flow, overrides = {}) {
   // Move the particles from beat time `from` to `to` (milliseconds). `to` before `from` moves nothing.
   function advance(from, to) {
     for (let ms = from; ms < to;) {
-      const t = ((ms % period) + period) % period, until = (boundaries.find(b => b > t + 1e-9) ?? period + boundaries[0]) - t;
+      const t = timeInBeat(ms), until = (boundaries.find(b => b > t + 1e-9) ?? period + boundaries[0]) - t;
       const dt = Math.min(settings.step, to - ms, until);
       integrate(ms, dt);
       ms += dt;
@@ -226,14 +223,14 @@ export function createFlow(flow, overrides = {}) {
   const offsets = [];
   let total = 0;
   for (const r of state) { offsets.push(total); total += r.n; }
+  // Index of the route that particle k (counted over all routes) belongs to.
+  const routeIndex = k => { let ri = state.length - 1; while (offsets[ri] > k) ri--; return ri; };
 
   // Position of particle k (counted over all routes) in the millimetre frame of the parts, written to out, and its size
   // factor: it shrinks towards zero within `fade` mm of the ends of the route, where the ring wraps around.
   const fade = 12;
   function sample(k, out) {
-    let ri = state.length - 1;
-    while (offsets[ri] > k) ri--;
-    const r = state[ri], u = r.u[k - offsets[ri]], p = u - Math.floor(u / r.length) * r.length;
+    const ri = routeIndex(k), r = state[ri], u = r.u[k - offsets[ri]], p = wrap(u, r.length);
     pointAt(r, p, out);
     const edge = Math.min(p, r.length - p);
     return clamp01(edge / fade);
@@ -248,8 +245,8 @@ export function createFlow(flow, overrides = {}) {
     leaflets: (name, out) => valves[name].pose(openness[name], out),
     advance,
     sample,
-    side: k => { let ri = state.length - 1; while (offsets[ri] > k) ri--; return state[ri].side; },
+    side: k => state[routeIndex(k)].side,
     // Arc length of particle k along its route, for tests.
-    arc: k => { let ri = state.length - 1; while (offsets[ri] > k) ri--; const r = state[ri], u = r.u[k - offsets[ri]]; return u - Math.floor(u / r.length) * r.length; },
+    arc: k => { const ri = routeIndex(k), r = state[ri]; return wrap(r.u[k - offsets[ri]], r.length); },
   };
 }

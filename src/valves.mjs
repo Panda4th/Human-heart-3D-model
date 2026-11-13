@@ -8,6 +8,8 @@
 // Only the leaflet count follows the part descriptions on screen (anatomy.mjs): tricuspid 3, mitral 2, aortic 3, pulmonary 3.
 
 export const valveNames = ['tricuspid', 'mitral', 'aortic', 'pulmonary'];
+// The two kinds of valve (the values of valveKind): the one between an atrium and its ventricle, and the one at the artery.
+export const valveKinds = ['atrioventricular', 'arterial'];
 export const valveKind = { tricuspid: 'atrioventricular', mitral: 'atrioventricular', aortic: 'arterial', pulmonary: 'arterial' };
 // The two valves of one side of the heart. Between the filling and the ejection (and the other way round) all four are closed,
 // so one of a pair starts to open only when the other is closed.
@@ -20,7 +22,8 @@ export const leafletCount = { tricuspid: 3, mitral: 2, aortic: 3, pulmonary: 3 }
 export const valveSettings = { ring: .7, apex: .75, lift: .25, arcSegments: 4, particleRadius: 1.5, margin: .5 };
 
 // Which valve a route passes. The right heart has the tricuspid and the pulmonary valve, the left heart the mitral and the aortic.
-export const valveOfRoute = (side, kind) => ({ right: { atrioventricular: 'tricuspid', arterial: 'pulmonary' }, left: { atrioventricular: 'mitral', arterial: 'aortic' } })[side][kind];
+const routeValves = { right: { atrioventricular: 'tricuspid', arterial: 'pulmonary' }, left: { atrioventricular: 'mitral', arterial: 'aortic' } };
+export const valveOfRoute = (side, kind) => routeValves[side][kind];
 
 const sub = (a, b) => [a[0] - b[0], a[1] - b[1], a[2] - b[2]];
 const add = (a, b) => [a[0] + b[0], a[1] + b[1], a[2] + b[2]];
@@ -34,7 +37,7 @@ const smooth = s => s * s * (3 - 2 * s);
 export function valveAxes(flow) {
   const sums = Object.fromEntries(valveNames.map(name => [name, [0, 0, 0]]));
   for (const route of flow.routes) {
-    for (const kind of ['atrioventricular', 'arterial']) {
+    for (const kind of valveKinds) {
       const m = route.marks[kind], t = unit(sub(route.points[Math.min(m + 2, route.points.length - 1)], route.points[Math.max(m - 2, 0)]));
       const name = valveOfRoute(route.side, kind);
       sums[name] = add(sums[name], t);
@@ -43,7 +46,7 @@ export function valveAxes(flow) {
   return Object.fromEntries(valveNames.map(name => [name, unit(sums[name])]));
 }
 
-export function createValve(name, spec, axis, settings = valveSettings) {
+function createValve(name, spec, axis, settings = valveSettings) {
   const n = leafletCount[name], ring = spec.radius * settings.ring, w = unit(axis);
   // The ring's own directions: u is the world up direction made perpendicular to the axis. Where the first leaflet lies is arbitrary.
   const up = [0, 1, 0], u = unit(sub(up, mul(w, dot(up, w)))), v = cross(w, u);

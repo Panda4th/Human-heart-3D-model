@@ -10,6 +10,8 @@ export const cycle = { atrialSystole: 100, ventricularSystole: 270, ventricularD
 export const period = cycle.atrialSystole + cycle.ventricularSystole + cycle.ventricularDiastole;
 // The slow speed stretches one beat to period * slowFactor ms, so the phases can be followed by eye.
 export const slowFactor = 5;
+// Time within the beat, 0 <= t < period, for any beat time in ms (negative times and times after the first beat included).
+export const timeInBeat = ms => ((ms % period) + period) % period;
 
 const smooth = x => {
   const t = Math.min(1, Math.max(0, x));
@@ -20,7 +22,7 @@ const smooth = x => {
 // rise and fall within atrial systole; the ventricles rise through ventricular systole and relax over the first half
 // of ventricular diastole.
 export function contraction(ms) {
-  const t = ((ms % period) + period) % period;
+  const t = timeInBeat(ms);
   const a = cycle.atrialSystole, v = a + cycle.ventricularSystole;
   const atria = t < a ? Math.sin(Math.PI * t / a) ** 2 : 0;
   const ventricles = t < a ? 0 : t < v ? smooth((t - a) / cycle.ventricularSystole) : 1 - smooth((t - v) / (cycle.ventricularDiastole / 2));
@@ -35,7 +37,7 @@ export const phases = [
   { id: 'relaxation', name: '心室の弛緩', time: '約0.43秒', short: '動脈弁 閉 → 房室弁 開', valves: '動脈弁が閉じます。はじめは4つの弁がすべて閉じたまま心室が緩み（等容性弛緩）、その後、房室弁が開いて心房から心室へ血液が流れ込みます。' },
 ];
 export function phaseAt(ms) {
-  const t = ((ms % period) + period) % period;
+  const t = timeInBeat(ms);
   return t < cycle.atrialSystole ? 0 : t < cycle.atrialSystole + cycle.ventricularSystole ? 1 : 2;
 }
 
@@ -52,7 +54,7 @@ export function stepBeat(time, delta, once) {
 // below are chosen for display, not taken from the source; the blood-flow particles follow these windows.
 export const isovolumic = { contraction: 50, relaxation: 80 };
 export function valvesAt(ms) {
-  const t = ((ms % period) + period) % period;
+  const t = timeInBeat(ms);
   const atrial = cycle.atrialSystole, systole = atrial + cycle.ventricularSystole;
   return {
     atrioventricular: t < atrial || t >= systole + isovolumic.relaxation,
@@ -62,12 +64,12 @@ export function valvesAt(ms) {
 
 // Peak pull toward each chamber's centre, as a fraction of the distance, before the fall-off below. Chosen for
 // display, not measured: the walls move a few millimetres.
-export const amplitude = { atria: .15, ventricles: .25 };
+const amplitude = { atria: .15, ventricles: .25 };
 const chamberGroup = { lv: 'ventricles', rv: 'ventricles', ra: 'atria', la: 'atria' };
 
 // Centre (mean wall vertex) and spread (root-mean-square distance of the wall vertices) of each chamber's wall, in
 // the millimetre frame of the parts.
-export function beatCenters(parts) {
+function beatCenters(parts) {
   return Object.entries(chamberGroup).map(([id, group]) => {
     const mesh = parts.get(id).children.find(o => o.isMesh);
     const p = mesh.geometry.attributes.position, center = new Vector3(), v = new Vector3();
@@ -156,5 +158,5 @@ export function createBeat(root, parts) {
     });
     return out;
   }
-  return { set, displace, centers, get state() { return state; } };
+  return { set, displace };
 }

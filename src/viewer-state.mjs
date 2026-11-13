@@ -2,6 +2,7 @@ import {
   AlwaysStencilFunc, BackSide, Box3, DecrementWrapStencilOp, DoubleSide, FrontSide, Group, IncrementWrapStencilOp, Matrix4, Mesh,
   MeshBasicMaterial, NotEqualStencilFunc, PlaneGeometry, Raycaster, ReplaceStencilOp, Sphere, Vector3,
 } from 'three';
+import { chambers } from './anatomy.mjs';
 
 // Keep framing and gesture decisions independent of WebGL for regression tests.
 // The sphere is measured from vertices: the box's circumscribed sphere was about 25% larger
@@ -23,7 +24,9 @@ export function modelSphere(object) {
   for (const point of points) radius = Math.max(radius, point.distanceTo(center));
   return new Sphere(center, radius);
 }
-export function fitDistance(radius, aspect, verticalFovDegrees = 36) {
+// Vertical field of view of the camera, in degrees.
+export const fieldOfView = 36;
+export function fitDistance(radius, aspect, verticalFovDegrees = fieldOfView) {
   const vertical = verticalFovDegrees * Math.PI / 360;
   const horizontal = Math.atan(Math.tan(vertical) * Math.max(aspect, 0.01));
   return radius / Math.sin(Math.min(vertical, horizontal)) * 1.15;
@@ -37,7 +40,9 @@ export function fitDistance(radius, aspect, verticalFovDegrees = 36) {
 // Vessels in the data are thin shells without wall thickness, so they get no cut face: the clipped
 // shell is drawn on both sides and the lumen stays visible.
 // Switching modes only toggles visibility, so no material changes and no shader recompiles.
-export const wallIds = ['lv', 'rv', 'ra', 'la'];
+export const wallIds = chambers;
+// Colour of the cut face of the heart wall (the cap colour given to createCrossSection).
+export const cutColor = 0xc98478;
 export function createCrossSection(parent, parts, plane, capColor, regionColor = 0xffc79e) {
   const caps = new Group(), originals = [], copies = [], solids = [], regions = new Map();
   const stencil = (side, op) => new MeshBasicMaterial({
@@ -141,30 +146,29 @@ function cutFace(ray, plane, solids) {
   const count = hits.reduce((sum, h) => sum + (normal.copy(h.face.normal).transformDirection(h.object.matrixWorld).dot(ray.direction) > 0 ? 1 : -1), 0);
   if (count !== 0) return { id: idOf(hits[0].object), distance: ray.origin.distanceTo(point), point };
 }
-// Raycasting ignores visibility and clipping planes. Return the id of the first part hit that is
-// actually drawn: shown, and not on the side the cross-section has removed. `solids` are the wall
-// meshes whose cut face is drawn on the plane; that face is nearer than anything it covers.
-// The result also gives the distance along the ray to the drawn surface and whether it is the cut face (onCut,
-// with the point on the plane). The chamber named for the cut face is the first wall surface beyond it, an estimate.
 // Raycasting also tests hidden objects, and the cross-section keeps the original walls (hidden) next to the drawn copies,
-// so the same triangles were tested twice and the hidden half was thrown away by isShown below. Test only what is shown.
+// so the same triangles would be tested twice and the hidden half thrown away. Test only what is shown.
 function shownObjects(targets) {
   const out = [];
   const visit = object => { if (object.visible) { out.push(object); object.children.forEach(visit); } };
   for (const target of targets) if (isShown(target)) visit(target);
   return out;
 }
+// Raycasting ignores visibility and clipping planes. Return the id of the first part hit that is
+// actually drawn: shown, and not on the side the cross-section has removed. `solids` are the wall
+// meshes whose cut face is drawn on the plane; that face is nearer than anything it covers.
+// The result also gives the distance along the ray to the drawn surface and whether it is the cut face (onCut,
+// with the point on the plane). The chamber named for the cut face is the first wall surface beyond it, an estimate.
 export function pickHit(raycaster, targets, planes = [], solids = []) {
   const cut = planes.length && solids.length ? cutFace(raycaster.ray, planes[0], solids) : undefined;
   for (const hit of raycaster.intersectObjects(shownObjects(targets), false)) {
     if (cut && cut.distance <= hit.distance) break;
-    if (!isShown(hit.object) || !planes.every(plane => plane.distanceToPoint(hit.point) >= 0)) continue;
+    if (!planes.every(plane => plane.distanceToPoint(hit.point) >= 0)) continue;
     const id = idOf(hit.object);
     if (id) return { id, distance: hit.distance, onCut: false };
   }
   return cut && { ...cut, onCut: true };
 }
-export const pickPart = (...args) => pickHit(...args)?.id;
 
 // True when the cut leaves nothing of an object with this world-space box (the plane keeps distance >= 0).
 // For a box this is exact only for an axis-aligned plane, which is the case for the front-to-back cut.

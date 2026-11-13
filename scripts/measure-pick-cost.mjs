@@ -7,28 +7,28 @@
 // GPU load, a phone, or the browser's event handling. Output: JSON on stdout.
 import * as THREE from 'three';
 import os from 'node:os';
-import { createCrossSection, fitDistance, modelSphere, pickHit, wallIds } from '../src/viewer-state.mjs';
+import { createCrossSection, fitDistance, modelSphere, pickHit, wallIds, cutColor, fieldOfView } from '../src/viewer-state.mjs';
 import { createConduction } from '../src/conduction.mjs';
-import { createAnatomy } from '../src/anatomy.mjs';
+import { createAnatomy, modelScale } from '../src/anatomy.mjs';
 import { readFileSync } from 'node:fs';
 
 const bundle = readFileSync(new URL('../src/data/bodyparts3d-heart.bin', import.meta.url));
 const probe = new THREE.Group(), probeParts = new Map();
-createAnatomy(probe, probeParts, bundle, .033);
+createAnatomy(probe, probeParts, bundle, modelScale);
 const bounds = modelSphere(probe);
 
 // `slider` is the value of the cut-depth slider. src/main.js sets the plane constant to -slider.
 function sceneAt(slider, eye) {
   const heart = new THREE.Group(), exterior = new THREE.Group(), conduction = new THREE.Group(), parts = new Map();
   heart.add(exterior);
-  const meta = createAnatomy(exterior, parts, bundle, .033);
+  const meta = createAnatomy(exterior, parts, bundle, modelScale);
   const plane = new THREE.Plane(new THREE.Vector3(0, 0, -1), -slider);
-  const section = createCrossSection(exterior, parts, plane, 0xc98478);
+  const section = createCrossSection(exterior, parts, plane, cutColor);
   section.setEnabled(true);
   exterior.add(conduction);
   const anchors = createConduction(conduction, parts, meta.conduction);
   heart.updateMatrixWorld(true);
-  const camera = new THREE.PerspectiveCamera(36, 1, .1, 150);
+  const camera = new THREE.PerspectiveCamera(fieldOfView, 1, .1, 150);
   camera.position.set(...eye).normalize().multiplyScalar(fitDistance(bounds.radius, 1)).add(bounds.center);
   camera.lookAt(bounds.center); camera.updateMatrixWorld();
   const occluders = [...parts.values()].filter(g => g.userData.kind !== 'conduction');

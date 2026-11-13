@@ -1,15 +1,15 @@
 import assert from 'node:assert/strict';
 import * as THREE from 'three';
-import { createCrossSection, fitDistance, modelSphere, pickHit, wallIds } from '../src/viewer-state.mjs';
+import { createCrossSection, fitDistance, modelSphere, pickHit, wallIds, cutColor, fieldOfView } from '../src/viewer-state.mjs';
 import { createConduction } from '../src/conduction.mjs';
-import { createAnatomy, decodeAnatomy } from '../src/anatomy.mjs';
+import { createAnatomy, decodeAnatomy, modelScale } from '../src/anatomy.mjs';
 import { readFileSync } from 'node:fs';
 
 const bundle = readFileSync(new URL('../src/data/bodyparts3d-heart.bin', import.meta.url));
 // Same structure as src/main.js.
 const heart = new THREE.Group(), exterior = new THREE.Group(), conduction = new THREE.Group(), parts = new Map();
 heart.add(exterior);
-const meta = createAnatomy(exterior, parts, bundle, .033);
+const meta = createAnatomy(exterior, parts, bundle, modelScale);
 exterior.add(conduction);
 createConduction(conduction, parts, meta.conduction);
 const bounds = modelSphere(heart);
@@ -17,12 +17,12 @@ const bounds = modelSphere(heart);
 function sectionScene(constant) {
   const root = new THREE.Group(), ext = new THREE.Group(), map = new Map();
   root.add(ext);
-  createAnatomy(ext, map, bundle, .033);
+  createAnatomy(ext, map, bundle, modelScale);
   const plane = new THREE.Plane(new THREE.Vector3(0, 0, -1), constant);
-  const section = createCrossSection(ext, map, plane, 0xc98478);
+  const section = createCrossSection(ext, map, plane, cutColor);
   section.setEnabled(true);
   root.updateMatrixWorld(true);
-  const camera = new THREE.PerspectiveCamera(36, 1, .1, 150);
+  const camera = new THREE.PerspectiveCamera(fieldOfView, 1, .1, 150);
   camera.position.set(0, .06, 1).normalize().multiplyScalar(fitDistance(bounds.radius, 1)).add(bounds.center);
   camera.lookAt(bounds.center); camera.updateMatrixWorld();
   return { map, plane, section, camera, targets: [...map.values()] };
@@ -67,7 +67,7 @@ function reproduce() {
       const got = pickHit(ray, targets, [plane], section.solids);
       const inner = new THREE.Raycaster(point.clone().addScaledVector(ray.ray.direction,1e-5),ray.ray.direction);
       const hits = inner.intersectObjects(section.solids,false).map(h=>({
-        id:h.object.parent.userData.id, face:h.faceIndex, distance:h.distance/.033,
+        id:h.object.parent.userData.id, face:h.faceIndex, distance:h.distance/modelScale,
         sign:n.copy(h.face.normal).transformDirection(h.object.matrixWorld).dot(ray.ray.direction)>0?1:-1,
         duplicate:skip.get(h.object).has(h.faceIndex)
       }));

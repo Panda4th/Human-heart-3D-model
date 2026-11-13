@@ -151,7 +151,7 @@ async function measureScenario(browser, url, scenario) {
   }
 }
 
-export async function measureViewer() {
+async function measureViewer() {
   const production = await buildStandalone();
   assert.equal(production, await readFile('index.html', 'utf8'), 'build differs from index.html');
   assert.equal(await buildStandalone({ transformSource: source => source }), production, 'identity transform changes build');

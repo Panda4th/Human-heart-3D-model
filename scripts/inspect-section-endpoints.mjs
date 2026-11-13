@@ -1,11 +1,11 @@
 import { readFileSync } from 'node:fs';
 import { Group, Vector3 } from 'three';
-import { createAnatomy } from '../src/anatomy.mjs';
+import { createAnatomy, modelScale } from '../src/anatomy.mjs';
 
 // Use the same geometry and scale as the static section in src/main.js.
 const model = new Group();
 const parts = new Map();
-createAnatomy(model, parts, readFileSync(new URL('../src/data/bodyparts3d-heart.bin', import.meta.url)), .033);
+createAnatomy(model, parts, readFileSync(new URL('../src/data/bodyparts3d-heart.bin', import.meta.url)), modelScale);
 model.updateMatrixWorld(true);
 const vector = new Vector3();
 const targets = [-1.8, -1.5, 1.5, 1.8];

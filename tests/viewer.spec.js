@@ -2,16 +2,21 @@ const {test,expect}=require('@playwright/test');
 const {pathToFileURL}=require('node:url');
 const path=require('node:path');
 const url = pathToFileURL(path.resolve('index.html')).href;
-// Number of pixels that belong to the model: the background is blue-grey and dark, the heart is clearly redder or brighter.
-const modelPixels = (page, png) => page.evaluate(async b64 => {
+// Decode a PNG screenshot in the page and run `rule` on its RGBA bytes there: rule(data, ...args). A function cannot be sent to the
+// page, so its source is sent: it must not use anything from outside itself. The pixel counters below share this.
+const inPagePixels = (page, png, rule, ...args) => page.evaluate(async ([b64, source, args]) => {
   const image = new Image(); image.src = 'data:image/png;base64,' + b64; await image.decode();
   const canvas = document.createElement('canvas'); canvas.width = image.width; canvas.height = image.height;
-  const g = canvas.getContext('2d'); g.drawImage(image, 0, 0);
-  const { data } = g.getImageData(0, 0, image.width, image.height);
+  const context = canvas.getContext('2d'); context.drawImage(image, 0, 0);
+  const { data } = context.getImageData(0, 0, image.width, image.height);
+  return (0, eval)(`(${source})`)(data, ...args);
+}, [png.toString('base64'), rule.toString(), args]);
+// Number of pixels that belong to the model: the background is blue-grey and dark, the heart is clearly redder or brighter.
+const modelPixels = (page, png) => inPagePixels(page, png, data => {
   let count = 0;
   for (let i = 0; i < data.length; i += 4) if (Math.max(data[i], data[i + 1], data[i + 2]) > 90 || data[i] - data[i + 2] > 25) count++;
   return count;
-}, png.toString('base64'));
+});
 // Rendering happens in the next animation frame after a state change, so a screenshot taken right away can
 // still show the previous frame. Wait for the frame to be drawn before comparing pictures.
 const settle = page => page.evaluate(() => new Promise(done => requestAnimationFrame(() => requestAnimationFrame(() => requestAnimationFrame(done)))));
@@ -257,15 +262,11 @@ for (const width of [1440,390,320]) test(`offline model and interactions at widt
   await context.close();
 });
 // Number of pixels whose colour is within `tolerance` (per channel) of the given colour.
-const countColor = (page, png, [r, g, b], tolerance) => page.evaluate(async ([b64, r, g, b, tolerance]) => {
-  const image = new Image(); image.src = 'data:image/png;base64,' + b64; await image.decode();
-  const canvas = document.createElement('canvas'); canvas.width = image.width; canvas.height = image.height;
-  const context = canvas.getContext('2d'); context.drawImage(image, 0, 0);
-  const { data } = context.getImageData(0, 0, image.width, image.height);
+const countColor = (page, png, [r, g, b], tolerance) => inPagePixels(page, png, (data, r, g, b, tolerance) => {
   let count = 0;
   for (let i = 0; i < data.length; i += 4) if (Math.abs(data[i] - r) <= tolerance && Math.abs(data[i + 1] - g) <= tolerance && Math.abs(data[i + 2] - b) <= tolerance) count++;
   return count;
-}, [png.toString('base64'), r, g, b, tolerance]);
+}, r, g, b, tolerance);
 for (const width of [1440, 390]) test(`cut view: removed parts, hidden labels, the clicked cut face and the dashed line at width ${width}`, async ({ browser }) => {
   const mobile = width < 700;
   const context = await browser.newContext({ viewport: { width, height: 900 }, hasTouch: mobile, isMobile: mobile });
@@ -843,18 +844,14 @@ test('the heart sound controls fit a phone screen', async ({ browser }) => {
 // pixels counted at 1440 px width / 390 px width): the red rule (red - green > 120, red > 170, blue < 110) matched 0 / 0 in the
 // exterior view and 322 / 97 in the flow view; the blue rule (blue - red > 90, blue > 140) matched 207 / 38 in the exterior view
 // (the pulmonary arteries and veins are bluish) and 729 / 218 in the flow view.
-const particlePixels = (page, png) => page.evaluate(async b64 => {
-  const image = new Image(); image.src = 'data:image/png;base64,' + b64; await image.decode();
-  const canvas = document.createElement('canvas'); canvas.width = image.width; canvas.height = image.height;
-  const context = canvas.getContext('2d'); context.drawImage(image, 0, 0);
-  const { data } = context.getImageData(0, 0, image.width, image.height);
+const particlePixels = (page, png) => inPagePixels(page, png, data => {
   let blue = 0, red = 0;
   for (let i = 0; i < data.length; i += 4) {
     if (data[i + 2] - data[i] > 90 && data[i + 2] > 140) blue++;
     if (data[i] - data[i + 1] > 120 && data[i] > 170 && data[i + 2] < 110) red++;
   }
   return { blue, red };
-}, png.toString('base64'));
+});
 for (const width of [1440, 390]) test(`flow view: particles appear, move with the beat, stop when it stops and leave with the mode at width ${width}`, async ({ browser }) => {
   const mobile = width < 700;
   const context = await browser.newContext({ viewport: { width, height: 900 }, hasTouch: mobile, isMobile: mobile });
