@@ -108,7 +108,9 @@ test('a latency books each sound earlier, so it is heard when the picture shows 
   q.seek(95);
   q.play();
   t.start(q, 0, .2);
-  assert.deepEqual(t.take(q, 0, { latency: .2 }).map(e => e.sound), ['second'], 'the first sound is 0.2 s too early to be booked');
+  const booked = t.take(q, 0, { latency: .2 });
+  assert.equal(booked[0].sound, 'second', 'the first sound is 0.2 s too early to be booked');
+  near(booked[0].at, .275 - .2);
 });
 
 test('after a stall the missed sounds are dropped, not played in a bunch', () => {
@@ -121,7 +123,7 @@ test('after a stall the missed sounds are dropped, not played in a bunch', () =>
   const events = s.take(p, 30);
   assert.deepEqual(events.filter(e => e.at < 30 - lateLimit), []);
   assert.ok(events.every(e => e.at >= 30 - lateLimit));
-  assert.ok(events.length <= 2, 'only what is due now or soon');
+  assert.ok(events.length <= 2 * (lookahead + lateLimit) / (period / 1000) + 2, 'only what is due now or within the lookahead');
 });
 
 test('a one-beat play books nothing after its end', () => {

@@ -11,8 +11,11 @@ import { cycle, period, slowFactor } from './heartbeat.mjs';
 // start of ventricular relaxation (the arterial valves close), as in NHLBI "How the Heart Beats". They match the explanatory
 // beat in heartbeat.mjs; they do not claim that the valve meshes move.
 export const soundBeats = { first: cycle.atrialSystole, second: cycle.atrialSystole + cycle.ventricularSystole };
-// Seconds of the time source booked ahead; a booked sound is cancelled and booked again whenever the clock changes.
-export const lookahead = .5;
+// Seconds of the time source booked ahead; a booked sound is cancelled and booked again whenever the clock changes. It is long
+// so that a page that stalls for a second or so (shader compilation, a slow frame) still has its next sounds booked: the audio
+// context plays them on its own clock, and a stall that outlasts the booking would drop them (CI on PR #44 lost sounds this
+// way with 0.5 s).
+export const lookahead = 2;
 // A sound that should already have started more than this many seconds ago is dropped, never played late or in a bunch.
 export const lateLimit = .04;
 export const maxLatency = .5;
