@@ -579,12 +579,13 @@ test('with reduced motion the beat plays once and returns to rest', async ({ bro
 // what is booked: its clock is the real clock, and each oscillator's start time and pitch (90 Hz first sound, 130 Hz second
 // sound) are recorded. This checks the booking against the beat, not what a speaker plays.
 const fakeAudio = () => {
-  window.voices = []; window.cancels = []; window.contexts = 0;
+  window.voices = []; window.cancels = []; window.contexts = 0; let order = 0;
   const born = performance.now();
   window.audioBorn = born;
-  // What a listener would hear: a sound booked before a cancel that lies before its start is silenced by that cancel.
-  window.audible = () => window.voices.filter(v => !window.cancels.some(c => c >= v.bookedAt && v.at > c));
-  const param = () => ({ value: 1, setValueAtTime() {}, linearRampToValueAtTime() {}, exponentialRampToValueAtTime() {}, setTargetAtTime() {}, cancelScheduledValues: t => window.cancels.push(t) });
+  // What a listener would hear: a sound booked before a cancel that lies before its start is silenced by that cancel (`order` is the
+  // sequence of bookings and cancels, which a clock reading cannot give: they can fall in the same millisecond).
+  window.audible = () => window.voices.filter(v => !window.cancels.some(c => c.order > v.order && v.at > c.t));
+  const param = () => ({ value: 1, setValueAtTime() {}, linearRampToValueAtTime() {}, exponentialRampToValueAtTime() {}, setTargetAtTime() {}, cancelScheduledValues: t => window.cancels.push({ t, order: order++ }) });
   window.AudioContext = class {
     constructor() { this.state = 'suspended'; this.destination = {}; this.baseLatency = 0; this.outputLatency = 0; window.contexts++; this.listeners = []; window.lastContext = this; }
     get currentTime() { return (performance.now() - born) / 1000; }
@@ -594,7 +595,7 @@ const fakeAudio = () => {
     createGain() { return { gain: param(), connect() {}, disconnect() {} }; }
     createOscillator() {
       const context = this;
-      const oscillator = { frequency: param(), connect() {}, start(t) { window.voices.push({ hz: oscillator.frequency.first, at: t, bookedAt: context.currentTime }); }, stop() {} };
+      const oscillator = { frequency: param(), connect() {}, start(t) { window.voices.push({ hz: oscillator.frequency.first, at: t, order: order++ }); }, stop() {} };
       const set = oscillator.frequency.setValueAtTime;
       oscillator.frequency.setValueAtTime = v => { oscillator.frequency.first = v; set(); };
       return oscillator;
@@ -671,6 +672,66 @@ test('the heart sound is off at first, books the two sounds on the beat clock an
   await page.evaluate(() => window.lastContext.interrupt());
   await expect(page.locator('#heart-sound')).toHaveAttribute('aria-pressed', 'false');
   await expect(page.locator('#sound-status')).toContainText('中断');
+  expect(errors).toEqual([]);
+  await context.close();
+});
+
+// Review of PR #44: stopping wound the clock back to the last drawn frame, so a sound that had started after that frame was booked
+// again on restart. Frames take 100 ms or more here, so stops often come between a sound and the next frame. At the real speed
+// (first sound to second sound 270 ms) two sounds never come closer than 0.27 s; a doubled sound would.
+test('stopping and starting the beat many times never sounds a heart sound twice', async ({ browser }) => {
+  const context = await browser.newContext({ viewport: { width: 1440, height: 900 } });
+  const page = await context.newPage(), errors = [];
+  page.on('pageerror', e => errors.push(e.message));
+  await page.addInitScript(fakeAudio);
+  await page.goto(url);
+  await expect(page.locator('html')).toHaveAttribute('data-ready', 'true');
+  // The cut view draws slowly in this environment (about 150 ms a frame), so the last frame is often far behind the clock.
+  await page.locator('#mode-interior').click();
+  await page.locator('#beat-speed').click();
+  await page.locator('#heart-sound').click();
+  await expect(page.locator('#heart-sound')).toHaveAttribute('aria-pressed', 'true');
+  for (let i = 0; i < 40; i++) {
+    await page.locator('#beat-play').click();
+    await page.waitForTimeout(60 + (i * 37) % 260);
+    await page.locator('#beat-play').click();
+    await page.waitForTimeout(15 + (i * 53) % 90);
+  }
+  // The beat only moves forward, so the sounds heard, in time order, alternate first, second, first, ... A sound booked twice
+  // makes two of the same kind in a row. (The gap alone cannot show it: a stop and a start take 100 ms or more here.)
+  const heard = (await page.evaluate(() => window.audible().map(v => ({ at: v.at, hz: v.hz })))).sort((a, b) => a.at - b.at);
+  expect(heard.length).toBeGreaterThan(10);
+  for (let i = 1; i < heard.length; i++) {
+    expect(heard[i].hz, `the sounds at ${heard[i - 1].at} and ${heard[i].at} are of the same kind`).not.toBe(heard[i - 1].hz);
+    expect(heard[i].at - heard[i - 1].at).toBeGreaterThan(.26);
+  }
+  expect(errors).toEqual([]);
+  await context.close();
+});
+
+// Review of PR #44: after the WebGL context was lost, the sounds went on being booked and could not be stopped from the page.
+test('when the 3D view is lost the beat and the heart sounds stop', async ({ browser }) => {
+  const context = await browser.newContext({ viewport: { width: 1440, height: 900 } });
+  const page = await context.newPage(), errors = [];
+  page.on('pageerror', e => errors.push(e.message));
+  await page.addInitScript(fakeAudio);
+  await page.goto(url);
+  await expect(page.locator('html')).toHaveAttribute('data-ready', 'true');
+  await page.locator('#beat-speed').click();
+  await page.locator('#beat-play').click();
+  await page.locator('#heart-sound').click();
+  await expect.poll(() => page.evaluate(() => window.audible().length), { timeout: 10000 }).toBeGreaterThan(2);
+  await page.locator('canvas').evaluate(c => c.dispatchEvent(new Event('webglcontextlost', { cancelable: true })));
+  await expect(page.locator('#error')).toContainText('再読み込み');
+  const after = await page.evaluate(() => window.audible().length);
+  await page.waitForTimeout(2500);
+  expect(await page.evaluate(() => window.audible().length), 'no sound is booked after the loss').toBe(after);
+  await expect(page.locator('#heart-sound')).toHaveAttribute('aria-pressed', 'false');
+  // Coming back to the page does not restart the sounds either.
+  await page.evaluate(() => { Object.defineProperty(document, 'hidden', { value: true, configurable: true }); document.dispatchEvent(new Event('visibilitychange')); });
+  await page.evaluate(() => { Object.defineProperty(document, 'hidden', { value: false, configurable: true }); document.dispatchEvent(new Event('visibilitychange')); });
+  await page.waitForTimeout(1500);
+  expect(await page.evaluate(() => window.audible().length)).toBe(after);
   expect(errors).toEqual([]);
   await context.close();
 });

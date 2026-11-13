@@ -216,7 +216,7 @@ try {
   // sound is never played twice or after a stop, and past sounds are never played back.
   const soundLimit = () => reduceMotion.matches ? period : Infinity;
   function bookSounds() {
-    if (soundOn && playback.running) sound.schedule(scheduler.take(playback, sound.now(), { latency: sound.latency(), limit: soundLimit() }));
+    if (soundOn && playback.running && !failed) sound.schedule(scheduler.take(playback, sound.now(), { latency: sound.latency(), limit: soundLimit() }));
   }
   function resyncSounds() {
     sound.cancel();
@@ -236,9 +236,9 @@ try {
     $('sound-status').textContent = text;
   }
   // Sound off: the beat goes on from the same position on the page's own clock.
-  // After an interruption the audio clock may have stopped, so the position is the last one drawn.
-  function soundOff(message = '', interrupted = false) {
-    const at = interrupted && playback.running ? beatTime : playback.position();
+  // After an interruption the audio clock has stopped, so the position is where it stopped; the page's clock takes over from there.
+  function soundOff(message = '') {
+    const at = playback.position();
     soundOn = false;
     playback.useSource(() => performance.now() / 1000, at);
     resyncSounds();
@@ -255,7 +255,7 @@ try {
     if (!soundOn) {
       if (!watching) {
         watching = true;
-        sound.onStateChange(() => { if (soundOn && sound.state !== 'running') soundOff('音声が中断されたため、心音を切りました。もう一度押すと再開します。', true); });
+        sound.onStateChange(() => { if (soundOn && sound.state !== 'running') soundOff('音声が中断されたため、心音を切りました。もう一度押すと再開します。'); });
       }
       // The audio clock takes over at the current position, so the beat does not jump when the sound is turned on.
       playback.useSource(() => sound.now());
@@ -265,30 +265,34 @@ try {
     }
   };
   $('heart-volume').oninput = () => sound.setVolume(Number($('heart-volume').value));
+  // Bring the drawn state (the walls, the particles, the phase text) to the state the clock is at. The beat is drawn at the clock's
+  // position, so a slow frame never delays it (or the sounds booked from the same clock). It is also done just before the clock
+  // stops (stop button, hidden page), so that the clock keeps its position: sounds up to that position have been booked, and a
+  // clock wound back to the last frame would book them again when it restarts. A pause stops the clock; it does not jump ahead
+  // afterwards. The particles catch up by at most one beat, which is enough for the ring to settle; a longer stall does not
+  // turn into a long run of steps.
+  function advanceBeat() {
+    // The particles advance to the same limited time as the beat: a frame that crosses the end of a one-beat play must not
+    // move them into the next beat.
+    const { next, done } = stepBeat(beatTime, Math.max(0, playback.position() - beatTime), reduceMotion.matches);
+    flow.advance(Math.max(beatTime, next - period), next);
+    flowStale = true;
+    beatTime = next;
+    if (done) {
+      beating = false;
+      beatTime = 0;
+      playback.pause();
+      playback.seek(0);
+      resyncSounds();
+      $('beat-play').textContent = playLabel();
+    }
+    beat.set(contraction(beatTime));
+    showPhase();
+  }
   function render(time) {
     const elapsed = previousTime ? (time - previousTime) / 1000 : 0;
     if (controls.autoRotate) controls.update(Math.min(elapsed, .05));
-    // The beat is drawn at the state the clock is at, so a slow frame never delays it (or the sounds booked from the same
-    // clock). A pause (stop, hidden page) stops the clock; it does not jump ahead afterwards. The particles catch up by at most
-    // one beat, which is enough for the ring to settle; a longer stall does not turn into a long run of steps.
-    if (beating) {
-      // The particles advance to the same limited time as the beat: a frame that crosses the end of a one-beat play must not
-      // move them into the next beat.
-      const { next, done } = stepBeat(beatTime, Math.max(0, playback.position() - beatTime), reduceMotion.matches);
-      flow.advance(Math.max(beatTime, next - period), next);
-      flowStale = true;
-      beatTime = next;
-      if (done) {
-        beating = false;
-        beatTime = 0;
-        playback.pause();
-        playback.seek(0);
-        resyncSounds();
-        $('beat-play').textContent = playLabel();
-      }
-      beat.set(contraction(beatTime));
-      showPhase();
-    }
+    if (beating) advanceBeat();
     if (dots.visible && flowStale) drawFlow();
     renderer.render(scene, camera);
     updateLabels();
@@ -497,7 +501,7 @@ try {
   $('beat-play').onclick = () => {
     beating = !beating;
     if (beating) playback.play();
-    else { playback.pause(); playback.seek(beatTime); }
+    else { advanceBeat(); playback.pause(); }
     resyncSounds();
     $('beat-play').textContent = beating ? '拍動を止める' : playLabel();
     previousTime = 0;
@@ -561,7 +565,7 @@ try {
       cancelAnimationFrame(frame);
       frame = 0;
       // The beat and the sounds stop together and go on from the same position when the page is shown again.
-      if (beating) { playback.pause(); playback.seek(beatTime); resyncSounds(); }
+      if (beating) { advanceBeat(); playback.pause(); resyncSounds(); }
     } else {
       if (beating) { playback.play(); resyncSounds(); }
       requestRender();
@@ -573,6 +577,12 @@ try {
     stopRotation();
     cancelAnimationFrame(frame);
     frame = 0;
+    // Nothing is drawn any more and the controls are disabled, so the beat and the sounds stop here too: they could not be
+    // stopped from the page afterwards.
+    beating = false;
+    playback.pause();
+    if (soundOn) soundOff(); else resyncSounds();
+    $('beat-play').textContent = playLabel();
     showError('3D表示が中断しました。ページを再読み込みしてください。説明と参考リンクは引き続き読めます。');
   });
   new ResizeObserver(resize).observe(canvas);
