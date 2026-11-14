@@ -256,6 +256,8 @@ test('bundle format is checked', () => {
   const at = 8 + text.indexOf(`"format":${anatomyFormat}`) + '"format":'.length;
   copy[at] = 0x32; // "2"
   assert.throws(() => decodeAnatomy(copy), /format 2/);
+  // The page tells a data mismatch from a missing WebGL by this name (Issue #50 B4).
+  assert.throws(() => decodeAnatomy(copy), { name: 'HeartBundleError' });
 });
 test('BodyParts3D heart wall has a plausible size and coronary vessels lie on it', () => {
   const wall = anatomy.parts.filter(p => ['lv', 'rv', 'ra', 'la'].includes(p.id)).flatMap(p => [...p.positions]);

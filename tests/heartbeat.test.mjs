@@ -5,7 +5,7 @@ import { readFileSync } from 'node:fs';
 import { createAnatomy, modelScale } from '../src/anatomy.mjs';
 import { createConduction } from '../src/conduction.mjs';
 import { createCrossSection, cutColor } from '../src/viewer-state.mjs';
-import { contraction, createBeat, cycle, isovolumic, period, phaseAt, phases, valvesAt } from '../src/heartbeat.mjs';
+import { contraction, createBeat, cycle, isovolumic, period, phaseAt, phases, slowFactor, valvesAt } from '../src/heartbeat.mjs';
 
 // Same structure as src/main.js: the beat is created after the cross-section and the conduction overlay.
 const heart = new THREE.Group(), exterior = new THREE.Group(), conduction = new THREE.Group(), parts = new Map();
@@ -147,4 +147,18 @@ test('the box of every part over the beat stays inside the union of the rest sha
   beat.set({ atria: 0, ventricles: 0 });
   for (const [id, group] of parts) if (union.get(id).min.z < boxOf(group).min.z - 1e-4) widened++;
   assert.ok(widened > 0, 'at least one part reaches further back than at rest');
+});
+
+// Issue #50 (C2/F1): the phase lengths and the slow factor are written out in the screen text too. A change of a constant must not leave
+// the old number there.
+test('the screen text gives the phase lengths and the slow factor as the constants say', () => {
+  const template = readFileSync(new URL('../src/template.html', import.meta.url), 'utf8');
+  const note = /<p class="note" id="beat-note"[^>]*>([^<]*)<\/p>/.exec(template)[1];
+  const lengths = [cycle.atrialSystole, cycle.ventricularSystole, cycle.ventricularDiastole];
+  phases.forEach((phase, i) => {
+    assert.equal(phase.time, `約${lengths[i] / 1000}秒`, phase.name);
+    assert.ok(note.includes(`${phase.name} ${phase.time}`), phase.name);
+  });
+  assert.ok(note.includes(`合計${period / 1000}秒は毎分${60000 / period}回`), note);
+  assert.ok(note.includes(`${slowFactor}倍に引き延ばしています`), note);
 });

@@ -5,12 +5,14 @@ import * as THREE from 'three';
 // Format 5 adds the schematic left-bundle sheet and three directional paths.
 // Format 6 adds the blood-flow routes and valve openings (meta.flow) and the four cavities as parts that are not drawn.
 export const anatomyFormat = 6;
+// Errors about the bundle itself carry this name, so that the page can tell a data mismatch from a missing WebGL.
+const bundleError = message => Object.assign(new Error(message), { name: 'HeartBundleError' });
 export function decodeAnatomy(bytes) {
   const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
-  if (new TextDecoder().decode(bytes.subarray(0, 4)) !== 'BP3D') throw new Error('Not a BodyParts3D heart bundle');
+  if (new TextDecoder().decode(bytes.subarray(0, 4)) !== 'BP3D') throw bundleError('Not a BodyParts3D heart bundle');
   const jsonLength = view.getUint32(4, true);
   const meta = JSON.parse(new TextDecoder().decode(bytes.subarray(8, 8 + jsonLength)));
-  if (meta.format !== anatomyFormat) throw new Error(`Heart bundle format ${meta.format}, expected ${anatomyFormat}`);
+  if (meta.format !== anatomyFormat) throw bundleError(`Heart bundle format ${meta.format}, expected ${anatomyFormat}`);
   const body = bytes.byteOffset + 8 + jsonLength;
   const parts = meta.parts.map(p => {
     const raw = new Int16Array(bytes.buffer.slice(body + p.positionOffset, body + p.positionOffset + p.vertices * 6));
