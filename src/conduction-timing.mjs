@@ -45,38 +45,61 @@ export function stretchNameAt(ms) {
   return null;
 }
 
-// Where along each part's path the impulse is, as a 0-to-1 fraction of that path, or null while it is not inside. `lengths` are the
-// arc lengths of the paths: the bundle stretch (25 ms) runs down the His bundle (both intervals) first and then along the branches
-// in parallel, each branch reaching its end at the end of the stretch.
+// Where the impulse is in the bundle stretch (25 ms) when it is in each part, as fractions of the stretch. `lengths` are the arc
+// lengths of the paths: the impulse runs down the His bundle (both intervals) first and then along the branches in parallel, each
+// branch reaching its end at the end of the stretch. pulseAt (the head) and glowAt (the glow) both use this split, so the glow never
+// runs ahead of the head.
+export function bundleSplit(lengths) {
+  const trunk = lengths.his + lengths.bhis, branches = Math.max(lengths.lbb, lengths.rbb), total = trunk + branches;
+  const share = trunk / total, split = lengths.his / total;
+  return { his: [0, split], bhis: [split, share], lbb: [share, 1], rbb: [share, 1] };
+}
+
+// Where along each part's path the impulse is, as a 0-to-1 fraction of that path, or null while it is not inside.
 export function pulseAt(ms, lengths) {
   const out = {};
   const atria = stretchAt(stretches.atria, ms), bundles = stretchAt(stretches.bundles, ms), purkinje = stretchAt(stretches.purkinje, ms);
   out.atria = atria.active ? atria.progress : null;
-  const trunk = lengths.his + lengths.bhis, branches = Math.max(lengths.lbb, lengths.rbb), total = trunk + branches;
-  const share = trunk / total, split = lengths.his / total;
-  const within = (a, b, p) => p >= a && p < b ? (p - a) / (b - a) : null;
+  const split = bundleSplit(lengths);
+  const within = ([a, b], p) => p >= a && p < b ? (p - a) / (b - a) : null;
   const p = bundles.active ? bundles.progress : -1;
-  out.his = within(0, split, p);
-  out.bhis = within(split, share, p);
-  out.lbb = within(share, 1, p);
-  out.rbb = out.lbb;
+  for (const id of ['his', 'bhis', 'lbb', 'rbb']) out[id] = within(split[id], p);
   out.purkinje = purkinje.active ? purkinje.progress : null;
   return out;
 }
 
-// How strongly each part glows at ms (0 to 1): fully while the impulse is in it, fading over `fade` ms after it has left. The SA
-// node glows with the atrial stretch, and the part of a path the impulse has not reached yet does not glow.
+// When the impulse is in each part, as a window on the beat clock. The bundle parts take their share of the bundle stretch from
+// bundleSplit, so each is in its own window, in the order of the path; the other parts are in their whole stretch (the SA node
+// with the atrial stretch).
+export function partWindows(lengths) {
+  const b = stretches.bundles, split = bundleSplit(lengths);
+  const sub = ([a, z]) => span(b.from + a * b.length, (z - a) * b.length);
+  return {
+    sa: stretches.atria, atria: stretches.atria, av: stretches.avNode,
+    his: sub(split.his), bhis: sub(split.bhis), lbb: sub(split.lbb), rbb: sub(split.rbb),
+    purkinje: stretches.purkinje,
+  };
+}
+
+// How strongly each part glows at ms (0 to 1): 0 until the impulse reaches it, fully while it is in it, and fading over `fade` ms
+// from the moment it has left it. The glow comes back with the impulse in the next beat.
 export const fade = 120;
 export function glowAt(ms, lengths) {
-  const glow = id => {
-    const sub = { sa: stretches.atria, atria: stretches.atria, av: stretches.avNode, his: stretches.bundles, bhis: stretches.bundles, lbb: stretches.bundles, rbb: stretches.bundles, purkinje: stretches.purkinje }[id];
-    const s = stretchAt(sub, ms);
-    if (s.active) return 1;
-    return Math.exp(-s.age / fade) * (s.age < 3 * fade ? 1 : 0);
-  };
   const out = {};
-  for (const id of ['sa', 'atria', 'av', 'his', 'bhis', 'lbb', 'rbb', 'purkinje']) out[id] = glow(id);
+  for (const [id, window] of Object.entries(partWindows(lengths))) {
+    const s = stretchAt(window, ms);
+    out[id] = s.active ? 1 : s.age < 3 * fade ? Math.exp(-s.age / fade) : 0;
+  }
   return out;
+}
+
+// How long ago (ms) the newest occurrence of a wave, `mean` ms into the beat, was at beat time `beatTime` (not wrapped), counting
+// only occurrences between minAge and maxAge ago; null if none. The beat time keeps growing while the beat plays, so the occurrence
+// is found from the beat time and not from a fixed list of beats.
+export function waveAge(beatTime, mean, minAge, maxAge) {
+  const newest = timeInBeat(beatTime - mean);
+  for (let age = newest; age <= maxAge; age += period) if (age >= minAge) return age;
+  return null;
 }
 
 // Screen text for the stretch the impulse is in (conduction view).

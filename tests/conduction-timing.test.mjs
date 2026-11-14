@@ -1,9 +1,14 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { cycle, period } from '../src/heartbeat.mjs';
-import { conductionTimes, ecgAt, ecgBumps, glowAt, pulseAt, repolarizationWindow, sinusFire, stretchAt, stretchNameAt, stretches, stretchTextAt } from '../src/conduction-timing.mjs';
+import { readFileSync } from 'node:fs';
+import { decodeAnatomy } from '../src/anatomy.mjs';
+import { createConductionPulse } from '../src/conduction.mjs';
+import { bundleSplit, conductionTimes, ecgAt, ecgBumps, fade, glowAt, partWindows, pulseAt, repolarizationWindow, sinusFire, stretchAt, stretchNameAt, stretches, stretchTextAt, waveAge } from '../src/conduction-timing.mjs';
 
 const lengths = { his: 10, bhis: 8, lbb: 60, rbb: 50 };
+// The arc lengths of the paths of the generated data, as the viewer uses them.
+const realLengths = createConductionPulse(decodeAnatomy(new Uint8Array(readFileSync(new URL('../src/data/bodyparts3d-heart.bin', import.meta.url)))).meta.conduction).lengths;
 
 test('the four stretches follow the durations of the source and run one after another', () => {
   assert.deepEqual(conductionTimes, { atria: 50, avNode: 100, bundles: 25, purkinje: 75 });
@@ -109,4 +114,72 @@ test('the schematic ECG has its waves on the stretches of the impulse and is fla
 
 test('the ECG is made of five named bumps', () => {
   assert.deepEqual(ecgBumps.map(b => b.name), ['P', 'Q', 'R', 'S', 'T']);
+});
+
+// Review of PR #49: the glow must not run ahead of the head. In the bundle stretch the impulse is in the His bundle, then in the
+// branching interval, then in both branches; each part glows only from the moment the head reaches it.
+for (const [name, l] of [['test lengths', lengths], ['the lengths of the data', realLengths]]) {
+  test(`the glow follows the head through the bundle parts in order (${name})`, () => {
+    const b = stretches.bundles, w = partWindows(l), split = bundleSplit(l);
+    // The windows tile the stretch: His, then branching interval, then both branches together.
+    assert.equal(w.his.from, b.from);
+    assert.ok(Math.abs(w.his.to - w.bhis.from) < 1e-9 && Math.abs(w.bhis.to - w.lbb.from) < 1e-9);
+    assert.ok(Math.abs(w.lbb.to - b.to) < 1e-9 && w.lbb.from === w.rbb.from && w.lbb.to === w.rbb.to);
+    assert.ok(split.his[1] > 0 && split.bhis[1] < 1);
+    // Before the head reaches a part it does not glow: while the head is only in the His bundle, the three others are dark; while it
+    // is in the branching interval, both branches are dark.
+    const inHis = (w.his.from + w.his.to) / 2, inBhis = (w.bhis.from + w.bhis.to) / 2, inBranches = (w.lbb.from + w.lbb.to) / 2;
+    for (const id of ['bhis', 'lbb', 'rbb']) assert.equal(glowAt(inHis, l)[id], 0, `${id} while the head is in the His bundle`);
+    for (const id of ['lbb', 'rbb']) assert.equal(glowAt(inBhis, l)[id], 0, `${id} while the head is in the branching interval`);
+    assert.equal(glowAt(w.his.from, l).his, 1, 'the His bundle glows when the head enters it');
+    assert.equal(glowAt(inBhis, l).bhis, 1);
+    assert.equal(glowAt(inBranches, l).lbb, 1);
+    assert.equal(glowAt(inBranches, l).rbb, 1);
+    // The head and the glow agree at every instant of the stretch and of the beat: a part with the head in it is fully lit, and a
+    // part the head has not reached in this beat is dark unless it is still fading from the beat before.
+    for (let ms = b.from - 1; ms < b.to + 1; ms += .05) {
+      const head = pulseAt(ms, l), glow = glowAt(ms, l);
+      for (const id of ['his', 'bhis', 'lbb', 'rbb']) {
+        if (head[id] !== null) assert.equal(glow[id], 1, `${id} at ${ms} ms`);
+        // 1e-6 ms of slack: the loop's own rounding (a step of 0.05 ms) can land a hair before the start and wrap to the start of the beat.
+        if (ms < w[id].from - 1e-6) assert.ok(glow[id] < Math.exp(-(period - (w[id].from - ms) - w[id].length) / fade) + 1e-9, `${id} lit before the head, at ${ms} ms`);
+      }
+    }
+    // After the head has left a part its glow fades from the moment of leaving that part (not from the end of the stretch), and the
+    // same shape comes back in every beat.
+    for (const id of ['his', 'bhis', 'lbb', 'rbb']) {
+      for (const dt of [10, 60, 120, 240]) {
+        const ms = w[id].to + dt;
+        assert.ok(Math.abs(glowAt(ms, l)[id] - Math.exp(-dt / fade)) < 1e-9, `${id} ${dt} ms after it`);
+        assert.ok(Math.abs(glowAt(ms + 5 * period, l)[id] - glowAt(ms, l)[id]) < 1e-9, `${id} repeats`);
+      }
+      assert.equal(glowAt(w[id].to + 3 * fade + 1, l)[id], 0);
+    }
+    // The part that the head leaves first fades first: His bundle < branching interval < branches, in the same time after leaving
+    // (they leave one after the other), so at the end of the stretch they are in order of brightness.
+    const end = glowAt(b.to + .001, l);
+    assert.ok(end.his < end.bhis && end.bhis <= end.lbb, JSON.stringify(end));
+  });
+}
+
+// Review of PR #49: the labels of the ECG are found from the beat time, which keeps growing while the beat plays.
+test('the age of a wave in the strip depends only on where the beat time is within the beat, however many beats have played', () => {
+  const [minAge, maxAge] = [6 / .276, (276 - 6) / .276];
+  for (const bump of ecgBumps.filter(b => ['P', 'R', 'T'].includes(b.name))) {
+    for (const base of [0, 30, 105, 340, 405, 740, 799]) {
+      const first = waveAge(base, bump.mean, minAge, maxAge);
+      for (const beats of [1, 2, 3, 4, 10, 100, 1000]) {
+        const later = waveAge(base + beats * period, bump.mean, minAge, maxAge);
+        assert.ok(first === later || Math.abs(first - later) < 1e-6, `${bump.name} at ${base} + ${beats} beats: ${first} vs ${later}`);
+      }
+    }
+  }
+  // The newest occurrence is chosen, and it is a real occurrence of the wave: its time is `mean` plus whole beats.
+  const age = waveAge(8400 + 400, ecgBumps[2].mean, minAge, maxAge);
+  assert.ok(age >= minAge && age <= maxAge);
+  assert.ok(Math.abs(((8800 - age - ecgBumps[2].mean) / period) - Math.round((8800 - age - ecgBumps[2].mean) / period)) < 1e-9);
+  // The strip is 1000 ms wide and a beat 800 ms: every wave is in view at every beat time except when it has just been drawn at the
+  // very edge, and none is when the window is too short for it.
+  for (let ms = 0; ms < 5 * period; ms += 7) for (const bump of ecgBumps.filter(b => ['P', 'R', 'T'].includes(b.name))) assert.notEqual(waveAge(ms + 40000, bump.mean, minAge, maxAge), null, `${bump.name} at ${ms}`);
+  assert.equal(waveAge(1000, 500, 5, 100), null);
 });

@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { createConduction, createConductionPulse } from './conduction.mjs';
-import { ecgAt, ecgBumps, glowAt, repolarizationWindow, stretchTextAt, stretches } from './conduction-timing.mjs';
+import { ecgAt, ecgBumps, glowAt, stretchTextAt, waveAge } from './conduction-timing.mjs';
 import { createAnatomy, modelScale } from './anatomy.mjs';
 import { createFlow, routesThrough } from './flow.mjs';
 import { contraction, createBeat, period, phaseAt, phases, stepBeat } from './heartbeat.mjs';
@@ -348,11 +348,8 @@ diffuseColor.a = min(1.0, diffuseColor.a + rim * 0.55);
     const labels = { P: 'P', R: 'QRS', T: 'T' };
     for (const text of ecgMarks) {
       const bump = ecgBumps.find(b => b.name === text.dataset.wave);
-      let x = -1;
-      for (let n = -2; n <= 2; n++) {
-        const ms = bump.mean + n * period, at = ecgNow - (beatTime - ms) * scale;
-        if (ms <= beatTime && at >= 6 && at <= ecgNow - 6) x = at;
-      }
+      // The newest occurrence of this wave in view, found from the beat time (which keeps growing while the beat plays).
+      const age = waveAge(beatTime, bump.mean, 6 / scale, (ecgNow - 6) / scale), x = age === null ? -1 : ecgNow - age * scale;
       text.toggleAttribute('hidden', x < 0);
       if (x >= 0) { text.setAttribute('x', x.toFixed(1)); text.setAttribute('y', (ecgBase - Math.max(bump.height, 0) * ecgAmp - 5).toFixed(1)); text.textContent = labels[bump.name]; }
     }

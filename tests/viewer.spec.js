@@ -1156,6 +1156,39 @@ test('conduction view: the impulse and the ECG follow the beat clock', async ({ 
   expect(errors).toEqual([]);
 });
 
+// Review of PR #49: the labels of the strip came from a fixed list of beats, so after a few beats of play they were gone for good.
+// The beat time keeps growing while the beat plays; the strip is a function of where it is within the beat, so after 4 or 10 whole
+// beats the strip and its labels must be what they were. (fastForward moves the fake clock at once and draws one frame.)
+test('conduction view: the ECG labels and the trace are the same after 4 and 10 whole beats', async ({ page }) => {
+  const errors = [];
+  page.on('pageerror', e => errors.push(e.message));
+  await page.clock.install({ time: 0 });
+  await page.goto(url);
+  await expect(page.locator('html')).toHaveAttribute('data-ready', 'true');
+  await page.clock.pauseAt(60000);
+  const click = id => page.evaluate(i => document.getElementById(i).click(), id);
+  await click('mode-conduction');
+  await click('beat-speed');
+  const strip = () => page.evaluate(() => ({
+    d: document.getElementById('ecg-trace').getAttribute('d'),
+    labels: [...document.querySelectorAll('#ecg-panel text')].map(t => [t.dataset.wave, t.hasAttribute('hidden'), t.getAttribute('x'), t.getAttribute('y'), t.textContent]),
+  }));
+  const stopAt = async ms => {
+    await click('beat-play');
+    await ms();
+    await click('beat-play');
+    await page.clock.runFor(30);
+    return strip();
+  };
+  const first = await stopAt(() => page.clock.runFor(405));
+  expect(first.labels.map(l => l[1]), 'at 405 ms the P, QRS and T labels are shown').toEqual([false, false, false]);
+  const fourBeats = await stopAt(() => page.clock.fastForward(4 * 800));
+  expect(fourBeats).toEqual(first);
+  const tenBeats = await stopAt(() => page.clock.fastForward(6 * 800));
+  expect(tenBeats).toEqual(first);
+  expect(errors).toEqual([]);
+});
+
 // The impulse is also drawn on the cross-section when the conduction overlay is on; the strip is only in the conduction view.
 test('interior view: the impulse runs on the conduction overlay and the strip stays out', async ({ page }) => {
   const errors = [];
