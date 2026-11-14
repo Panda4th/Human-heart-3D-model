@@ -1156,6 +1156,28 @@ test('conduction view: the impulse and the ECG follow the beat clock', async ({ 
   expect(errors).toEqual([]);
 });
 
+// The phase box (top left of the model) must not lie over the model in a narrow PC window. With the beat stopped mid-beat and the box,
+// the labels and the strip hidden, count the model pixels in the box's area. Before the box was cut down below 1400px: 3382 at 1024x768
+// (exterior view), 636 at 1280x800; after: 0 at both (and at 1100x800, 1300x800, 1366x768, 1360x1000 when measured by hand).
+for (const [width, height] of [[1024, 768], [1280, 800]]) for (const mode of ['exterior', 'conduction']) test(`PC layout: the phase box is clear of the model at ${width}x${height} (${mode})`, async ({ browser }) => {
+  const context = await browser.newContext({ viewport: { width, height } });
+  const page = await context.newPage();
+  await page.goto(url);
+  await expect(page.locator('html')).toHaveAttribute('data-ready', 'true');
+  await page.locator(`#mode-${mode}`).click();
+  await page.locator('#beat-play').click();
+  await page.waitForTimeout(600);
+  await page.locator('#beat-play').click();
+  await expect(page.locator('#beat-phase')).toBeVisible();
+  await settle(page);
+  const rect = await page.evaluate(() => { const r = document.getElementById('beat-phase').getBoundingClientRect(); return { x: r.left, y: r.top, width: r.width, height: r.height }; });
+  expect(rect.width, 'the box is the short one').toBeLessThan(260);
+  await page.addStyleTag({ content: '#beat-phase,#labels,#ecg-panel{visibility:hidden}' });
+  await settle(page);
+  expect(await modelPixels(page, await page.screenshot({ clip: rect }))).toBe(0);
+  await context.close();
+});
+
 // Review of PR #49: the labels of the strip came from a fixed list of beats, so after a few beats of play they were gone for good.
 // The beat time keeps growing while the beat plays; the strip is a function of where it is within the beat, so after 4 or 10 whole
 // beats the strip and its labels must be what they were. (fastForward moves the fake clock at once and draws one frame.)

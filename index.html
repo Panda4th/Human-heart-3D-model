@@ -73,6 +73,15 @@ nav.views{grid-row:4;grid-column:1/-1;position:relative;z-index:2;align-self:sta
 nav.tools{grid-row:7;grid-column:1/-1;padding:6px 12px 12px}
 .beat-phase{left:5%}
 }
+@media(min-width:761px) and (max-width:1399px){
+/* The phase box (top left of the model) used to lie over the aortic arch and the top of the superior vena cava when the window was
+   narrow. Model pixels under the box (Chromium software rendering, the beat stopped mid-beat, labels hidden): 3382 at 1024x768, 2958 at
+   1100x800, 636 at 1280x800, 328 at 1300x800, 179 at 1360x1000, and none from 1340x820 on, at 1400x860, 1400x1000, 1440x900, 1440x1100,
+   1536x864 and 1920x1080 (exterior view; the conduction view, with its one more line, gave fewer). A width of 280px (the first idea)
+   still overlapped below 1280px (1266 at 1024x768), so the explanatory sentence is left out here, as on a phone: the box then holds the
+   phase name and the one-line valve state, and no model pixel lies under it at any of these sizes. */
+#beat-phase-valves{display:none}
+}
 @media(min-width:1000px){
 /* The stage is the window minus the 330px side column. From about 1000px it is wide enough (about 670px) for the heading and the four
    mode buttons side by side, and for the cut slider and the two overlay buttons in one row; below that each gets its own row, so
