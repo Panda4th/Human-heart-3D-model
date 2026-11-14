@@ -1437,7 +1437,8 @@ test('a click on the phase box in the side column does not choose a part under i
 
 // Review of PR #51: on a small upright phone the phase box under the model, a cut notice and the description left <main> (the buttons)
 // 1px tall at 320x520. <main> keeps at least 100px: the description, the notices and then the model shrink.
-for (const [width, height] of [[320, 520], [320, 568], [360, 560], [667, 375]]) test(`phone layout at ${width}x${height}: the buttons keep 100px with the phase box and a cut notice`, async ({ browser }) => {
+// On a phone held sideways <main> keeps 60px instead, so that everything fits a screen 300px tall; the cut notice must not run over it.
+for (const [width, height] of [[320, 520], [320, 568], [360, 560], [667, 375], [568, 320], [667, 300]]) test(`phone layout at ${width}x${height}: the buttons keep their room with the phase box and a cut notice`, async ({ browser }) => {
   const context = await browser.newContext({ viewport: { width, height }, hasTouch: true, isMobile: true });
   const page = await context.newPage();
   await page.goto(url);
@@ -1450,9 +1451,50 @@ for (const [width, height] of [[320, 520], [320, 568], [360, 560], [667, 375]]) 
   await click('beat-play');
   await click('beat-play');
   await expect(page.locator('#beat-phase')).toBeVisible();
-  const main = await page.locator('main').boundingBox();
-  expect(main.height).toBeGreaterThanOrEqual(99.5);
+  const main = await page.locator('main').boundingBox(), notice = await page.locator('#cut-notice').boundingBox();
+  expect(main.height).toBeGreaterThanOrEqual(height <= 480 ? 59.5 : 99.5);
   expect(main.y + main.height).toBeLessThanOrEqual(height + 1);
+  expect(notice.y + notice.height, 'the cut notice ends above the buttons').toBeLessThanOrEqual(main.y + .5);
+  await context.close();
+});
+
+// Review of PR #51: under the model on a small upright phone, the phase box changed height when the impulse line wrapped differently,
+// and the model box with it (186-201px at 320x520). It keeps the height of its tallest text.
+test('phone layout at 320x520: the model box keeps its size while the beat plays in the conduction view', async ({ browser }) => {
+  const context = await browser.newContext({ viewport: { width: 320, height: 520 }, hasTouch: true, isMobile: true });
+  const page = await context.newPage();
+  await page.goto(url);
+  await expect(page.locator('html')).toHaveAttribute('data-ready', 'true');
+  await page.evaluate(() => document.getElementById('mode-conduction').click());
+  await page.evaluate(() => document.getElementById('beat-speed').click());
+  await page.evaluate(() => document.getElementById('beat-play').click());
+  const heights = new Set(), texts = new Set();
+  for (let i = 0; i < 30; i++) {
+    const [h, t] = await page.evaluate(() => [document.querySelector('canvas').getBoundingClientRect().height, document.getElementById('beat-electric').textContent]);
+    heights.add(h); texts.add(t);
+    await page.waitForTimeout(60);
+  }
+  expect(texts.size, 'the impulse line changed').toBeGreaterThan(1);
+  expect([...heights]).toHaveLength(1);
+  await context.close();
+});
+
+// Review of PR #51: from 761 to 999px the list of parts scrolls under the phase box at the top of the side column; a button reached by
+// Shift+Tab was left focused but hidden under the box. Both directions must leave the focused button in view below the box.
+test('side column at 800x700: a part button reached by Tab or Shift+Tab is not hidden under the phase box', async ({ browser }) => {
+  const context = await browser.newContext({ viewport: { width: 800, height: 700 } });
+  const page = await context.newPage();
+  await page.goto(url);
+  await expect(page.locator('html')).toHaveAttribute('data-ready', 'true');
+  await page.locator('#beat-play').click();
+  await page.locator('#beat-play').click();
+  const visible = () => page.evaluate(() => {
+    const e = document.activeElement, r = e.getBoundingClientRect(), box = document.getElementById('beat-phase').getBoundingClientRect();
+    return { name: e.textContent.trim(), clear: !e.classList.contains('part') || r.top >= box.bottom - .5 };
+  });
+  await page.getByRole('button', { name: '左心室', exact: true }).focus();
+  for (let i = 0; i < 14; i++) { await page.keyboard.press('Tab'); const v = await visible(); expect(v.clear, `Tab to ${v.name}`).toBe(true); }
+  for (let i = 0; i < 14; i++) { await page.keyboard.press('Shift+Tab'); const v = await visible(); expect(v.clear, `Shift+Tab to ${v.name}`).toBe(true); }
   await context.close();
 });
 

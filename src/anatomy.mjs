@@ -10,14 +10,31 @@ const bundleError = message => Object.assign(new Error(message), { name: 'HeartB
 export function decodeAnatomy(bytes) {
   const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
   if (new TextDecoder().decode(bytes.subarray(0, 4)) !== 'BP3D') throw bundleError('Not a BodyParts3D heart bundle');
+  const fail = what => { throw bundleError(`Heart bundle: ${what}`); };
+  if (bytes.byteLength < 8) fail('cut off in the header');
   const jsonLength = view.getUint32(4, true);
-  const meta = JSON.parse(new TextDecoder().decode(bytes.subarray(8, 8 + jsonLength)));
-  if (meta.format !== anatomyFormat) throw bundleError(`Heart bundle format ${meta.format}, expected ${anatomyFormat}`);
+  if (8 + jsonLength > bytes.byteLength) fail('cut off in the metadata');
+  let meta;
+  try { meta = JSON.parse(new TextDecoder().decode(bytes.subarray(8, 8 + jsonLength))); } catch { fail('the metadata is not JSON'); }
+  if (meta?.format !== anatomyFormat) throw bundleError(`Heart bundle format ${meta?.format}, expected ${anatomyFormat}`);
+  // The metadata the viewer reads, and every mesh region within the bytes (review of PR #51: a bundle cut by two bytes was read as
+  // valid, because slice() cuts silently, and a bundle without `flow` or `conduction` failed later as if WebGL were missing).
+  if (!Array.isArray(meta.parts) || !Number.isFinite(meta.step) || !Array.isArray(meta.center) || meta.center.length !== 3) fail('no parts, step or centre');
+  const c = meta.conduction, f = meta.flow;
+  if (!c?.nodes?.sa || !c.nodes.av || !c.leftBundle?.sheet || !c.paths) fail('no conduction data');
+  for (const key of ['atria', 'his', 'branchingHis', 'leftFascicles', 'branches', 'purkinje']) if (!Array.isArray(c.paths[key])) fail(`no conduction path ${key}`);
+  if (!f?.valves || !Array.isArray(f.routes) || !f.routes.length) fail('no blood-flow data');
+  const bodyLength = bytes.byteLength - 8 - jsonLength;
+  const fits = (offset, length) => Number.isInteger(offset) && Number.isInteger(length) && offset >= 0 && length >= 0 && offset + length <= bodyLength;
+  for (const p of meta.parts) {
+    if (!fits(p.positionOffset, p.vertices * 6) || !fits(p.indexOffset, p.indices * 2) || p.indices % 3) fail(`part ${p.id} lies outside the data`);
+  }
   const body = bytes.byteOffset + 8 + jsonLength;
   const parts = meta.parts.map(p => {
     const raw = new Int16Array(bytes.buffer.slice(body + p.positionOffset, body + p.positionOffset + p.vertices * 6));
     const positions = Float32Array.from(raw, (v, i) => v * meta.step + meta.center[i % 3]);
     const indices = new Uint16Array(bytes.buffer.slice(body + p.indexOffset, body + p.indexOffset + p.indices * 2));
+    for (const i of indices) if (i >= p.vertices) fail(`part ${p.id} has an index past its vertices`);
     return { id: p.id, positions, indices };
   });
   return { meta, parts };
@@ -63,6 +80,7 @@ export function createAnatomy(parent, parts, bytes, scale) {
     const modes = kind === 'interior' ? ['interior'] : chambers.includes(id) ? ['exterior', 'interior', 'flow'] : ['exterior', 'flow'];
     group.userData = { id, name, en, desc, color, kind, modes };
     const mesh = byId.get(id);
+    if (!mesh) throw bundleError(`Heart bundle: no part ${id}`);
     const geometry = new THREE.BufferGeometry();
     geometry.setAttribute('position', new THREE.BufferAttribute(mesh.positions, 3));
     geometry.setIndex(new THREE.BufferAttribute(mesh.indices, 1));

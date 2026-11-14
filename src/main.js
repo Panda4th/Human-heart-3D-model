@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { createConduction, createConductionPulse } from './conduction.mjs';
-import { ecgAt, ecgBumps, glowAt, stretchTextAt, waveAge } from './conduction-timing.mjs';
+import { ecgAt, ecgBumps, glowAt, stretchText, stretchTextAt, waveAge } from './conduction-timing.mjs';
 import { createAnatomy, modelScale } from './anatomy.mjs';
 import { createFlow, routesThrough } from './flow.mjs';
 import { contraction, createBeat, period, phaseAt, phases, stepBeat } from './heartbeat.mjs';
@@ -273,9 +273,33 @@ diffuseColor.a = min(1.0, diffuseColor.a + rim * 0.55);
   function requestRender() {
     if (!frame && !document.hidden && !failed) frame = requestAnimationFrame(render);
   }
+  // The phase box under the model (upright phone) keeps the height of its tallest text, or the model box changed size each time
+  // the impulse line wrapped differently (review of PR #51: 186-201px at 320x520). In the side column (761-999px) the list scrolls
+  // under the box, so the box's height is kept clear when the focus scrolls the list (review of PR #51: Shift+Tab hid the focused
+  // button under it).
+  const phaseBox = $('beat-phase'), phaseLines = [$('beat-phase-name'), $('beat-phase-short'), $('beat-electric')];
+  function fitPhaseBox() {
+    phaseBox.style.minHeight = '';
+    if (!phaseBox.hidden && getComputedStyle(phaseBox).position === 'static') {
+      const saved = phaseLines.map(e => [e.textContent, e.hidden]);
+      let tallest = 0;
+      for (const phase of phases) for (const text of conduction.visible ? Object.values(stretchText) : ['']) {
+        phaseLines[0].textContent = `${phase.name}（${phase.time}）`;
+        phaseLines[1].textContent = phase.short;
+        phaseLines[2].textContent = text;
+        phaseLines[2].hidden = !text;
+        tallest = Math.max(tallest, phaseBox.getBoundingClientRect().height);
+      }
+      saved.forEach(([text, hidden], i) => { phaseLines[i].textContent = text; phaseLines[i].hidden = hidden; });
+      phaseBox.style.minHeight = `${Math.ceil(tallest)}px`;
+    }
+    const aside = document.querySelector('aside');
+    aside.style.scrollPaddingTop = phaseBox.parentElement === aside && !phaseBox.hidden ? `${Math.ceil(phaseBox.getBoundingClientRect().height) + 8}px` : '';
+  }
+  new ResizeObserver(fitPhaseBox).observe(phaseBox);
   function showPhase() {
     const index = phaseAt(beatTime);
-    $('beat-phase').hidden = false;
+    if (phaseBox.hidden) { phaseBox.hidden = false; fitPhaseBox(); }
     $('beat-note').hidden = false;
     if (index === shownPhase) return;
     shownPhase = index;
@@ -446,6 +470,7 @@ diffuseColor.a = min(1.0, diffuseColor.a + rim * 0.55);
     requestRender();
   }
   function resize() {
+    fitPhaseBox(); // the text wraps by the width
     const { width, height } = canvas.getBoundingClientRect();
     if (width <= 0 || height <= 0) return;
     const offset = camera.position.clone().sub(controls.target);
@@ -565,6 +590,7 @@ diffuseColor.a = min(1.0, diffuseColor.a + rim * 0.55);
     for (const group of parts.values()) group.userData.button.hidden = !selectable(group);
     $('conduction-note').hidden = !conduction.visible;
     $('ecg-panel').hidden = mode !== 'conduction';
+    fitPhaseBox(); // the impulse line is shown with the conduction overlay
     $('propagation-note').hidden = mode !== 'conduction';
     ecgKey = '';
     $('interior-conduction').setAttribute('aria-pressed', String(conductionOverlay));
