@@ -43,8 +43,8 @@ try {
   controls.enableDamping = false;
   controls.enablePan = false;
   controls.autoRotateSpeed = .8;
-  scene.add(new THREE.HemisphereLight(0xddeaff, 0x27131b, 2));
-  for (const [color, intensity, pos] of [[0xffd8bd, 100, [4, 5, 6]], [0x8caeff, 65, [-4, 2, -3]]]) {
+  scene.add(new THREE.HemisphereLight(0xddeaff, 0x27131b, 1));
+  for (const [color, intensity, pos] of [[0xffd8bd, 200, [4, 5, 6]], [0x8caeff, 65, [-4, 2, -3]]]) {
     const light = new THREE.PointLight(color, intensity);
     light.position.set(...pos);
     scene.add(light);
@@ -54,6 +54,24 @@ try {
   scene.add(heart);
   heart.add(exterior);
   const meta = createAnatomy(exterior, parts, anatomyData, modelScale);
+  // See-through walls (conduction and flow views) are nearly clear in the middle and brighter toward the silhouette, so that the chambers
+  // and vessels keep their outlines. The extra term applies only to transparent materials (not OPAQUE), so the other views are unchanged.
+  // The cross-section copies are cloned later and do not inherit the patch; they are never see-through.
+  for (const group of parts.values()) {
+    if (group.userData.kind !== 'exterior') continue;
+    group.traverse(object => {
+      if (!object.isMesh) return;
+      object.material.onBeforeCompile = shader => {
+        shader.fragmentShader = shader.fragmentShader.replace('#include <opaque_fragment>', `#ifndef OPAQUE
+float rim = pow(1.0 - abs(dot(normalize(normal), normalize(vViewPosition))), 2.2);
+outgoingLight += diffuseColor.rgb * rim * 1.1;
+diffuseColor.a = min(1.0, diffuseColor.a + rim * 0.55);
+#endif
+#include <opaque_fragment>`);
+      };
+      object.material.customProgramCacheKey = () => 'see-through-rim';
+    });
+  }
   // Interior view: a front-to-back cut fixed to the heart. Points with z > constant are removed.
   // Read the slider so a value restored by the browser matches the drawn cut.
   const cutPlane = new THREE.Plane(new THREE.Vector3(0, 0, -1), -Number($('cut-depth').value));
@@ -445,7 +463,7 @@ try {
       group.traverse(object => {
         if (!object.isMesh || object.userData.crossSection || object.material.transparent === seeThrough) return;
         object.material.transparent = seeThrough;
-        object.material.opacity = seeThrough ? .12 : 1;
+        object.material.opacity = seeThrough ? .07 : 1;
         object.material.depthWrite = !seeThrough;
         object.material.needsUpdate = true;
       });
