@@ -183,3 +183,19 @@ test('the age of a wave in the strip depends only on where the beat time is with
   for (let ms = 0; ms < 5 * period; ms += 7) for (const bump of ecgBumps.filter(b => ['P', 'R', 'T'].includes(b.name))) assert.notEqual(waveAge(ms + 40000, bump.mean, minAge, maxAge), null, `${bump.name} at ${ms}`);
   assert.equal(waveAge(1000, 500, 5, 100), null);
 });
+
+// Issue #50 (C2/F1): the durations are written out in the screen text too. A change of a constant must not leave the old number there.
+test('the screen text gives the durations of the four stretches as the constants say', async () => {
+  const { stretchText } = await import('../src/conduction-timing.mjs');
+  const template = readFileSync(new URL('../src/template.html', import.meta.url), 'utf8');
+  const seconds = ms => `約${ms / 1000}秒`;
+  for (const [name, ms] of Object.entries(conductionTimes)) assert.ok(stretchText[name].includes(seconds(ms)), `${name}: ${stretchText[name]}`);
+  const note = /<p class="note" id="propagation-note"[^>]*>([^<]*)<\/p>/.exec(template)[1];
+  assert.ok(note.includes(`洞房結節から心房へ${seconds(conductionTimes.atria)}`), note);
+  assert.ok(note.includes(`房室結節で${seconds(conductionTimes.avNode)}`), note);
+  assert.ok(note.includes(`心尖へ${seconds(conductionTimes.bundles)}`), note);
+  assert.ok(note.includes(`心室の筋へ${seconds(conductionTimes.purkinje)}`), note);
+  const total = Object.values(conductionTimes).reduce((a, b) => a + b, 0);
+  assert.ok(note.includes(`4つの区間を足すと${total}ミリ秒`), note);
+  assert.ok(note.includes(`約${-sinusFire / 1000}秒前に発火`), note);
+});

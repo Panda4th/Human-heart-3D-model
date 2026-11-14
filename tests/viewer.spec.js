@@ -512,10 +512,29 @@ for (const width of [1440, 390]) test(`heartbeat plays, shows its phase and stop
   const seen = new Set();
   for (let i = 0; i < 15; i++) { seen.add(await page.locator('#beat-phase-name').textContent()); await page.waitForTimeout(200); }
   expect(seen.size).toBeGreaterThanOrEqual(2);
-  await page.locator('#beat-play').click();
+  // Stop while the ventricles contract (0.5-1.85 s of the 4 s slow beat), so that the shape differs from rest. Until 2026-11-14 the stop
+  // fell about 3 s in, when the ventricles had relaxed again (rest shape), and the two pictures differed only because the phase box lay
+  // on the canvas; with the box off the model on a phone (Issue #50 B2/C1) they were equal. The box is hidden for the comparison, so it
+  // is the shape that is compared.
+  // The stop is clicked from inside the page, 300 ms after the phase name changes to the ventricular contraction: a click sent from the
+  // test arrived too late under load (2 of 4 runs with two workers stopped in the relaxation). It waits to see another phase first, so
+  // that a check that starts late in a contraction waits for the next one (review of PR #51).
+  await page.evaluate(() => new Promise(done => {
+    let other = false;
+    const timer = setInterval(() => {
+      const contracting = document.getElementById('beat-phase-name').textContent.startsWith('心室の収縮');
+      if (!contracting) { other = true; return; }
+      if (!other) return;
+      clearInterval(timer);
+      setTimeout(() => { document.getElementById('beat-play').click(); done(); }, 300);
+    }, 20);
+  }));
   await expect(page.locator('#beat-play')).toHaveText('拍動を再生');
   await expect(page.locator('#beat-phase')).toBeVisible();
+  await expect(page.locator('#beat-phase-name')).toHaveText(/^心室の収縮/);
+  const box = await page.addStyleTag({ content: '#beat-phase{visibility:hidden}' });
   const stopped = await stableShot(c);
+  await box.evaluate(e => e.remove());
   expect(stopped.equals(still)).toBe(false);
   const frames = await page.evaluate(() => window.renderRequests);
   await page.waitForTimeout(250);
@@ -534,6 +553,9 @@ for (const width of [1440, 390]) test(`heartbeat plays, shows its phase and stop
 test('the outline and the cut face shrink in the picture while the ventricles contract', async ({ browser }) => {
   const context = await browser.newContext({ viewport: { width: 1440, height: 900 } });
   const page = await context.newPage();
+  // The beat is stopped on a fake clock (Issue #50 B1: with the real clock, the stop landed later than 1.5 s on a slow machine, where the
+  // ventricles were relaxing again, and the cut face was too large in 3 of 3 runs). The thresholds are unchanged.
+  await page.clock.install({ time: 0 });
   await page.goto(url);
   await expect(page.locator('html')).toHaveAttribute('data-ready', 'true');
   await page.addStyleTag({ content: '#beat-phase{visibility:hidden}' });
@@ -547,10 +569,12 @@ test('the outline and the cut face shrink in the picture while the ventricles co
   await page.locator('#mode-interior').click();
   const interiorRest = await measure();
   expect(interiorRest.cap).toBeGreaterThan(5000);
-  await page.locator('#beat-play').click();
+  await page.clock.pauseAt(await page.evaluate(() => Date.now()) + 1000);
+  await page.evaluate(() => document.getElementById('beat-play').click());
   // 1.5 s of the slow beat is 300 ms of the real cycle: the ventricles are about three quarters contracted.
-  await page.waitForTimeout(1500);
-  await page.locator('#beat-play').click();
+  await page.clock.runFor(1500);
+  await page.evaluate(() => document.getElementById('beat-play').click()); // the stop draws the beat exactly where the clock is
+  await page.clock.resume();
   const interiorBeat = await measure();
   expect(interiorBeat.cap).toBeLessThan(interiorRest.cap * .97);
   expect(interiorBeat.model).toBeLessThan(interiorRest.model * .98);
@@ -591,6 +615,7 @@ const fakeAudio = () => {
     constructor() { this.state = 'suspended'; this.destination = {}; this.baseLatency = 0; this.outputLatency = 0; window.contexts++; this.listeners = []; window.lastContext = this; }
     get currentTime() { return (performance.now() - born) / 1000; }
     resume() { this.state = 'running'; return Promise.resolve(); }
+    suspend() { this.state = 'suspended'; return Promise.resolve(); }
     addEventListener(type, fn) { this.listeners.push(fn); }
     interrupt() { this.state = 'interrupted'; this.listeners.forEach(fn => fn()); }
     createGain() { return { gain: param(), connect() {}, disconnect() {} }; }
@@ -818,6 +843,8 @@ test('the heart sound cannot start where the page has no audio, and the page sti
   await page.goto(url);
   await expect(page.locator('html')).toHaveAttribute('data-ready', 'true');
   await expect(page.locator('#heart-sound')).toBeHidden();
+  // The note says why there is no sound button (Issue #50 B4: it said only what the button does).
+  await expect(page.locator('#sound-note')).toContainText('対応していないため');
   await page.locator('#beat-play').click();
   await expect(page.locator('#beat-play')).toHaveText('拍動を止める');
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
@@ -1277,4 +1304,236 @@ test('flow view: choosing a part emphasises the routes through it and darkens th
   expect(again.blue).toBeGreaterThan(all.blue * .8);
   expect(again.red).toBeGreaterThan(all.red * .8);
   expect(errors).toEqual([]);
+});
+
+// Issue #50 B4/E8: the audio context was still starting (resume pending) when the 3D view was lost. The controls were disabled and the
+// beat stopped, but the sound button turned itself on afterwards. It must stay off, with nothing booked.
+test('a heart sound that finishes starting after the 3D view is lost stays off', async ({ page }) => {
+  const errors = [];
+  page.on('pageerror', e => errors.push(e.message));
+  await page.addInitScript(fakeAudio);
+  await page.addInitScript(() => {
+    const original = window.AudioContext.prototype.resume;
+    window.AudioContext.prototype.resume = function () { return new Promise(done => { window.finishResume = () => { original.call(this); done(); }; }); };
+  });
+  await page.goto(url);
+  await expect(page.locator('html')).toHaveAttribute('data-ready', 'true');
+  await page.locator('#beat-play').click();
+  await page.locator('#heart-sound').click();
+  await expect.poll(() => page.evaluate(() => typeof window.finishResume)).toBe('function');
+  await page.locator('canvas').evaluate(c => c.dispatchEvent(new Event('webglcontextlost', { cancelable: true })));
+  await expect(page.locator('#heart-sound')).toBeDisabled();
+  await page.evaluate(() => window.finishResume());
+  await page.waitForTimeout(500);
+  await expect(page.locator('#heart-sound')).toHaveAttribute('aria-pressed', 'false');
+  // The audio context is not left running with no control to stop it (review of PR #51).
+  expect(await page.evaluate(() => window.lastContext.state)).toBe('suspended');
+  await expect(page.locator('#sound-status')).toBeHidden();
+  expect(await page.evaluate(() => window.voices.length)).toBe(0);
+  expect(errors).toEqual([]);
+});
+
+// Issue #50 B4: without JavaScript the controls are disabled instead of looking usable.
+test('without JavaScript the controls are disabled', async ({ browser }) => {
+  const context = await browser.newContext({ javaScriptEnabled: false });
+  const page = await context.newPage();
+  await page.goto(url);
+  // The <noscript> notice itself is not checked: with javaScriptEnabled false, Chromium still parses <noscript> as if scripts ran, so
+  // the notice is not in the page Playwright sees (tried 2026-11-14).
+  for (const id of ['mode-exterior', 'mode-conduction', 'view-front', 'beat-play', 'heart-sound', 'cut-depth']) await expect(page.locator(`#${id}`)).toBeDisabled();
+  await context.close();
+});
+
+// Issue #50 C3: on a phone, CSS order shows the ECG strip and the step buttons under the mode buttons and the view buttons under the
+// interior overlay buttons. Tab must follow that order, top to bottom, through the scrolling part of the page.
+for (const mode of ['conduction', 'interior']) test(`phone layout: Tab goes down the page in the ${mode} view`, async ({ browser }) => {
+  const context = await browser.newContext({ viewport: { width: 390, height: 844 }, hasTouch: true, isMobile: true });
+  const page = await context.newPage();
+  await page.goto(url);
+  await expect(page.locator('html')).toHaveAttribute('data-ready', 'true');
+  await page.locator(`#mode-${mode}`).click();
+  await page.locator(`#mode-${mode}`).focus();
+  const tops = [];
+  for (let i = 0; i < 30; i++) {
+    await page.keyboard.press('Tab');
+    tops.push(await page.evaluate(() => {
+      const e = document.activeElement, main = document.querySelector('main');
+      return main.contains(e) ? [e.id || e.textContent.trim(), e.getBoundingClientRect().top + main.scrollTop] : null;
+    }));
+  }
+  const inMain = tops.filter(Boolean);
+  expect(inMain.length).toBeGreaterThan(10);
+  for (let i = 1; i < inMain.length; i++) expect(inMain[i][1], `${inMain[i - 1][0]} -> ${inMain[i][0]}`).toBeGreaterThanOrEqual(inMain[i - 1][1] - 1);
+  await context.close();
+});
+
+// Issue #50 C5: a part the cut removed was dimmed with opacity .55, which put its tag "断面で消えた" at 3.78:1. Name and tag must keep
+// 4.5:1 against the button, and the button must not be see-through.
+test('interior view: the name and the tag of a part the cut removed keep 4.5:1 contrast', async ({ page }) => {
+  await page.goto(url);
+  await expect(page.locator('html')).toHaveAttribute('data-ready', 'true');
+  await page.locator('#mode-interior').click();
+  await page.locator('#cut-depth').fill('0.9');
+  const button = page.locator('.part.cut-out').first();
+  await expect(button).toBeVisible();
+  const result = await button.evaluate(b => {
+    const rgb = c => c.match(/[\d.]+/g).slice(0, 3).map(Number);
+    const lum = c => { const [r, g, b2] = rgb(c).map(v => { v /= 255; return v <= .03928 ? v / 12.92 : ((v + .055) / 1.055) ** 2.4; }); return .2126 * r + .7152 * g + .0722 * b2; };
+    const ratio = (a, b) => { const [x, y] = [lum(a), lum(b)].sort((p, q) => q - p); return (x + .05) / (y + .05); };
+    const style = getComputedStyle(b), tag = getComputedStyle(b.querySelector('.cut-tag'));
+    return { opacity: style.opacity, name: ratio(style.color, style.backgroundColor), tag: ratio(tag.color, style.backgroundColor) };
+  });
+  expect(result.opacity).toBe('1');
+  expect(result.name).toBeGreaterThanOrEqual(4.5);
+  expect(result.tag).toBeGreaterThanOrEqual(4.5);
+});
+
+// Issue #50 B2/C1: below 1000px and on an upright phone the model fills its box and the phase box covered the top of the vessels in every
+// corner (99 model pixels under it at 761x800 in the conduction view, 170 in the interior view, 297 at 390x844). There it is moved off the
+// model; a phone held sideways keeps it on the model, capped at 200px. Measured as in the test above, with the longest impulse line.
+for (const [width, height, mobile] of [[761, 800, false], [900, 800, false], [999, 800, false], [390, 844, true], [320, 640, true], [568, 320, true], [667, 375, true]]) test(`the phase box is clear of the model at ${width}x${height}`, async ({ browser }) => {
+  const context = await browser.newContext({ viewport: { width, height }, hasTouch: mobile, isMobile: mobile });
+  const page = await context.newPage();
+  await page.goto(url);
+  await expect(page.locator('html')).toHaveAttribute('data-ready', 'true');
+  for (const mode of ['exterior', 'conduction', 'interior']) {
+    await page.locator(`#mode-${mode}`).click();
+    await page.locator('#beat-play').click();
+    await page.waitForTimeout(600);
+    await page.locator('#beat-play').click();
+    await expect(page.locator('#beat-phase')).toBeVisible();
+    // In the conduction view the impulse line is forced on with its longest text, wherever the beat stopped.
+    if (mode === 'conduction') await page.evaluate(() => { const e = document.getElementById('beat-electric'); e.hidden = false; e.textContent = '刺激：ヒス束と左右の脚を心尖へ下る（約0.025秒）'; });
+    await page.addStyleTag({ content: '#labels,#ecg-panel{visibility:hidden}' });
+    await settle(page);
+    const [rect, canvas] = await page.evaluate(() => [document.getElementById('beat-phase'), document.querySelector('canvas')].map(e => { const r = e.getBoundingClientRect(); return { x: r.left, y: r.top, width: r.width, height: r.height }; }));
+    const overCanvas = rect.x < canvas.x + canvas.width && rect.x + rect.width > canvas.x && rect.y < canvas.y + canvas.height && rect.y + rect.height > canvas.y;
+    expect(overCanvas, `${mode}: the box is on the model only on a phone held sideways`).toBe(height <= 480);
+    if (overCanvas) {
+      const style = await page.addStyleTag({ content: '#beat-phase{visibility:hidden}' });
+      await settle(page);
+      expect(await modelPixels(page, await page.screenshot({ clip: rect })), mode).toBe(0);
+      await style.evaluate(e => e.remove());
+    }
+  }
+  await context.close();
+});
+
+// Review of PR #51: the phase box at the top of the side column (761-999px) is opaque and the part buttons pass under it when the list
+// scrolls; a click on it chose the button hidden under it.
+test('a click on the phase box in the side column does not choose a part under it', async ({ browser }) => {
+  const context = await browser.newContext({ viewport: { width: 800, height: 700 } });
+  const page = await context.newPage();
+  await page.goto(url);
+  await expect(page.locator('html')).toHaveAttribute('data-ready', 'true');
+  await page.locator('#beat-play').click();
+  await page.locator('#beat-play').click();
+  await page.evaluate(() => { document.querySelector('aside').scrollTop = 150; });
+  const box = await page.locator('#beat-phase').boundingBox();
+  await page.mouse.click(box.x + box.width / 2, box.y + box.height / 2);
+  await expect(page.locator('#name')).toHaveText('左心室');
+  await context.close();
+});
+
+// Review of PR #51: on a small upright phone the phase box under the model, a cut notice and the description left <main> (the buttons)
+// 1px tall at 320x520. <main> keeps at least 100px: the description, the notices and then the model shrink.
+// On a phone held sideways <main> keeps 60px instead, so that everything fits a screen 300px tall; the cut notice must not run over it.
+for (const [width, height] of [[320, 520], [320, 568], [360, 560], [667, 375], [568, 320], [667, 300]]) test(`phone layout at ${width}x${height}: the buttons keep their room with the phase box and a cut notice`, async ({ browser }) => {
+  const context = await browser.newContext({ viewport: { width, height }, hasTouch: true, isMobile: true });
+  const page = await context.newPage();
+  await page.goto(url);
+  await expect(page.locator('html')).toHaveAttribute('data-ready', 'true');
+  const click = id => page.evaluate(i => document.getElementById(i).click(), id);
+  await click('mode-interior');
+  await page.locator('#cut-depth').fill('0.9');
+  await page.evaluate(() => document.querySelector('.part.cut-out').click());
+  await expect(page.locator('#cut-notice')).toBeVisible();
+  await click('beat-play');
+  await click('beat-play');
+  await expect(page.locator('#beat-phase')).toBeVisible();
+  const main = await page.locator('main').boundingBox(), notice = await page.locator('#cut-notice').boundingBox();
+  expect(main.height).toBeGreaterThanOrEqual(height <= 480 ? 59.5 : 99.5);
+  expect(main.y + main.height).toBeLessThanOrEqual(height + 1);
+  expect(notice.y + notice.height, 'the cut notice ends above the buttons').toBeLessThanOrEqual(main.y + .5);
+  await context.close();
+});
+
+// Review of PR #51: under the model on a small upright phone, the phase box changed height when the impulse line wrapped differently,
+// and the model box with it (186-201px at 320x520). It keeps the height of its tallest text.
+test('phone layout at 320x520: the model box keeps its size while the beat plays in the conduction view', async ({ browser }) => {
+  const context = await browser.newContext({ viewport: { width: 320, height: 520 }, hasTouch: true, isMobile: true });
+  const page = await context.newPage();
+  await page.goto(url);
+  await expect(page.locator('html')).toHaveAttribute('data-ready', 'true');
+  await page.evaluate(() => document.getElementById('mode-conduction').click());
+  await page.evaluate(() => document.getElementById('beat-speed').click());
+  await page.evaluate(() => document.getElementById('beat-play').click());
+  const heights = new Set(), texts = new Set();
+  for (let i = 0; i < 30; i++) {
+    const [h, t] = await page.evaluate(() => [document.querySelector('canvas').getBoundingClientRect().height, document.getElementById('beat-electric').textContent]);
+    heights.add(h); texts.add(t);
+    await page.waitForTimeout(60);
+  }
+  expect(texts.size, 'the impulse line changed').toBeGreaterThan(1);
+  expect([...heights]).toHaveLength(1);
+  await context.close();
+});
+
+// Review of PR #51: from 761 to 999px the list of parts scrolls under the phase box at the top of the side column; a button reached by
+// Shift+Tab was left focused but hidden under the box. Both directions must leave the focused button in view below the box.
+test('side column at 800x700: a part button reached by Tab or Shift+Tab is not hidden under the phase box', async ({ browser }) => {
+  const context = await browser.newContext({ viewport: { width: 800, height: 700 } });
+  const page = await context.newPage();
+  await page.goto(url);
+  await expect(page.locator('html')).toHaveAttribute('data-ready', 'true');
+  await page.locator('#beat-play').click();
+  await page.locator('#beat-play').click();
+  const visible = () => page.evaluate(() => {
+    const e = document.activeElement, r = e.getBoundingClientRect(), box = document.getElementById('beat-phase').getBoundingClientRect();
+    return { name: e.textContent.trim(), clear: !e.classList.contains('part') || r.top >= box.bottom - .5 };
+  });
+  await page.getByRole('button', { name: '左心室', exact: true }).focus();
+  for (let i = 0; i < 14; i++) { await page.keyboard.press('Tab'); const v = await visible(); expect(v.clear, `Tab to ${v.name}`).toBe(true); }
+  for (let i = 0; i < 14; i++) { await page.keyboard.press('Shift+Tab'); const v = await visible(); expect(v.clear, `Shift+Tab to ${v.name}`).toBe(true); }
+  await context.close();
+});
+
+// Review of PR #51: the model and the description were taken out of the page and put back at every change of the phase box's media
+// queries (turning a phone, resizing a PC window), which lost the focus and the description's scroll position.
+test('turning a phone keeps the focus and the description scroll', async ({ browser }) => {
+  const context = await browser.newContext({ viewport: { width: 360, height: 640 }, hasTouch: true, isMobile: true });
+  const page = await context.newPage();
+  await page.goto(url);
+  await expect(page.locator('html')).toHaveAttribute('data-ready', 'true');
+  await page.locator('#mode-conduction').click();
+  await page.evaluate(() => { document.querySelector('.detail').scrollTop = 40; });
+  await page.locator('#view-front').focus();
+  await page.setViewportSize({ width: 640, height: 360 });
+  await page.waitForTimeout(300);
+  expect(await page.evaluate(() => document.activeElement.id)).toBe('view-front');
+  expect(await page.evaluate(() => document.querySelector('.detail').scrollTop)).toBeGreaterThan(0);
+  await page.setViewportSize({ width: 900, height: 700 });
+  await page.waitForTimeout(300); // leaving the phone layout moves the view buttons back (that loses the focus, as it should once)
+  await page.locator('#view-front').focus();
+  await page.setViewportSize({ width: 1100, height: 700 });
+  await page.waitForTimeout(300);
+  expect(await page.evaluate(() => document.activeElement.id)).toBe('view-front');
+  await context.close();
+});
+
+// Review of PR #51: any broken bundle (here its JSON length is wrong, so the JSON does not parse) is a data error, not a missing WebGL;
+// and a script that cannot run at all (a syntax error, as in a browser too old for its syntax) still leaves an explanation.
+for (const [name, edit, text] of [
+  ['a broken data bundle', html => html.replace('fromBase64("QlAzRGA8AAB7', 'fromBase64("QlAzRGA8AAF7'), 'データを読み込めませんでした'],
+  ['a script that cannot run', html => { const at = html.lastIndexOf('<script>') + '<script>'.length; return html.slice(0, at) + ')' + html.slice(at); }, 'プログラムを起動できませんでした'],
+]) test(`${name} leaves its own explanation`, async ({ page }, testInfo) => {
+  const fs = require('node:fs');
+  const html = fs.readFileSync(path.resolve('index.html'), 'utf8'), changed = edit(html);
+  expect(changed).not.toBe(html);
+  const file = testInfo.outputPath('broken.html');
+  fs.writeFileSync(file, changed);
+  await page.goto(pathToFileURL(file).href);
+  await expect(page.locator('#error')).toContainText(text);
+  await expect(page.locator('#mode-conduction')).toBeDisabled();
+  await expect(page.locator('#msd-reference')).toBeVisible();
 });

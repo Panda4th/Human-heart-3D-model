@@ -256,6 +256,30 @@ test('bundle format is checked', () => {
   const at = 8 + text.indexOf(`"format":${anatomyFormat}`) + '"format":'.length;
   copy[at] = 0x32; // "2"
   assert.throws(() => decodeAnatomy(copy), /format 2/);
+  // The page tells a data mismatch from a missing WebGL by this name (Issue #50 B4).
+  assert.throws(() => decodeAnatomy(copy), { name: 'HeartBundleError' });
+});
+// Review of PR #51: a bundle cut short by an even number of bytes was read as valid (slice() cuts silently), and one without the
+// conduction or blood-flow metadata failed later, as if WebGL were missing. Both must be data errors.
+test('a cut-off bundle or one without required metadata is a data error', () => {
+  const dataError = { name: 'HeartBundleError' };
+  for (const cut of [2, 4, 1000]) assert.throws(() => decodeAnatomy(bundle.subarray(0, bundle.length - cut)), dataError, `cut ${cut}`);
+  assert.throws(() => decodeAnatomy(bundle.subarray(0, 6)), dataError);
+  const view = new DataView(bundle.buffer, bundle.byteOffset), jsonLength = view.getUint32(4, true);
+  const meta = JSON.parse(new TextDecoder().decode(bundle.subarray(8, 8 + jsonLength)));
+  const rebuild = edit => {
+    const copy = structuredClone(meta);
+    edit(copy);
+    const json = new TextEncoder().encode(JSON.stringify(copy)), out = new Uint8Array(8 + json.length + bundle.length - 8 - jsonLength);
+    out.set(bundle.subarray(0, 4));
+    new DataView(out.buffer).setUint32(4, json.length, true);
+    out.set(json, 8);
+    out.set(bundle.subarray(8 + jsonLength), 8 + json.length);
+    return out;
+  };
+  assert.doesNotThrow(() => decodeAnatomy(rebuild(() => {})));
+  for (const [name, edit] of [['flow', m => { delete m.flow; }], ['conduction', m => { delete m.conduction; }], ['a path', m => { delete m.conduction.paths.purkinje; }],
+    ['an index past the vertices', m => { m.parts[0].vertices = 3; }]]) assert.throws(() => decodeAnatomy(rebuild(edit)), dataError, name);
 });
 test('BodyParts3D heart wall has a plausible size and coronary vessels lie on it', () => {
   const wall = anatomy.parts.filter(p => ['lv', 'rv', 'ra', 'la'].includes(p.id)).flatMap(p => [...p.positions]);

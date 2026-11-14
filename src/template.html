@@ -31,14 +31,18 @@ canvas:focus-visible{outline:2px solid #f0bb90;outline-offset:-4px}
 button{font:inherit;color:inherit;background:#1b2a31;border:1px solid #ffffff30;border-radius:8px;min-height:44px;padding:10px 13px;cursor:pointer}
 button:hover{background:#30434b}button:focus-visible,a:focus-visible,summary:focus-visible{outline:2px solid #f0bb90;outline-offset:3px}
 button[aria-pressed=true]{border-color:#dca27f;background:#3a3330}button:disabled{opacity:.45;cursor:default}
-.modes button,.views button,.tools button{font-size:12px}.views button{min-height:38px}
+/* Every button is at least 44px tall. The view buttons, the overlay buttons and "見える位置へ動かす" were 38px from 2026-11-07 to 2026-11-14,
+   with no reason recorded (Issue #50 C5), and now follow the rule. */
+.modes button,.views button,.tools button{font-size:12px}
 aside{padding:28px 24px;border-left:1px solid #ffffff15;background:#152027}
 aside h2{font-size:11px;font-weight:500;letter-spacing:.12em;color:#a8b9bd;margin:0 0 16px}
 .part{width:100%;display:flex;align-items:center;text-align:left;margin:7px 0;padding:11px 12px;font-size:13px}
-.part .cut-tag{display:none}.part.cut-out{opacity:.55;border-style:dashed}.part.cut-out .cut-tag{display:inline;margin-left:auto;padding-left:8px;font-size:10px;color:#e1c998;white-space:nowrap}
+/* A part the cut removed is dimmed through its colours, not opacity: opacity .55 put the tag "断面で消えた" at 3.8:1 against the button
+   (axe, Issue #50 C5). Name #a6b1b3 is 6.7:1 on the button, 4.7:1 hovered and 5.6:1 pressed; the tag stays 9.2:1. */
+.part .cut-tag{display:none}.part.cut-out{color:#a6b1b3;border-style:dashed}.part.cut-out i{opacity:.55}.part.cut-out .cut-tag{display:inline;margin-left:auto;padding-left:8px;font-size:10px;color:#e1c998;white-space:nowrap}
 .part i{height:8px;width:8px;border-radius:50%;margin-right:11px;flex-shrink:0}
 .detail{border-top:1px solid #ffffff20;margin-top:24px;padding-top:20px}.detail h3{font-weight:400;font-size:23px;margin:0 0 6px}
-.detail-note{font-size:12px;line-height:20px;color:#e1c998;border-left:2px solid #ae8d56;padding-left:10px;margin:12px 0 0;max-width:640px}.detail-note button{display:block;margin-top:8px;min-height:38px;font-size:12px}
+.detail-note{font-size:12px;line-height:20px;color:#e1c998;border-left:2px solid #ae8d56;padding-left:10px;margin:12px 0 0;max-width:640px}.detail-note button{display:block;margin-top:8px;font-size:12px}
 .detail small{color:#d0ac91;font-size:11px}.detail p{font-size:13px;line-height:1.9;color:#c3cfd1}
 #steps{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-top:16px}#steps button{font-size:12px}#step-count{font-size:12px;color:#d3bb9d}
 .note{font-size:12px;line-height:1.8;color:#a6b9be;margin-top:22px}#conduction-note{color:#e1c998;border-left:2px solid #ae8d56;padding-left:12px}
@@ -86,6 +90,13 @@ nav.tools{grid-row:7;grid-column:1/-1;padding:6px 12px 12px}
 .beat-phase{max-width:200px}
 #beat-phase-valves{display:none}
 }
+@media(min-width:761px) and (max-width:999px){
+/* Below 1000px the model fills its box and no corner of it is free (model pixels under the box at 761x800: 99 top left, 49 top right and
+   37 bottom left in the conduction view, 170 top left in the interior view), so main.js moves the box to the top of the side column,
+   where it stays in view while the list scrolls. It is opaque there because the part buttons pass under it, and takes the pointer, or a click on it chose the hidden button
+   under it (review of PR #51). */
+aside>.beat-phase{position:sticky;top:-28px;left:auto;z-index:2;pointer-events:auto;max-width:none;margin:-28px -24px 16px;border-width:0 0 1px;border-radius:0;padding:10px 24px;background:#121e29}
+}
 @media(min-width:1000px){
 /* The stage is the window minus the 330px side column. From about 1000px it is wide enough (about 670px) for the heading and the four
    mode buttons side by side, and for the cut slider and the two overlay buttons in one row; below that each gets its own row, so
@@ -101,12 +112,15 @@ nav.tools{grid-row:7;grid-column:1/-1;padding:6px 12px 12px}
    model stayed black in that arrangement (7535baf) while the description showed. */
 body{height:100dvh;overflow:hidden;display:flex;flex-direction:column}
 header{flex:none;height:72px;min-height:0;padding:0 20px}.brand{font-size:16px}.badge{font-size:10px;padding:6px 8px}
-#pinned{flex:none;display:flex;flex-direction:column}
-main{flex:1;min-height:0;overflow-y:auto;align-items:stretch;overscroll-behavior:contain;display:flex;flex-direction:column;border-top:1px solid #ffffff26}
+/* <main> keeps at least two rows of buttons. When the pinned part (model, phase box, description, cut notices) would leave it less,
+   the description and the notices shrink first (they scroll), then the model (review of PR #51: at 320x520 with a cut notice and the
+   phase box, <main> was 1px tall and no button could be reached; 29px before the phase box moved under the model). */
+#pinned{flex:0 1 auto;min-height:0;display:flex;flex-direction:column}
+main{flex:1;min-height:100px;overflow-y:auto;align-items:stretch;overscroll-behavior:contain;display:flex;flex-direction:column;border-top:1px solid #ffffff26}
 .stage,aside{display:contents}
-.viewport{flex:none;height:clamp(220px,36dvh,420px);background:radial-gradient(ellipse at 50% 45%,#293d44 0%,#17242b 55%,#11191e 90%)}
-.detail{flex:none;height:clamp(120px,22dvh,230px);overflow:auto;margin:0;padding:12px 20px;background:#152027;border-top:0}
-.detail-note{flex:none;margin:0;padding:6px 20px;max-height:96px;overflow:auto;border-left:0;border-top:1px solid #ffffff20;background:#152027}.detail-note button{display:inline-block;margin:4px 0 0}
+.viewport{flex:0 1 auto;min-height:120px;height:clamp(220px,36dvh,420px);background:radial-gradient(ellipse at 50% 45%,#293d44 0%,#17242b 55%,#11191e 90%)}
+.detail{flex:0 3 auto;min-height:48px;height:clamp(120px,22dvh,230px);overflow:auto;margin:0;padding:12px 20px;background:#152027;border-top:0}
+.detail-note{flex:0 3 auto;min-height:52px;margin:0;padding:6px 20px;max-height:96px;overflow:auto;border-left:0;border-top:1px solid #ffffff20;background:#152027}.detail-note button{display:inline-block;margin:4px 0 0}
 .detail h3{font-size:19px}.detail p{font-size:12.5px;line-height:1.7;margin:6px 0 0}
 .stage-heading{order:0;padding:16px 20px 0}.stage-heading h1{font-size:21px;margin-bottom:12px}
 #steps{order:1;padding:0 20px}#ecg-panel{order:1;margin:10px 20px 0}#cut{order:2;margin-top:12px}#interior-overlay{order:3}nav.views{order:4}
@@ -116,13 +130,25 @@ aside h2{order:7;margin:12px 20px 8px}#parts{order:8;padding:0 20px;display:grid
 aside .note,aside .reference{order:9;margin-left:20px;margin-right:20px}main>footer{order:10;margin-top:18px}
 .tools button{font-size:12px;padding:10px}.note{margin-top:18px}
 }
+@media(max-width:760px) and (min-height:481px){
+/* An upright phone: main.js puts the phase box under the model, out of it. The model box is about as wide as the model, and the box
+   covered the top of the vessels in every corner (model pixels under it at 390x844: 297 top left, 460 bottom left; at 320x640 at least
+   600 in every corner). The box keeps the left edge of the description. */
+.beat-phase{position:static;flex:none;margin:6px 20px 0;max-width:none;display:flex;flex-wrap:wrap;align-items:baseline;column-gap:10px;line-height:1.5;padding:4px 10px}
+}
 @media(max-width:760px) and (max-height:480px){
 /* Phone held sideways: the pinned header, model and description (72+220+120px) used to fill the whole
    screen and leave <main> about 0px tall, so the buttons could not be reached. Shrink them so <main> keeps room. */
 header{height:44px}
-.viewport{height:clamp(110px,42dvh,200px)}
+.viewport{height:clamp(110px,42dvh,200px);min-height:96px}
 .detail{height:clamp(64px,22dvh,120px);padding:8px 20px}
 .detail-note{max-height:60px;padding:4px 20px}
+/* The smallest heights of the pinned part and <main> must fit a screen 300px tall (44+96+40+44+60 = 284), or the cut notice ran over
+   the buttons at 568x320 (20px) and 667x300 (40px) (review of PR #51). */
+main{min-height:60px}.detail{min-height:40px}.detail-note{min-height:44px}
+/* The phase box stays on the model here. The conduction view's impulse line made it 267px wide, over the model at 568x320 (836 model
+   pixels under it); at 200px the line wraps and the box keeps left of the model (measured at 568x320, 667x375, 740x360, 760x412). */
+.beat-phase{max-width:200px}
 }
 @media(prefers-reduced-motion:reduce){*{scroll-behavior:auto}}
 </style>
@@ -135,12 +161,12 @@ header{height:44px}
   <div class="stage-heading">
     <p id="mode-number">01 / EXTERIOR</p><h1 id="mode-title">かたちから、心臓を知る。</h1>
     <nav class="modes" aria-label="観察モード">
-      <button id="mode-exterior" data-viewer-control aria-pressed="true">外観</button>
-      <button id="mode-conduction" data-viewer-control aria-pressed="false">刺激伝導系</button>
-      <button id="mode-interior" data-viewer-control aria-pressed="false">内部（断面）</button>
-      <button id="mode-flow" data-viewer-control aria-pressed="false">血流</button>
+      <button id="mode-exterior" data-viewer-control disabled aria-pressed="true">外観</button>
+      <button id="mode-conduction" data-viewer-control disabled aria-pressed="false">刺激伝導系</button>
+      <button id="mode-interior" data-viewer-control disabled aria-pressed="false">内部（断面）</button>
+      <button id="mode-flow" data-viewer-control disabled aria-pressed="false">血流</button>
     </nav>
-    <p id="cut-notice" class="detail-note" hidden>この部位は現在の断面では見えません。切断面より手前にあり、取り除かれています。<button id="cut-restore" data-viewer-control>見える位置へ動かす</button></p>
+    <p id="cut-notice" class="detail-note" hidden>この部位は現在の断面では見えません。切断面より手前にあり、取り除かれています。<button id="cut-restore" data-viewer-control disabled>見える位置へ動かす</button></p>
     <p id="pick-note" class="detail-note" hidden>切り口をクリックして選んだ名前です。切り口の奥で最初に当たる壁面から推定したもので、実際の所属とは限りません（検査では一部で食い違いました）。印の円がクリックした位置、明るい色の領域が選んだ心腔の切り口です。</p>
   </div>
   <div class="viewport">
@@ -149,29 +175,29 @@ header{height:44px}
     <div id="error" role="alert" hidden></div>
   </div>
   <nav class="views" aria-label="定位置の視点">
-    <button id="view-front" data-viewer-control>前面</button><button id="view-back" data-viewer-control>背面</button><button id="view-left" data-viewer-control>身体の左側</button>
+    <button id="view-front" data-viewer-control disabled>前面</button><button id="view-back" data-viewer-control disabled>背面</button><button id="view-left" data-viewer-control disabled>身体の左側</button>
   </nav>
-  <label id="cut" hidden><span>前寄り</span><input id="cut-depth" type="range" min="-1.8" max="1.8" step="0.05" value="-0.6" autocomplete="off" data-viewer-control aria-label="断面の位置（前から後ろ）"><span>後ろ寄り</span></label>
-  <div id="interior-overlay" class="views" hidden><button id="interior-conduction" data-viewer-control aria-pressed="false">刺激伝導系を重ねる</button><button id="interior-flow" data-viewer-control aria-pressed="false">血流を重ねる</button></div>
+  <label id="cut" hidden><span>前寄り</span><input id="cut-depth" type="range" min="-1.8" max="1.8" step="0.05" value="-0.6" autocomplete="off" data-viewer-control disabled aria-label="断面の位置（前から後ろ）"><span>後ろ寄り</span></label>
+  <div id="interior-overlay" class="views" hidden><button id="interior-conduction" data-viewer-control disabled aria-pressed="false">刺激伝導系を重ねる</button><button id="interior-flow" data-viewer-control disabled aria-pressed="false">血流を重ねる</button></div>
   <div id="ecg-panel" class="ecg-panel" hidden>
     <svg viewBox="0 0 320 64" role="img" aria-label="模式の心電図。拍動と同じ時計で流れます。波の形と大きさは表示用です。"><line class="ecg-base" x1="0" y1="46" x2="320" y2="46"/><line class="ecg-now" x1="276" y1="4" x2="276" y2="60"/><path id="ecg-trace" d=""/><text data-wave="P"></text><text data-wave="R"></text><text data-wave="T"></text></svg>
     模式の心電図（波の形と大きさは表示用）
   </div>
   <p id="orientation" class="axis">前面 ／ 左右の名称は身体を基準</p>
   <nav class="tools" aria-label="表示操作">
-    <button id="out" data-viewer-control aria-label="縮小">−</button><button id="in" data-viewer-control aria-label="拡大">＋</button>
-    <button id="rotate" data-viewer-control aria-pressed="false">自動回転</button><button id="reset" data-viewer-control>視点を戻す</button>
-    <button id="beat-play" data-viewer-control>拍動を再生</button><button id="beat-speed" data-viewer-control aria-pressed="false">実際の速さ</button>
-    <button id="heart-sound" data-viewer-control aria-pressed="false">心音を鳴らす</button><label id="heart-volume-label" class="volume"><span>音量</span><input id="heart-volume" type="range" min="0" max="1" step="0.05" value="0.5" autocomplete="off" data-viewer-control aria-label="心音の音量"></label>
+    <button id="out" data-viewer-control disabled aria-label="縮小">−</button><button id="in" data-viewer-control disabled aria-label="拡大">＋</button>
+    <button id="rotate" data-viewer-control disabled aria-pressed="false">自動回転</button><button id="reset" data-viewer-control disabled>視点を戻す</button>
+    <button id="beat-play" data-viewer-control disabled>拍動を再生</button><button id="beat-speed" data-viewer-control disabled aria-pressed="false">実際の速さ</button>
+    <button id="heart-sound" data-viewer-control disabled aria-pressed="false">心音を鳴らす</button><label id="heart-volume-label" class="volume"><span>音量</span><input id="heart-volume" type="range" min="0" max="1" step="0.05" value="0.5" autocomplete="off" data-viewer-control disabled aria-label="心音の音量"></label>
   </nav>
 </section>
 <aside>
   <h2>STRUCTURES / 部位を選択</h2>
   <div id="parts"></div>
-  <div id="steps" hidden><button id="previous" data-viewer-control>← 前へ</button><span id="step-count" aria-live="polite"></span><button id="next" data-viewer-control>次へ →</button></div>
+  <div id="steps" hidden><button id="previous" data-viewer-control disabled>← 前へ</button><span id="step-count" aria-live="polite"></span><button id="next" data-viewer-control disabled>次へ →</button></div>
   <div class="detail" aria-live="polite"><h3 id="name">心臓を観察する</h3><small id="en">Heart study</small><p id="description">部位を選ぶと、名前と役割を表示します。</p></div>
-  <p class="note" id="conduction-note" hidden>電気刺激の経路を示す模式図です。神経や血管ではなく、主に特殊な心筋細胞による仕組みです。破線は心房への広がりを表します。ヒス束は近位区間と分岐区間を別々に選べます。左脚側の起始目印と、その先の右脚側の起始目印を分けた模式配置です。実際の貫通部・分岐部の組織境界を同定した区切りではありません。右脚・左脚は別々に選べます。右脚は1本の線、左脚は幅のある近位部と3方向の線に省略した模式表示です。左脚の分かれ方を全員共通の形とするものではありません。元データに刺激伝導系の形状はないため、上大静脈、三尖弁、大動脈弁、乳頭筋、内腔の位置から配置を推定しました。太さは誇張しており、断面の再現ではありません。伝導速度のシミュレーションでもなく、時間の扱いは下の説明に書いています。位置は解剖学的に妥当と確かめられたものではありません（資料との照合は途中です）。</p>
-  <p class="note" id="propagation-note" hidden>「拍動を再生」を押すと、拍動と同じ時計で刺激が伝わります（光の点が先頭、通った部位はしばらく明るく残ります）。洞房結節から心房へ約0.05秒、房室結節で約0.1秒の足止め、ヒス束と左右の脚を心尖へ約0.025秒、プルキンエ線維から心室の筋へ約0.075秒という4つの区間の時間は、OpenStax Anatomy and Physiology 2e 19.2の本文に合わせました（原文のHTMLを2026-11-14に直接読んで確認）。同じ本文には「洞房結節から心室の脱分極までの合計は約225ミリ秒」ともありますが、4つの区間を足すと250ミリ秒で、資料の中で合っていません。ここでは4つの区間の値を使いました。区間の中の進み方は資料になく、経路の長さに応じた表示用の動きです（心房への広がりの2本は、同じ0.05秒で進めます）。拍動の時計との位置合わせは表示用です。心室の収縮の始まりを、刺激がプルキンエ線維に入る時刻に置いたため、洞房結節は拍の始まり（心房の収縮の始まり）の約0.075秒前に発火します（資料は、心房が収縮を始めるのをP波の始まりの約0.025秒後としています）。模式の心電図のP波・QRS・T波の位置は、これらの時刻から置きました。波の形と大きさは表示用で、目盛りはありません。実際の心電図の測定値ではなく、診断に使えるものでもありません。部位の位置が解剖学的に妥当と確かめられていないことは変わりません。</p>
+  <p class="note" id="conduction-note" hidden>電気刺激の経路を示す模式図です。神経や血管ではなく、主に特殊な心筋細胞による仕組みです。破線は心房への広がりを表します。ヒス束は近位区間と分岐区間を別々に選べます。左脚側の起始目印と、その先の右脚側の起始目印を分けた模式配置です。実際の貫通部・分岐部の組織境界を同定した区切りではありません。右脚・左脚は別々に選べます。右脚は1本の線、左脚は幅のある近位部と3方向の線に省略した模式表示です。左脚の分かれ方を全員共通の形とするものではありません。元データに刺激伝導系の形状はないため、上大静脈、三尖弁、大動脈弁、乳頭筋、内腔の位置から配置を推定しました。太さは誇張しており、断面の再現ではありません。伝導速度のシミュレーションでもなく、時間の扱いは下の説明に書いています。位置は解剖学的に妥当と確かめられたものではありません（資料の図との大まかな見比べだけで、位置の定量的な照合は行っておらず、今後も予定していません）。</p>
+  <p class="note" id="propagation-note" hidden>「拍動を再生」を押すと、拍動と同じ時計で刺激が伝わります（光の点が先頭、通った部位はしばらく明るく残ります）。洞房結節から心房へ約0.05秒、房室結節で約0.1秒の足止め、ヒス束と左右の脚を心尖へ約0.025秒、プルキンエ線維から心室の筋へ約0.075秒という4つの区間の時間は、OpenStax Anatomy and Physiology 2e 19.2の本文に合わせました（原文のHTMLを2026-11-14に直接読んで確認）。ただし本文の約0.025秒は「左右の脚が心尖に届くまで」の時間で、ヒス束の2区間（近位区間と分岐区間）もこの0.025秒に含めたのは表示用の割り当てです。同じ本文には「洞房結節から心室の脱分極までの合計は約225ミリ秒」ともありますが、4つの区間を足すと250ミリ秒で、資料の中で合っていません。ここでは4つの区間の値を使いました。区間の中の進み方は資料になく、経路の長さに応じた表示用の動きです（心房への広がりの2本は、同じ0.05秒で進めます）。拍動の時計との位置合わせは表示用です。心室の収縮の始まりを、刺激がプルキンエ線維に入る時刻に置いたため、洞房結節は拍の始まり（心房の収縮の始まり）の約0.075秒前に発火します（資料は、心房が収縮を始めるのをP波の始まりの約0.025秒後としています）。模式の心電図のP波・QRS・T波の位置は、これらの時刻から置きました。波の形と大きさは表示用で、目盛りはありません。実際の心電図の測定値ではなく、診断に使えるものでもありません。部位の位置が解剖学的に妥当と確かめられていないことは変わりません。</p>
   <p class="note" id="interior-note" hidden>心臓を前後方向の平面で切り、切った面より前を取り除いて表示しています。断面は心臓に固定されていて、回転すると切り口を斜めから見られます。切り口の色は識別用で、切り口の面を作るのは心臓の壁だけです。血管は元データに壁の厚みがなく、切ると薄い殻の内側（内腔）が見えます。弁と乳頭筋はBodyParts3D 4.0の形状で、弁の開き具合は元データの1時点のもので、拍動による変化は表しません。弁から乳頭筋へ伸びる糸状の部分は腱索とみられますが、元データでは弁尖と同じ部品です。心室中隔と心室の心筋は個別の形状がないため、区別して選べません。左心室の後ろの乳頭筋は元データにありません。この表示で選べるのは心房・心室・弁・乳頭筋で、血管は外観で選べます。「刺激伝導系を重ねる」を押すと、刺激伝導系も同じ断面で切って重ね、選べるようになります。その位置は推定です。壁や弁の奥にある部位のラベルは破線で「（壁や弁の奥）」と示します。選んだ心房・心室の切り口は明るい色になります。切り口は前面から見たときに見え、背面からは見えません。</p>
   <p class="note" id="anatomy-note">BodyParts3D（© ライフサイエンス統合データベースセンター、<a href="https://creativecommons.org/licenses/by/4.0/deed.ja" target="_blank" rel="noopener noreferrer">CC BY 4.0</a>）の成人男性1体の心臓と周囲の血管を、面数を減らして表示しています。心室・心房の色分けは、各内腔に最も近い壁を自動で割り当てた推定で、実際の境界とは一致しません。血管は心臓の近くで切っています。</p>
   <p class="note" id="flow-overlay-note" hidden>血流の粒子を、同じ断面で切って重ねています。説明用の模式で、血液の実際の流線や速度ではありません。「拍動を再生」で粒子が動きます。この画面の弁は元データの形（開閉途中の1時点）のままで、弁の開閉は動きません。粒子の経路は弁尖と交差するため、粒子が弁尖をすり抜けて見える所があります（血流の画面では、代わりに模式の弁尖を描いています）。切断面より前にある粒子は取り除かれます。</p>
@@ -179,7 +205,7 @@ header{height:44px}
   <p class="note" id="flow-note" hidden>血流は説明用の模式です。血液の実際の流線や速度ではありません。粒子は、血管と心腔の中央を通る6本の経路（上大静脈・下大静脈から肺動脈へ、4本の肺静脈から大動脈弓へ）に沿って動きます。青は右心系、赤は左心系の経路で、色は識別用です。壁は透かしてあり（中はほぼ透明で、縁だけ明るく描きます）、粒子と壁の前後は見分けにくいことがあります。「拍動を再生」を押すと動きます。拍動と同じ時間軸で、房室弁（三尖弁・僧帽弁）は心房の収縮中と、心室が緩んだあとの充満の間に開いて粒子が心房から心室へ進み、動脈弁（肺動脈弁・大動脈弁）は心室の収縮の後半（駆出）にだけ開いて心室から動脈へ進みます。弁が閉じている間、粒子はその手前で待ちます。この画面の弁は、血流を見せるための模式の弁尖です（元データの弁は描きません）。尖の数だけ部位の説明に合わせ（三尖弁3、僧帽弁2、動脈弁は各3）、形、大きさ、開閉の速さは表示用に決めたものです。粒子は、弁尖が完全に開いてから通り、弁尖は近くに粒子がいない間だけ動きます。そのため閉じるのは、弁の窓が終わってから最大で約0.05秒遅れます。拍動の説明にある「4つの弁がすべて閉じたまま」の時間（等容性収縮の50ミリ秒、等容性弛緩の80ミリ秒）のうち、この画面の弁尖が4つとも閉じるのは、収縮期で約0.01秒、弛緩期で約0.02秒だけです（閉じ終えるまでと開き始めるまでの時間を除くため）。心房の収縮で心室へ入る量は、1拍の充満の約25%にしました（OpenStaxは「残り20〜30%」）。等容性収縮の50ミリ秒、等容性弛緩の80ミリ秒、1拍で心室から出る割合（心室部分の60%）、粒子の速さと数は、資料にない表示用の値です。経路が元データの弁尖と交差する問題は、この画面では模式の弁尖に置き換えて避けていますが、元データの弁尖と模式の弁尖の位置が合っているかは確かめていません。</p>
   <p class="note" id="sound-status" role="status" hidden></p>
   <p class="note" id="sound-note">「心音を鳴らす」は初期は切れています。押すと、拍動に合わせて説明用の合成心音が鳴ります（Ⅰ音は心室の収縮の始まり、Ⅱ音は心室の弛緩の始まりに合わせます）。聴診で聞く実際の音の再現ではなく、外部の音源は使っていません。音は拍動と同じ時計から予約し、ゆっくり再生では鳴る間隔だけが伸びます。端末の出力遅延やiPhoneの消音スイッチの影響は確認していません。</p>
-  <p class="note" id="beat-note" hidden>拍動は説明用の模式です。心房・心室の順序と各時期の長さ（心房の収縮 約0.1秒、心室の収縮 約0.27秒、心室の弛緩 約0.43秒）はOpenStax Anatomy and Physiology 2e 19.3に合わせました。合計0.8秒は毎分75回にあたります。「実際の速さ」を押さない間は5倍に引き延ばしています。縮み方は各心腔の中心へ向かって寄せるだけで、縮む量と時間の中での変化の形は表示用に決めたもので実測ではありません。心臓の長軸方向の短縮やねじれ、壁が厚くなる変化は表していません。弁の形は元データの1時点のままで動かず、開閉は左上の文字だけで示します（「血流」画面だけは、模式の弁尖が開閉します）。止めるとその時点の形のまま止まります。</p>
+  <p class="note" id="beat-note" hidden>拍動は説明用の模式です。心房・心室の順序と各時期の長さ（心房の収縮 約0.1秒、心室の収縮 約0.27秒、心室の弛緩 約0.43秒）はOpenStax Anatomy and Physiology 2e 19.3に合わせました。合計0.8秒は毎分75回にあたります。「実際の速さ」を押さない間は5倍に引き延ばしています。縮み方は各心腔の中心へ向かって寄せるだけで、縮む量と時間の中での変化の形は表示用に決めたもので実測ではありません。心臓の長軸方向の短縮やねじれ、壁が厚くなる変化は表していません。弁の形は元データの1時点のままで動かず、開閉は拍動の時期の表示（モデルの左上。幅の狭い画面では、モデルの下か右の欄）の文字だけで示します（「血流」画面だけは、模式の弁尖が開閉します）。止めるとその時点の形のまま止まります。</p>
   <p class="note">ドラッグで回転、スクロール／ピンチで拡大縮小。キーボードでも操作できます。<br>色は識別用です。医療用途ではありません。</p>
   <div class="reference"><a id="msd-reference" href="https://www.msdmanuals.com/ja-jp/home/multimedia/3dmodel/心臓の刺激伝導系" target="_blank" rel="noopener noreferrer">MSDの参考3Dモデルを開く ↗</a><p>BioDigital提供。別タブで開きます（要ネット接続）。本モデルの刺激伝導系は独自に作成した模式図です。</p></div>
   <p class="note">説明の参考：<a href="https://www.nhlbi.nih.gov/health/heart/anatomy" target="_blank" rel="noopener noreferrer">NHLBI：心臓の構造</a> ／ <a href="https://www.nhlbi.nih.gov/health/heart/heart-beats" target="_blank" rel="noopener noreferrer">拍動の仕組み</a> ／ <a href="https://www.medlineplus.gov/ency/anatomyvideos/000021.htm" target="_blank" rel="noopener noreferrer">MedlinePlus：刺激伝導系</a></p>
@@ -187,6 +213,18 @@ header{height:44px}
 <footer><details><summary>内蔵ライブラリとデータのライセンス</summary><pre><!-- LICENSE --></pre></details></footer>
 </main>
 <noscript><p>このモデルを操作するにはJavaScriptを有効にしてください。</p></noscript>
+<script>
+// Written for old browsers on purpose (var, function). If the viewer's script cannot run at all, for example a browser too old for its
+// syntax, nothing else explains the disabled controls (review of PR #51): after the page has loaded, a viewer that never got ready
+// leaves this message, unless it has shown its own.
+window.addEventListener('load', function () {
+  var error = document.getElementById('error');
+  if (document.documentElement.getAttribute('data-ready') !== 'true' && error.hidden) {
+    error.hidden = false;
+    error.textContent = '3D表示のプログラムを起動できませんでした。古いブラウザーでは動きません（目安：Chrome・Edge 108、Firefox 101、Safari 16.4以降）。説明と参考リンクは引き続き読めます。';
+  }
+});
+</script>
 <script>/* APP */</script>
 </body>
 </html>

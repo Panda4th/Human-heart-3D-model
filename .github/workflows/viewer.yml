@@ -5,7 +5,9 @@ permissions:
 jobs:
   browser:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    # 10 minutes until 2026-11-14. PR #51 added 24 browser tests (74 in all); the push run of 922a032 was cancelled at 10 minutes with
+    # 72 of 74 passed, and the pull_request run took 8.5 minutes. 20 leaves room for the suite as it is now.
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4

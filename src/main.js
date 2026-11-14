@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { createConduction, createConductionPulse } from './conduction.mjs';
-import { ecgAt, ecgBumps, glowAt, stretchTextAt, waveAge } from './conduction-timing.mjs';
+import { ecgAt, ecgBumps, glowAt, stretchText, stretchTextAt, waveAge } from './conduction-timing.mjs';
 import { createAnatomy, modelScale } from './anatomy.mjs';
 import { createFlow, routesThrough } from './flow.mjs';
 import { contraction, createBeat, period, phaseAt, phases, stepBeat } from './heartbeat.mjs';
@@ -26,11 +26,45 @@ function showError(message) {
     el.before(home);
     return [el, home];
   });
+  // On a phone, CSS `order` shows the ECG strip and the step buttons right under the mode buttons and the view buttons under the
+  // interior overlay buttons; the keyboard follows the DOM, so they are moved there too, or Tab went back up the page (Issue #50 C3).
+  const reordered = [
+    [$('ecg-panel'), () => document.querySelector('.stage-heading')],
+    [$('steps'), () => $('ecg-panel')],
+    [document.querySelector('nav.views'), () => $('interior-overlay')],
+  ].map(([el, after]) => {
+    const home = document.createComment('');
+    el.before(home);
+    return [el, home, after];
+  });
   const place = () => {
     for (const [el, home] of moved) phone.matches ? $('pinned').append(el) : home.after(el);
+    for (const [el, home, after] of reordered) phone.matches ? after().after(el) : home.after(el);
   };
-  phone.addEventListener('change', place);
+  // The phase box (shown once the beat has been played) lies on the model's top left corner where the model leaves room for it. In a
+  // PC window below 1000px and on an upright phone the model fills its box, and the box covered the top of the vessels in every corner
+  // (Issue #50 B2/C1), so there it leaves the model: on an upright phone it goes under the model (the model keeps its size, the
+  // scrolling part below gets shorter), in a PC window from 761 to 999px to the top of the side column. A phone held sideways keeps it on
+  // the model, whose box is wide and low there. See the rules in template.html.
+  const phaseBox = $('beat-phase'), phaseHome = document.createComment('');
+  phaseBox.before(phaseHome);
+  const upright = matchMedia('(max-width:760px) and (min-height:481px)'), narrow = matchMedia('(min-width:761px) and (max-width:999px)');
+  // Elements are moved only when their place changes: re-attaching the model and the description loses the focus and the
+  // description's scroll position (review of PR #51), so `place` runs only when the phone layout starts or ends, and the phase box
+  // moves only when its own place changes. `place` moves the model, so after it the box is placed again.
+  let phaseAt = null;
+  const placePhase = (force = false) => {
+    const at = upright.matches ? 'under' : narrow.matches ? 'aside' : 'home';
+    if (at === phaseAt && !force) return;
+    phaseAt = at;
+    if (at === 'under') canvas.closest('.viewport').after(phaseBox);
+    else if (at === 'aside') document.querySelector('aside').prepend(phaseBox);
+    else phaseHome.after(phaseBox);
+  };
+  phone.addEventListener('change', () => { place(); placePhase(true); });
+  for (const query of [upright, narrow]) query.addEventListener('change', () => placePhase());
   place();
+  placePhase(true);
 }
 try {
   const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true, stencil: true });
@@ -54,7 +88,14 @@ try {
   const heart = new THREE.Group(), exterior = new THREE.Group(), conduction = new THREE.Group(), parts = new Map();
   scene.add(heart);
   heart.add(exterior);
-  const meta = createAnatomy(exterior, parts, anatomyData, modelScale);
+  // Any error while reading the bundle is a data error (a cut-off file gives a RangeError, broken JSON a SyntaxError), not a missing
+  // WebGL: it gets its own message (review of PR #51).
+  let meta;
+  try {
+    meta = createAnatomy(exterior, parts, anatomyData, modelScale);
+  } catch (error) {
+    throw Object.assign(new Error(`heart bundle: ${error.message}`, { cause: error }), { name: 'HeartBundleError' });
+  }
   // See-through walls (conduction and flow views) are nearly clear in the middle and brighter toward the silhouette, so that the chambers
   // and vessels keep their outlines. The extra term applies only to transparent materials (not OPAQUE), so the other views are unchanged.
   // The cross-section copies are cloned later and do not inherit the patch; they are never see-through.
@@ -232,9 +273,33 @@ diffuseColor.a = min(1.0, diffuseColor.a + rim * 0.55);
   function requestRender() {
     if (!frame && !document.hidden && !failed) frame = requestAnimationFrame(render);
   }
+  // The phase box under the model (upright phone) keeps the height of its tallest text, or the model box changed size each time
+  // the impulse line wrapped differently (review of PR #51: 186-201px at 320x520). In the side column (761-999px) the list scrolls
+  // under the box, so the box's height is kept clear when the focus scrolls the list (review of PR #51: Shift+Tab hid the focused
+  // button under it).
+  const phaseBox = $('beat-phase'), phaseLines = [$('beat-phase-name'), $('beat-phase-short'), $('beat-electric')];
+  function fitPhaseBox() {
+    phaseBox.style.minHeight = '';
+    if (!phaseBox.hidden && getComputedStyle(phaseBox).position === 'static') {
+      const saved = phaseLines.map(e => [e.textContent, e.hidden]);
+      let tallest = 0;
+      for (const phase of phases) for (const text of conduction.visible ? Object.values(stretchText) : ['']) {
+        phaseLines[0].textContent = `${phase.name}（${phase.time}）`;
+        phaseLines[1].textContent = phase.short;
+        phaseLines[2].textContent = text;
+        phaseLines[2].hidden = !text;
+        tallest = Math.max(tallest, phaseBox.getBoundingClientRect().height);
+      }
+      saved.forEach(([text, hidden], i) => { phaseLines[i].textContent = text; phaseLines[i].hidden = hidden; });
+      phaseBox.style.minHeight = `${Math.ceil(tallest)}px`;
+    }
+    const aside = document.querySelector('aside');
+    aside.style.scrollPaddingTop = phaseBox.parentElement === aside && !phaseBox.hidden ? `${Math.ceil(phaseBox.getBoundingClientRect().height) + 8}px` : '';
+  }
+  new ResizeObserver(fitPhaseBox).observe(phaseBox);
   function showPhase() {
     const index = phaseAt(beatTime);
-    $('beat-phase').hidden = false;
+    if (phaseBox.hidden) { phaseBox.hidden = false; fitPhaseBox(); }
     $('beat-note').hidden = false;
     if (index === shownPhase) return;
     shownPhase = index;
@@ -285,6 +350,9 @@ diffuseColor.a = min(1.0, diffuseColor.a + rim * 0.55);
     say('');
     // Sound can start only from a tap: the context is created and resumed here, before anything is awaited.
     try { await sound.open(); } catch { /* handled by the state check below */ }
+    // The 3D view may have stopped (context lost) while the audio context was starting: the controls are disabled then, and
+    // the sound must stay off.
+    if (failed) { sound.suspend(); return; }
     if (sound.state !== 'running') { say('音声を開始できませんでした。もう一度押してください。端末が消音になっていないかも確認してください。'); return; }
     if (!soundOn) {
       if (!watching) {
@@ -402,6 +470,7 @@ diffuseColor.a = min(1.0, diffuseColor.a + rim * 0.55);
     requestRender();
   }
   function resize() {
+    fitPhaseBox(); // the text wraps by the width
     const { width, height } = canvas.getBoundingClientRect();
     if (width <= 0 || height <= 0) return;
     const offset = camera.position.clone().sub(controls.target);
@@ -521,6 +590,7 @@ diffuseColor.a = min(1.0, diffuseColor.a + rim * 0.55);
     for (const group of parts.values()) group.userData.button.hidden = !selectable(group);
     $('conduction-note').hidden = !conduction.visible;
     $('ecg-panel').hidden = mode !== 'conduction';
+    fitPhaseBox(); // the impulse line is shown with the conduction overlay
     $('propagation-note').hidden = mode !== 'conduction';
     ecgKey = '';
     $('interior-conduction').setAttribute('aria-pressed', String(conductionOverlay));
@@ -629,7 +699,11 @@ diffuseColor.a = min(1.0, diffuseColor.a + rim * 0.55);
     resyncSounds();
     $('beat-speed').setAttribute('aria-pressed', String(realSpeed));
   };
-  if (!sound.supported) { $('heart-sound').hidden = true; $('heart-volume-label').hidden = true; }
+  if (!sound.supported) {
+    $('heart-sound').hidden = true;
+    $('heart-volume-label').hidden = true;
+    $('sound-note').textContent = 'このブラウザーは音声の再生（Web Audio API）に対応していないため、心音のボタンを表示していません。拍動の表示はそのまま使えます。';
+  }
   function zoom(factor) {
     const offset = camera.position.clone().sub(controls.target).multiplyScalar(factor).clampLength(controls.minDistance, controls.maxDistance);
     camera.position.copy(controls.target).add(offset);
@@ -698,14 +772,21 @@ diffuseColor.a = min(1.0, diffuseColor.a + rim * 0.55);
     beating = false;
     playback.pause();
     if (soundOn) soundOff(); else resyncSounds();
+    // The audio context would keep running (no sound, but power) with no control left to stop it.
+    sound.suspend();
     setPlayButton();
     showError('3D表示が中断しました。ページを再読み込みしてください。説明と参考リンクは引き続き読めます。');
   });
   new ResizeObserver(resize).observe(canvas);
   resize();
+  // The controls are disabled in the HTML, so that they do not look usable without JavaScript; they are enabled once the viewer
+  // runs. setMode (through select) then disables the step buttons that do not apply.
+  document.querySelectorAll('[data-viewer-control]').forEach(control => control.disabled = false);
   setMode('exterior');
   document.documentElement.dataset.ready = 'true';
 } catch (error) {
-  showError('3D表示を開始できませんでした。WebGL対応のブラウザーで開いてください。参考リンクからMSDのモデルも確認できます。');
+  showError(error?.name === 'HeartBundleError'
+    ? '心臓モデルのデータを読み込めませんでした（データの形式がこの版の表示プログラムと合いません）。説明と参考リンクは引き続き読めます。'
+    : '3D表示を開始できませんでした。WebGL 2に対応したブラウザーで開いてください。参考リンクからMSDのモデルも確認できます。');
   console.error(error);
 }

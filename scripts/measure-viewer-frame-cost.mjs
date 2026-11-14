@@ -56,7 +56,7 @@ function instrument(source) {
     ${statement}
     if (frameSample) frameSample.${field} = performance.now() - start;
   }`);
-  source = timed('flow.advance(beatTime, next);', 'flowAdvanceMs');
+  source = timed('flow.advance(Math.max(beatTime, next - period), next);', 'flowAdvanceMs');
   source = timed('beat.set(contraction(beatTime));', 'beatSetMs');
   source = timed('drawFlow();', 'drawFlowMs');
   source = timed('renderer.render(scene, camera);', 'rendererRenderMs');
@@ -125,7 +125,10 @@ async function measureScenario(browser, url, scenario) {
     assert.equal(await page.locator('#beat-play').textContent(), '拍動を止める');
     const samples = await page.evaluate(({ warmupFrames, measuredFrames }) => {
       return new Promise((resolve, reject) => {
-        const timer = setTimeout(() => reject(new Error('live playback measurement timed out')), 25000);
+        // Up to 1 s a frame. The fixed 25 s of 2026-11-12 held the 120 frames at the frame interval measured then (median 117-150 ms)
+        // but not in a slower container (about 200 ms a frame on 2026-11-14, Issue #50 E2): the frame count, not the time, is the
+        // measurement.
+        const timer = setTimeout(() => reject(new Error('live playback measurement timed out')), (warmupFrames + measuredFrames) * 1000);
         window.frameCost.capture(warmupFrames, measuredFrames).then(result => {
           clearTimeout(timer);
           resolve(result);
