@@ -41,11 +41,15 @@ export function phaseAt(ms) {
   return t < cycle.atrialSystole ? 0 : t < cycle.atrialSystole + cycle.ventricularSystole ? 1 : 2;
 }
 
-// One step of the beat clock. With `once` (reduced motion: one beat per press) the time stops at the end of the first beat,
-// so that whatever is advanced with it (the blood-flow particles) never goes past the beat it was asked to play.
+// The end of the beat that the beat time `time` lies in. The beat clock counts on across beats (it is not wrapped while playing).
+export const beatEnd = time => (Math.floor(time / period) + 1) * period;
+// One step of the beat clock. With `once` (reduced motion: one beat per press) the time stops at the end of the beat it is in,
+// so that whatever is advanced with it (the blood-flow particles) never goes past the beat it was asked to play. Until 2026-11-14
+// it stopped at the end of the first beat (period): after the beat had played on normally and the setting was turned on, the clock
+// was already past it, and a press ended the play at once (Issue #50 recheck, B3).
 export function stepBeat(time, delta, once) {
-  const next = once ? Math.min(time + delta, period) : time + delta;
-  return { next, done: once && next >= period };
+  const end = beatEnd(time), next = once ? Math.min(time + delta, end) : time + delta;
+  return { next, done: once && next >= end };
 }
 
 // Which valves are open at time ms. OpenStax 19.3 gives the order (atrioventricular valves open in atrial systole and

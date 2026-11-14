@@ -213,6 +213,12 @@ test('a one-beat play (reduced motion) moves the particles through that beat onl
   assert.deepEqual(stepBeat(750, 250, true), { next: 800, done: true });
   assert.deepEqual(stepBeat(300, 250, true), { next: 550, done: false });
   assert.deepEqual(stepBeat(750, 250, false), { next: 1000, done: false }, 'without the setting the clock runs on');
+  // Issue #50 recheck (B3): the beat clock counts on across beats, so a one-beat play that starts after the beat has run on normally
+  // (the setting turned on while the page is open) ends at the end of the beat it is in, not at the first beat's end (800 ms), which
+  // ended it at once.
+  assert.deepEqual(stepBeat(1200, 100, true), { next: 1300, done: false });
+  assert.deepEqual(stepBeat(1550, 100, true), { next: 1600, done: true });
+  assert.deepEqual(stepBeat(1600, 100, true), { next: 1700, done: false }, 'a play that starts on a beat boundary plays that whole beat');
   const exact = createFlow(data);
   exact.advance(0, period);
   for (const frame of [250, 16.7, 33.3, 790, 1000]) {

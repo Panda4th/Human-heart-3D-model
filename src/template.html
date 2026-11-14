@@ -70,7 +70,9 @@ aside{height:calc(100dvh - 56px);min-height:560px;overflow-y:auto}
 canvas{position:absolute;inset:0}
 nav.views{grid-row:4;grid-column:1/-1;position:relative;z-index:2;align-self:start;justify-self:end;flex-direction:column;gap:6px;margin:12px 5% 0 0}
 #orientation{grid-row:4;grid-column:1/-1;position:relative;z-index:2;align-self:end;justify-self:center;margin:0 0 8px;pointer-events:none}
-#ecg-panel{grid-row:4;grid-column:1/-1;position:relative;z-index:2;align-self:end;justify-self:start;width:min(320px,40%);margin:0 0 36px 5%}
+/* main.js puts the ECG strip at the top of the side column (under the phase box when that is there); it lay over the vessels on the
+   model's bottom left (Issue #50 recheck, C1). */
+aside>#ecg-panel{margin:0 0 20px}
 #cut-notice,#pick-note{grid-row:4;grid-column:1/-1;position:relative;z-index:2;align-self:end;justify-self:start;width:min(320px,40%);margin:0 0 36px 5%;padding:8px 10px;background:#152027;border-radius:0 8px 8px 0}
 #cut{grid-row:5;grid-column:1/-1;justify-self:start;margin:6px 5%}
 #interior-overlay{grid-row:6;grid-column:1/-1;justify-self:start;margin:0 5% 6px}
