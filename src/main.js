@@ -49,14 +49,22 @@ function showError(message) {
   const phaseBox = $('beat-phase'), phaseHome = document.createComment('');
   phaseBox.before(phaseHome);
   const upright = matchMedia('(max-width:760px) and (min-height:481px)'), narrow = matchMedia('(min-width:761px) and (max-width:999px)');
-  const placePhase = () => {
-    if (upright.matches) canvas.closest('.viewport').after(phaseBox);
-    else if (narrow.matches) document.querySelector('aside').prepend(phaseBox);
+  // Elements are moved only when their place changes: re-attaching the model and the description loses the focus and the
+  // description's scroll position (review of PR #51), so `place` runs only when the phone layout starts or ends, and the phase box
+  // moves only when its own place changes. `place` moves the model, so after it the box is placed again.
+  let phaseAt = null;
+  const placePhase = (force = false) => {
+    const at = upright.matches ? 'under' : narrow.matches ? 'aside' : 'home';
+    if (at === phaseAt && !force) return;
+    phaseAt = at;
+    if (at === 'under') canvas.closest('.viewport').after(phaseBox);
+    else if (at === 'aside') document.querySelector('aside').prepend(phaseBox);
     else phaseHome.after(phaseBox);
   };
-  const update = () => { place(); placePhase(); };
-  for (const query of [phone, upright, narrow]) query.addEventListener('change', update);
-  update();
+  phone.addEventListener('change', () => { place(); placePhase(true); });
+  for (const query of [upright, narrow]) query.addEventListener('change', () => placePhase());
+  place();
+  placePhase(true);
 }
 try {
   const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true, stencil: true });
@@ -80,7 +88,14 @@ try {
   const heart = new THREE.Group(), exterior = new THREE.Group(), conduction = new THREE.Group(), parts = new Map();
   scene.add(heart);
   heart.add(exterior);
-  const meta = createAnatomy(exterior, parts, anatomyData, modelScale);
+  // Any error while reading the bundle is a data error (a cut-off file gives a RangeError, broken JSON a SyntaxError), not a missing
+  // WebGL: it gets its own message (review of PR #51).
+  let meta;
+  try {
+    meta = createAnatomy(exterior, parts, anatomyData, modelScale);
+  } catch (error) {
+    throw Object.assign(new Error(`heart bundle: ${error.message}`, { cause: error }), { name: 'HeartBundleError' });
+  }
   // See-through walls (conduction and flow views) are nearly clear in the middle and brighter toward the silhouette, so that the chambers
   // and vessels keep their outlines. The extra term applies only to transparent materials (not OPAQUE), so the other views are unchanged.
   // The cross-section copies are cloned later and do not inherit the patch; they are never see-through.
@@ -313,7 +328,7 @@ diffuseColor.a = min(1.0, diffuseColor.a + rim * 0.55);
     try { await sound.open(); } catch { /* handled by the state check below */ }
     // The 3D view may have stopped (context lost) while the audio context was starting: the controls are disabled then, and
     // the sound must stay off.
-    if (failed) return;
+    if (failed) { sound.suspend(); return; }
     if (sound.state !== 'running') { say('音声を開始できませんでした。もう一度押してください。端末が消音になっていないかも確認してください。'); return; }
     if (!soundOn) {
       if (!watching) {
@@ -731,6 +746,8 @@ diffuseColor.a = min(1.0, diffuseColor.a + rim * 0.55);
     beating = false;
     playback.pause();
     if (soundOn) soundOff(); else resyncSounds();
+    // The audio context would keep running (no sound, but power) with no control left to stop it.
+    sound.suspend();
     setPlayButton();
     showError('3D表示が中断しました。ページを再読み込みしてください。説明と参考リンクは引き続き読めます。');
   });

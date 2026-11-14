@@ -516,11 +516,15 @@ for (const width of [1440, 390]) test(`heartbeat plays, shows its phase and stop
   // fell about 3 s in, when the ventricles had relaxed again (rest shape), and the two pictures differed only because the phase box lay
   // on the canvas; with the box off the model on a phone (Issue #50 B2/C1) they were equal. The box is hidden for the comparison, so it
   // is the shape that is compared.
-  // The stop is clicked from inside the page, 300 ms after the phase name changes: a click sent from the test arrived too late under
-  // load (2 of 4 runs with two workers stopped in the relaxation).
+  // The stop is clicked from inside the page, 300 ms after the phase name changes to the ventricular contraction: a click sent from the
+  // test arrived too late under load (2 of 4 runs with two workers stopped in the relaxation). It waits to see another phase first, so
+  // that a check that starts late in a contraction waits for the next one (review of PR #51).
   await page.evaluate(() => new Promise(done => {
+    let other = false;
     const timer = setInterval(() => {
-      if (!document.getElementById('beat-phase-name').textContent.startsWith('心室の収縮')) return;
+      const contracting = document.getElementById('beat-phase-name').textContent.startsWith('心室の収縮');
+      if (!contracting) { other = true; return; }
+      if (!other) return;
       clearInterval(timer);
       setTimeout(() => { document.getElementById('beat-play').click(); done(); }, 300);
     }, 20);
@@ -611,6 +615,7 @@ const fakeAudio = () => {
     constructor() { this.state = 'suspended'; this.destination = {}; this.baseLatency = 0; this.outputLatency = 0; window.contexts++; this.listeners = []; window.lastContext = this; }
     get currentTime() { return (performance.now() - born) / 1000; }
     resume() { this.state = 'running'; return Promise.resolve(); }
+    suspend() { this.state = 'suspended'; return Promise.resolve(); }
     addEventListener(type, fn) { this.listeners.push(fn); }
     interrupt() { this.state = 'interrupted'; this.listeners.forEach(fn => fn()); }
     createGain() { return { gain: param(), connect() {}, disconnect() {} }; }
@@ -1321,6 +1326,8 @@ test('a heart sound that finishes starting after the 3D view is lost stays off',
   await page.evaluate(() => window.finishResume());
   await page.waitForTimeout(500);
   await expect(page.locator('#heart-sound')).toHaveAttribute('aria-pressed', 'false');
+  // The audio context is not left running with no control to stop it (review of PR #51).
+  expect(await page.evaluate(() => window.lastContext.state)).toBe('suspended');
   await expect(page.locator('#sound-status')).toBeHidden();
   expect(await page.evaluate(() => window.voices.length)).toBe(0);
   expect(errors).toEqual([]);
@@ -1410,4 +1417,81 @@ for (const [width, height, mobile] of [[761, 800, false], [900, 800, false], [99
     }
   }
   await context.close();
+});
+
+// Review of PR #51: the phase box at the top of the side column (761-999px) is opaque and the part buttons pass under it when the list
+// scrolls; a click on it chose the button hidden under it.
+test('a click on the phase box in the side column does not choose a part under it', async ({ browser }) => {
+  const context = await browser.newContext({ viewport: { width: 800, height: 700 } });
+  const page = await context.newPage();
+  await page.goto(url);
+  await expect(page.locator('html')).toHaveAttribute('data-ready', 'true');
+  await page.locator('#beat-play').click();
+  await page.locator('#beat-play').click();
+  await page.evaluate(() => { document.querySelector('aside').scrollTop = 150; });
+  const box = await page.locator('#beat-phase').boundingBox();
+  await page.mouse.click(box.x + box.width / 2, box.y + box.height / 2);
+  await expect(page.locator('#name')).toHaveText('左心室');
+  await context.close();
+});
+
+// Review of PR #51: on a small upright phone the phase box under the model, a cut notice and the description left <main> (the buttons)
+// 1px tall at 320x520. <main> keeps at least 100px: the description, the notices and then the model shrink.
+for (const [width, height] of [[320, 520], [320, 568], [360, 560], [667, 375]]) test(`phone layout at ${width}x${height}: the buttons keep 100px with the phase box and a cut notice`, async ({ browser }) => {
+  const context = await browser.newContext({ viewport: { width, height }, hasTouch: true, isMobile: true });
+  const page = await context.newPage();
+  await page.goto(url);
+  await expect(page.locator('html')).toHaveAttribute('data-ready', 'true');
+  const click = id => page.evaluate(i => document.getElementById(i).click(), id);
+  await click('mode-interior');
+  await page.locator('#cut-depth').fill('0.9');
+  await page.evaluate(() => document.querySelector('.part.cut-out').click());
+  await expect(page.locator('#cut-notice')).toBeVisible();
+  await click('beat-play');
+  await click('beat-play');
+  await expect(page.locator('#beat-phase')).toBeVisible();
+  const main = await page.locator('main').boundingBox();
+  expect(main.height).toBeGreaterThanOrEqual(99.5);
+  expect(main.y + main.height).toBeLessThanOrEqual(height + 1);
+  await context.close();
+});
+
+// Review of PR #51: the model and the description were taken out of the page and put back at every change of the phase box's media
+// queries (turning a phone, resizing a PC window), which lost the focus and the description's scroll position.
+test('turning a phone keeps the focus and the description scroll', async ({ browser }) => {
+  const context = await browser.newContext({ viewport: { width: 360, height: 640 }, hasTouch: true, isMobile: true });
+  const page = await context.newPage();
+  await page.goto(url);
+  await expect(page.locator('html')).toHaveAttribute('data-ready', 'true');
+  await page.locator('#mode-conduction').click();
+  await page.evaluate(() => { document.querySelector('.detail').scrollTop = 40; });
+  await page.locator('#view-front').focus();
+  await page.setViewportSize({ width: 640, height: 360 });
+  await page.waitForTimeout(300);
+  expect(await page.evaluate(() => document.activeElement.id)).toBe('view-front');
+  expect(await page.evaluate(() => document.querySelector('.detail').scrollTop)).toBeGreaterThan(0);
+  await page.setViewportSize({ width: 900, height: 700 });
+  await page.waitForTimeout(300); // leaving the phone layout moves the view buttons back (that loses the focus, as it should once)
+  await page.locator('#view-front').focus();
+  await page.setViewportSize({ width: 1100, height: 700 });
+  await page.waitForTimeout(300);
+  expect(await page.evaluate(() => document.activeElement.id)).toBe('view-front');
+  await context.close();
+});
+
+// Review of PR #51: any broken bundle (here its JSON length is wrong, so the JSON does not parse) is a data error, not a missing WebGL;
+// and a script that cannot run at all (a syntax error, as in a browser too old for its syntax) still leaves an explanation.
+for (const [name, edit, text] of [
+  ['a broken data bundle', html => html.replace('fromBase64("QlAzRGA8AAB7', 'fromBase64("QlAzRGA8AAF7'), 'データを読み込めませんでした'],
+  ['a script that cannot run', html => { const at = html.lastIndexOf('<script>') + '<script>'.length; return html.slice(0, at) + ')' + html.slice(at); }, 'プログラムを起動できませんでした'],
+]) test(`${name} leaves its own explanation`, async ({ page }, testInfo) => {
+  const fs = require('node:fs');
+  const html = fs.readFileSync(path.resolve('index.html'), 'utf8'), changed = edit(html);
+  expect(changed).not.toBe(html);
+  const file = testInfo.outputPath('broken.html');
+  fs.writeFileSync(file, changed);
+  await page.goto(pathToFileURL(file).href);
+  await expect(page.locator('#error')).toContainText(text);
+  await expect(page.locator('#mode-conduction')).toBeDisabled();
+  await expect(page.locator('#msd-reference')).toBeVisible();
 });

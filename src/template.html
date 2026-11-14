@@ -93,8 +93,9 @@ nav.tools{grid-row:7;grid-column:1/-1;padding:6px 12px 12px}
 @media(min-width:761px) and (max-width:999px){
 /* Below 1000px the model fills its box and no corner of it is free (model pixels under the box at 761x800: 99 top left, 49 top right and
    37 bottom left in the conduction view, 170 top left in the interior view), so main.js moves the box to the top of the side column,
-   where it stays in view while the list scrolls. It is opaque there because the part buttons pass under it. */
-aside>.beat-phase{position:sticky;top:-28px;left:auto;z-index:2;max-width:none;margin:-28px -24px 16px;border-width:0 0 1px;border-radius:0;padding:10px 24px;background:#121e29}
+   where it stays in view while the list scrolls. It is opaque there because the part buttons pass under it, and takes the pointer, or a click on it chose the hidden button
+   under it (review of PR #51). */
+aside>.beat-phase{position:sticky;top:-28px;left:auto;z-index:2;pointer-events:auto;max-width:none;margin:-28px -24px 16px;border-width:0 0 1px;border-radius:0;padding:10px 24px;background:#121e29}
 }
 @media(min-width:1000px){
 /* The stage is the window minus the 330px side column. From about 1000px it is wide enough (about 670px) for the heading and the four
@@ -111,12 +112,15 @@ aside>.beat-phase{position:sticky;top:-28px;left:auto;z-index:2;max-width:none;m
    model stayed black in that arrangement (7535baf) while the description showed. */
 body{height:100dvh;overflow:hidden;display:flex;flex-direction:column}
 header{flex:none;height:72px;min-height:0;padding:0 20px}.brand{font-size:16px}.badge{font-size:10px;padding:6px 8px}
-#pinned{flex:none;display:flex;flex-direction:column}
-main{flex:1;min-height:0;overflow-y:auto;align-items:stretch;overscroll-behavior:contain;display:flex;flex-direction:column;border-top:1px solid #ffffff26}
+/* <main> keeps at least two rows of buttons. When the pinned part (model, phase box, description, cut notices) would leave it less,
+   the description and the notices shrink first (they scroll), then the model (review of PR #51: at 320x520 with a cut notice and the
+   phase box, <main> was 1px tall and no button could be reached; 29px before the phase box moved under the model). */
+#pinned{flex:0 1 auto;min-height:0;display:flex;flex-direction:column}
+main{flex:1;min-height:100px;overflow-y:auto;align-items:stretch;overscroll-behavior:contain;display:flex;flex-direction:column;border-top:1px solid #ffffff26}
 .stage,aside{display:contents}
-.viewport{flex:none;height:clamp(220px,36dvh,420px);background:radial-gradient(ellipse at 50% 45%,#293d44 0%,#17242b 55%,#11191e 90%)}
-.detail{flex:none;height:clamp(120px,22dvh,230px);overflow:auto;margin:0;padding:12px 20px;background:#152027;border-top:0}
-.detail-note{flex:none;margin:0;padding:6px 20px;max-height:96px;overflow:auto;border-left:0;border-top:1px solid #ffffff20;background:#152027}.detail-note button{display:inline-block;margin:4px 0 0}
+.viewport{flex:0 1 auto;min-height:140px;height:clamp(220px,36dvh,420px);background:radial-gradient(ellipse at 50% 45%,#293d44 0%,#17242b 55%,#11191e 90%)}
+.detail{flex:0 3 auto;min-height:48px;height:clamp(120px,22dvh,230px);overflow:auto;margin:0;padding:12px 20px;background:#152027;border-top:0}
+.detail-note{flex:0 3 auto;min-height:52px;margin:0;padding:6px 20px;max-height:96px;overflow:auto;border-left:0;border-top:1px solid #ffffff20;background:#152027}.detail-note button{display:inline-block;margin:4px 0 0}
 .detail h3{font-size:19px}.detail p{font-size:12.5px;line-height:1.7;margin:6px 0 0}
 .stage-heading{order:0;padding:16px 20px 0}.stage-heading h1{font-size:21px;margin-bottom:12px}
 #steps{order:1;padding:0 20px}#ecg-panel{order:1;margin:10px 20px 0}#cut{order:2;margin-top:12px}#interior-overlay{order:3}nav.views{order:4}
@@ -136,7 +140,7 @@ aside .note,aside .reference{order:9;margin-left:20px;margin-right:20px}main>foo
 /* Phone held sideways: the pinned header, model and description (72+220+120px) used to fill the whole
    screen and leave <main> about 0px tall, so the buttons could not be reached. Shrink them so <main> keeps room. */
 header{height:44px}
-.viewport{height:clamp(110px,42dvh,200px)}
+.viewport{height:clamp(110px,42dvh,200px);min-height:96px}
 .detail{height:clamp(64px,22dvh,120px);padding:8px 20px}
 .detail-note{max-height:60px;padding:4px 20px}
 /* The phase box stays on the model here. The conduction view's impulse line made it 267px wide, over the model at 568x320 (836 model
@@ -206,6 +210,18 @@ header{height:44px}
 <footer><details><summary>内蔵ライブラリとデータのライセンス</summary><pre><!-- LICENSE --></pre></details></footer>
 </main>
 <noscript><p>このモデルを操作するにはJavaScriptを有効にしてください。</p></noscript>
+<script>
+// Written for old browsers on purpose (var, function). If the viewer's script cannot run at all, for example a browser too old for its
+// syntax, nothing else explains the disabled controls (review of PR #51): after the page has loaded, a viewer that never got ready
+// leaves this message, unless it has shown its own.
+window.addEventListener('load', function () {
+  var error = document.getElementById('error');
+  if (document.documentElement.getAttribute('data-ready') !== 'true' && error.hidden) {
+    error.hidden = false;
+    error.textContent = '3D表示のプログラムを起動できませんでした。古いブラウザーでは動きません（目安：Chrome・Edge 108、Firefox 101、Safari 16.4以降）。説明と参考リンクは引き続き読めます。';
+  }
+});
+</script>
 <script>/* APP */</script>
 </body>
 </html>

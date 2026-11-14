@@ -113,6 +113,10 @@ export function createHeartSound(Context) {
       }
       return Promise.resolve(context.resume());
     },
+    // Let the audio context stop (no sound is lost: everything booked has been cancelled before).
+    suspend() {
+      if (context && context.state === 'running') Promise.resolve(context.suspend()).catch(() => {});
+    },
     onStateChange(handler) { context.addEventListener('statechange', handler); },
     now: () => context.currentTime,
     // Seconds from booking to hearing, as the context reports it (outputLatency, else baseLatency). 0 when unknown. Whether
