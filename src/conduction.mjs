@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { pulseAt } from './conduction-timing.mjs';
 
 // Explanatory overlay in BodyParts3D millimetres. BodyParts3D has no conduction-system meshes,
 // so scripts/prepare-bodyparts3d.mjs places these points from nearby cavities and valves.
@@ -71,4 +72,42 @@ export function createConduction(parent, parts, data) {
     ['sa', nodes.sa], ['atria', middle(paths.atria[0])], ['av', nodes.av], ['his', curveMiddle(paths.his[0])], ['bhis', curveMiddle(paths.branchingHis[0])],
     ['rbb', middle(paths.branches[1])], ['lbb', middle(paths.branches[0])], ['purkinje', middle(paths.purkinje[0])],
   ]);
+}
+
+// The head of the impulse: a small bright sphere that runs along each path while the impulse is in it (conduction-timing.mjs gives
+// where). The spheres are helpers (createBeat leaves them alone) and not parts, so they cannot be picked and the part look code
+// does not touch them. update() puts each at the beat-displaced point of its path; with ms null every sphere is hidden.
+const pulseRadius = 2.6;
+export function createConductionPulse(data) {
+  const { paths } = data;
+  const curveOf = points => new THREE.CatmullRomCurve3(points.map(p => new THREE.Vector3(...p)));
+  const sources = [
+    ...paths.atria.map(p => ['atria', p]), ...paths.his.map(p => ['his', p]), ...paths.branchingHis.map(p => ['bhis', p]),
+    ...paths.leftFascicles.map(p => ['lbb', p]), ['rbb', paths.branches[1]], ...paths.purkinje.map(p => ['purkinje', p]),
+  ];
+  const group = new THREE.Group(), material = new THREE.MeshBasicMaterial({ color: 0xffffff });
+  group.userData.helper = true;
+  const heads = sources.map(([id, points]) => {
+    const mesh = new THREE.Mesh(new THREE.SphereGeometry(pulseRadius, 16, 10), material);
+    mesh.visible = false;
+    mesh.frustumCulled = false;
+    group.add(mesh);
+    return { id, curve: curveOf(points), mesh };
+  });
+  // Arc length of the longest path of each part: where the impulse is within the bundle stretch depends on them.
+  const lengths = {};
+  for (const { id, curve } of heads) lengths[id] = Math.max(lengths[id] ?? 0, curve.getLength());
+  const point = new THREE.Vector3();
+  function update(ms, displace) {
+    const at = ms === null ? null : pulseAt(ms, lengths);
+    for (const { id, curve, mesh } of heads) {
+      const u = at?.[id];
+      mesh.visible = u !== null && u !== undefined;
+      if (!mesh.visible) continue;
+      curve.getPointAt(Math.min(1, Math.max(0, u)), point);
+      const p = displace([point.x, point.y, point.z]);
+      mesh.position.set(p[0], p[1], p[2]);
+    }
+  }
+  return { group, lengths, update, material };
 }

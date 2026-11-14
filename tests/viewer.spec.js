@@ -878,8 +878,10 @@ for (const width of [1440, 390]) test(`flow view: particles appear, move with th
   await expect(page.locator('#flow-note')).toBeVisible();
   await expect(page.locator('#conduction-note')).toBeHidden();
   await expect(page.locator('.part:visible')).toHaveCount(10);
-  await page.getByRole('button', { name: '右心室', exact: true }).click();
-  await expect(page.locator('#name')).toHaveText('右心室');
+  // The coronary arteries are on no route, so choosing them leaves every particle as it was: the thresholds below are unchanged.
+  // (Choosing the right ventricle, as this test did before the route emphasis of stage B, now darkens the left-heart particles.)
+  await page.getByRole('button', { name: '冠動脈', exact: true }).click();
+  await expect(page.locator('#name')).toHaveText('冠動脈');
   await c.scrollIntoViewIfNeeded();
   const rest = await stableShot(c), restPixels = await particlePixels(page, rest);
   expect(restPixels.red).toBeGreaterThan(25); // was 40 before the red rule was tightened: 295 at 1440 px, 52 at 390 px
@@ -1096,4 +1098,124 @@ for (const width of [761, 800, 900, 1024, 1280]) test(`PC layout at width ${widt
     }
   }
   await context.close();
+});
+
+// Stage B, the impulse and the schematic ECG on the beat clock (conduction-timing.mjs). The page's clock is the fake one: stopped with
+// pauseAt() once the page has loaded and moved only by runFor(), so each stop falls at the beat time planned (real speed: 1 ms is 1 ms).
+// The white head of the impulse is drawn only while the impulse is in a path that has one (the AV node has none).
+const whitePixels = (page, png) => inPagePixels(page, png, data => {
+  let n = 0;
+  for (let i = 0; i < data.length; i += 4) if (data[i] > 235 && data[i + 1] > 235 && data[i + 2] > 235) n++;
+  return n;
+});
+test('conduction view: the impulse and the ECG follow the beat clock', async ({ page }) => {
+  const errors = [];
+  page.on('pageerror', e => errors.push(e.message));
+  await page.clock.install({ time: 0 });
+  await page.goto(url);
+  await expect(page.locator('html')).toHaveAttribute('data-ready', 'true');
+  await page.clock.pauseAt(60000);
+  const click = id => page.evaluate(i => document.getElementById(i).click(), id);
+  // The strip is only in the conduction view, and at rest the parts keep their plain look (no head, no impulse text).
+  await expect(page.locator('#ecg-panel')).toBeHidden();
+  await expect(page.locator('#propagation-note')).toBeHidden();
+  await click('mode-conduction');
+  await click('beat-speed');
+  await page.clock.runFor(30);
+  await expect(page.locator('#ecg-panel')).toBeVisible();
+  await expect(page.locator('#propagation-note')).toBeVisible();
+  await expect(page.locator('#beat-electric')).toBeHidden();
+  // [beat time, text of the stretch, the head is drawn]. The stops keep off the edges of the stretches (75, 100, 175, -25 ms), where a
+  // clock a hair off would read the neighbour. The last point of the strip must be the schematic ECG at that beat time (the wiring;
+  // where the waves sit is checked by tests/conduction-timing.test.mjs).
+  const { ecgAt } = await import('../src/conduction-timing.mjs');
+  const stops = [[20, /房室結節/, false], [80, /ヒス束と左右の脚/, true], [105, /プルキンエ線維/, true], [125, /プルキンエ線維/, true], [340, /T波/, false], [740, /洞房結節から心房/, true]];
+  const lastY = () => page.evaluate(() => Number(document.getElementById('ecg-trace').getAttribute('d').split('L').pop().split(' ')[1]));
+  const c = page.locator('canvas');
+  let at = 0;
+  const counts = {};
+  for (const [ms, text] of stops) {
+    await click('beat-play');
+    await page.clock.runFor(ms - at);
+    at = ms;
+    await click('beat-play'); // the stop draws the beat exactly where the clock is
+    await page.clock.runFor(30);
+    await expect(page.locator('#beat-electric')).toHaveText(text);
+    expect(Math.abs(await lastY() - (46 - ecgAt(ms) * 34)), `strip at ${ms} ms`).toBeLessThan(.2);
+    await page.clock.resume();
+    counts[ms] = await whitePixels(page, await stableShot(c));
+    await page.clock.pauseAt(await page.evaluate(() => Date.now()) + 50000);
+  }
+  // Measured (Chromium, SwiftShader, 1280x720): 0, 0, 102, 24, 0, 0 white pixels at 20, 80, 105, 125, 340 and 740 ms. A head that lies
+  // behind the see-through walls (the His bundle, the atria) is tinted and not white, so only the Purkinje heads, at the apex, are
+  // counted; where no head can be drawn (the AV node's wait, the recovery) the count must be 0.
+  expect(counts[20]).toBe(0);
+  expect(counts[340]).toBe(0);
+  expect(counts[105]).toBeGreaterThan(40);
+  expect(counts[125]).toBeGreaterThan(8);
+  expect(errors).toEqual([]);
+});
+
+// The impulse is also drawn on the cross-section when the conduction overlay is on; the strip is only in the conduction view.
+test('interior view: the impulse runs on the conduction overlay and the strip stays out', async ({ page }) => {
+  const errors = [];
+  page.on('pageerror', e => errors.push(e.message));
+  await page.goto(url);
+  await expect(page.locator('html')).toHaveAttribute('data-ready', 'true');
+  await page.locator('#mode-interior').click();
+  await page.locator('#interior-conduction').click();
+  await expect(page.locator('#ecg-panel')).toBeHidden();
+  await expect(page.locator('#propagation-note')).toBeHidden();
+  await expect(page.locator('#beat-electric')).toBeHidden();
+  await page.locator('#beat-play').click();
+  await page.waitForTimeout(900);
+  await expect(page.locator('#beat-electric')).toHaveText(/^刺激：/);
+  await page.locator('#beat-play').click();
+  // Leaving the conduction parts hides the impulse text again once the overlay is off and the beat is at rest.
+  await page.locator('#mode-exterior').click();
+  await expect(page.locator('#beat-electric')).toBeHidden();
+  await page.locator('#mode-conduction').click();
+  await expect(page.locator('#ecg-panel')).toBeVisible();
+  expect(errors).toEqual([]);
+});
+
+// Stage B, the blood-flow view: choosing a part emphasises the particles of the routes through it (flow.mjs, routesThrough).
+test('flow view: choosing a part emphasises the routes through it and darkens the others', async ({ page }) => {
+  const errors = [];
+  page.on('pageerror', e => errors.push(e.message));
+  await page.goto(url);
+  await expect(page.locator('html')).toHaveAttribute('data-ready', 'true');
+  await page.addStyleTag({ content: '#beat-phase{visibility:hidden}' });
+  const c = page.locator('canvas');
+  await page.locator('#mode-flow').click();
+  // The part that the view picks on entering does not emphasise anything: both sides are drawn alike.
+  await expect(page.locator('#flow-route-note')).toContainText('部位を選ぶと');
+  const all = await particlePixels(page, await stableShot(c));
+  expect(all.blue).toBeGreaterThan(100);
+  expect(all.red).toBeGreaterThan(25);
+  const pick = async name => { await page.getByRole('button', { name, exact: true }).click(); await settle(page); return particlePixels(page, await stableShot(c)); };
+  // The right atrium is on the two right routes: the left-heart (red) particles go dark and small.
+  const right = await pick('右心房');
+  await expect(page.locator('#flow-route-note')).toContainText('上大静脈・下大静脈の2本、右心系');
+  expect(right.red).toBeLessThan(all.red * .25);
+  expect(right.blue).toBeGreaterThan(all.blue * .8);
+  // The left ventricle is on the four left routes.
+  const left = await pick('左心室');
+  await expect(page.locator('#flow-route-note')).toContainText('左上肺静脈・左下肺静脈・右上肺静脈・右下肺静脈の4本、左心系');
+  expect(left.blue).toBeLessThan(all.blue * .25);
+  expect(left.red).toBeGreaterThan(all.red * .8);
+  // The coronary arteries are on no route: nothing is darkened, and the note says so.
+  const coronary = await pick('冠動脈');
+  await expect(page.locator('#flow-route-note')).toContainText('通る経路はありません');
+  expect(coronary.blue).toBeGreaterThan(all.blue * .8);
+  expect(coronary.red).toBeGreaterThan(all.red * .8);
+  // Back in the exterior view the note is gone, and coming back to the flow view starts without emphasis again.
+  await page.locator('#mode-exterior').click();
+  await expect(page.locator('#flow-route-note')).toBeHidden();
+  await page.locator('#mode-flow').click();
+  await expect(page.locator('#flow-route-note')).toContainText('部位を選ぶと');
+  const again = await particlePixels(page, await stableShot(c));
+  expect(again.blue).toBeGreaterThan(all.blue * .8);
+  expect(again.red).toBeGreaterThan(all.red * .8);
+  expect(errors).toEqual([]);
 });
