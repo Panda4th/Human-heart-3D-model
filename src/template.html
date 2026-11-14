@@ -79,7 +79,11 @@ nav.tools{grid-row:7;grid-column:1/-1;padding:6px 12px 12px}
    1100x800, 636 at 1280x800, 328 at 1300x800, 179 at 1360x1000, and none from 1340x820 on, at 1400x860, 1400x1000, 1440x900, 1440x1100,
    1536x864 and 1920x1080 (exterior view; the conduction view, with its one more line, gave fewer). A width of 280px (the first idea)
    still overlapped below 1280px (1266 at 1024x768), so the explanatory sentence is left out here, as on a phone: the box then holds the
-   phase name and the one-line valve state, and no model pixel lies under it at any of these sizes. */
+   phase name and the one-line valve state. The line about the impulse (conduction view) changes with the stretch the impulse is in, and
+   its longest text made the box 271px wide, which put 80 pixels of the model under it at 1024x768 and 35 at 1100x800 (and 87 in the CI
+   run of 93ff471), so the box is capped at 200px and that line wraps; with the longest text forced, no model pixel lies under it at
+   1024x768, 1100x800, 1280x800, 1366x768, 1360x1000 and 1399x900. */
+.beat-phase{max-width:200px}
 #beat-phase-valves{display:none}
 }
 @media(min-width:1000px){
