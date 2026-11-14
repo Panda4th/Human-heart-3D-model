@@ -126,6 +126,20 @@ test('after a stall the missed sounds are dropped, not played in a bunch', () =>
   assert.ok(events.length <= 2 * (lookahead + lateLimit) / (period / 1000) + 2, 'only what is due now or within the lookahead');
 });
 
+// Issue #50 recheck (F2): the test above reads lateLimit itself, so it held for any value (a limit of 10 s passed). A sound more than
+// 50 ms late is dropped whatever the constant says; one 30 ms late is still played.
+test('a sound more than 50 ms late is dropped, one 30 ms late is played', () => {
+  for (const [now, kept] of [[.16, false], [.13, true]]) {
+    const c = makeClock(), p = createPlayback(c.read), s = createSoundScheduler();
+    p.setSlow(false);
+    p.play();
+    s.start(p, 0);
+    c.t = now;
+    const first = s.take(p, now).find(e => e.sound === 'first' && Math.abs(e.at - .1) < 1e-9);
+    assert.equal(Boolean(first), kept, `the first sound (due at 0.1 s) booked at ${now} s`);
+  }
+});
+
 test('a one-beat play books nothing after its end', () => {
   const c = makeClock(), p = createPlayback(c.read), s = createSoundScheduler();
   p.setSlow(false);

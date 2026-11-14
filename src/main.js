@@ -4,7 +4,7 @@ import { createConduction, createConductionPulse } from './conduction.mjs';
 import { ecgAt, ecgBumps, glowAt, stretchText, stretchTextAt, waveAge } from './conduction-timing.mjs';
 import { createAnatomy, modelScale } from './anatomy.mjs';
 import { createFlow, routesThrough } from './flow.mjs';
-import { contraction, createBeat, period, phaseAt, phases, stepBeat } from './heartbeat.mjs';
+import { beatEnd, contraction, createBeat, period, phaseAt, phases, stepBeat } from './heartbeat.mjs';
 import { createHeartSound, createPlayback, createSoundScheduler } from './heartsound.mjs';
 import anatomyData from './data/bodyparts3d-heart.bin';
 import { createCrossSection, cutColor, fieldOfView, fitDistance, modelSphere, pickHit, removedByCut, selectableIn, TapGesture } from './viewer-state.mjs';
@@ -37,9 +37,14 @@ function showError(message) {
     el.before(home);
     return [el, home, after];
   });
+  // On a PC the ECG strip (conduction view) goes to the top of the side column. On the model's bottom left it lay over the vessels in
+  // many windows from 761 to 1280px (model pixels under it: 811 at 800x700, 185 at 1024x768, 49 at 1280x1024); on the bottom right it
+  // covered more, and a row of its own under the model took about 95px from the model's box (Issue #50 recheck, C1).
+  const ecgAside = () => document.querySelector('aside').prepend($('ecg-panel'));
   const place = () => {
     for (const [el, home] of moved) phone.matches ? $('pinned').append(el) : home.after(el);
     for (const [el, home, after] of reordered) phone.matches ? after().after(el) : home.after(el);
+    if (!phone.matches) ecgAside();
   };
   // The phase box (shown once the beat has been played) lies on the model's top left corner where the model leaves room for it. In a
   // PC window below 1000px and on an upright phone the model fills its box, and the box covered the top of the vessels in every corner
@@ -51,7 +56,8 @@ function showError(message) {
   const upright = matchMedia('(max-width:760px) and (min-height:481px)'), narrow = matchMedia('(min-width:761px) and (max-width:999px)');
   // Elements are moved only when their place changes: re-attaching the model and the description loses the focus and the
   // description's scroll position (review of PR #51), so `place` runs only when the phone layout starts or ends, and the phase box
-  // moves only when its own place changes. `place` moves the model, so after it the box is placed again.
+  // moves only when its own place changes. `place` moves the model, so after it the box is placed again. In the side column the box is
+  // prepended, so it stays above the ECG strip.
   let phaseAt = null;
   const placePhase = (force = false) => {
     const at = upright.matches ? 'under' : narrow.matches ? 'aside' : 'home';
@@ -313,7 +319,8 @@ diffuseColor.a = min(1.0, diffuseColor.a + rim * 0.55);
   // Heart sounds. The sounds are booked a short time ahead from the playback clock; whenever the clock changes (play, stop,
   // speed, hidden page, sound on or off) the booked sounds are cancelled and booked again from the current position, so a
   // sound is never played twice or after a stop, and past sounds are never played back.
-  const soundLimit = () => reduceMotion.matches ? period : Infinity;
+  // With reduced motion the sounds stop at the end of the beat being played (beatEnd), as the beat does.
+  const soundLimit = () => reduceMotion.matches ? beatEnd(beatTime) : Infinity;
   function bookSounds() {
     if (soundOn && playback.running && !failed) sound.schedule(scheduler.take(playback, sound.now(), { latency: sound.latency(), limit: soundLimit() }));
   }

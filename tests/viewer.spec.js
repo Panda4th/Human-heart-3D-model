@@ -800,6 +800,8 @@ test('when the 3D view is lost the beat and the heart sounds stop', async ({ bro
   await expect.poll(() => page.evaluate(() => window.audible().length), { timeout: 10000 }).toBeGreaterThan(2);
   await page.locator('canvas').evaluate(c => c.dispatchEvent(new Event('webglcontextlost', { cancelable: true })));
   await expect(page.locator('#error')).toContainText('再読み込み');
+  // The beat has stopped too, not only the sounds (Issue #50 recheck, F2: a page that kept beating=true passed this test).
+  await expect(page.locator('#beat-play')).toHaveText('拍動を再生');
   const after = await page.evaluate(() => window.audible().length);
   await page.waitForTimeout(2500);
   expect(await page.evaluate(() => window.audible().length), 'no sound is booked after the loss').toBe(after);
@@ -1266,8 +1268,12 @@ test('interior view: the impulse runs on the conduction overlay and the strip st
 });
 
 // Stage B, the blood-flow view: choosing a part emphasises the particles of the routes through it (flow.mjs, routesThrough).
-test('flow view: choosing a part emphasises the routes through it and darkens the others', async ({ page }) => {
-  const errors = [];
+// The phone width was added on 2026-11-14 (Issue #50 recheck, F1: the emphasis had been checked only at the default 1280x720).
+// The floors for "particles are drawn" are about half of what was measured (Chromium, SwiftShader): blue 435 / red 157 at 1280x720 (floors
+// 100 / 25, unchanged), blue 81 / red 33 at 390x844 (floors 40 / 15, new). The emphasis itself is checked by ratios, the same at both.
+for (const [width, height, mobile, floor] of [[1280, 720, false, { blue: 100, red: 25 }], [390, 844, true, { blue: 40, red: 15 }]]) test(`flow view: choosing a part emphasises the routes through it and darkens the others at width ${width}`, async ({ browser }) => {
+  const context = await browser.newContext({ viewport: { width, height }, hasTouch: mobile, isMobile: mobile });
+  const page = await context.newPage(), errors = [];
   page.on('pageerror', e => errors.push(e.message));
   await page.goto(url);
   await expect(page.locator('html')).toHaveAttribute('data-ready', 'true');
@@ -1277,8 +1283,8 @@ test('flow view: choosing a part emphasises the routes through it and darkens th
   // The part that the view picks on entering does not emphasise anything: both sides are drawn alike.
   await expect(page.locator('#flow-route-note')).toContainText('部位を選ぶと');
   const all = await particlePixels(page, await stableShot(c));
-  expect(all.blue).toBeGreaterThan(100);
-  expect(all.red).toBeGreaterThan(25);
+  expect(all.blue).toBeGreaterThan(floor.blue);
+  expect(all.red).toBeGreaterThan(floor.red);
   const pick = async name => { await page.getByRole('button', { name, exact: true }).click(); await settle(page); return particlePixels(page, await stableShot(c)); };
   // The right atrium is on the two right routes: the left-heart (red) particles go dark and small.
   const right = await pick('右心房');
@@ -1304,6 +1310,7 @@ test('flow view: choosing a part emphasises the routes through it and darkens th
   expect(again.blue).toBeGreaterThan(all.blue * .8);
   expect(again.red).toBeGreaterThan(all.red * .8);
   expect(errors).toEqual([]);
+  await context.close();
 });
 
 // Issue #50 B4/E8: the audio context was still starting (resume pending) when the 3D view was lost. The controls were disabled and the
@@ -1536,4 +1543,87 @@ for (const [name, edit, text] of [
   await expect(page.locator('#error')).toContainText(text);
   await expect(page.locator('#mode-conduction')).toBeDisabled();
   await expect(page.locator('#msd-reference')).toBeVisible();
+});
+
+// Issue #50 recheck (B3): after the beat had played on normally, turning on "reduce motion" and pressing "拍動を1回再生" ended the play at
+// once: the beat clock counts on across beats, and the one-beat play stopped at the end of the first beat (800 ms), already behind it.
+// It now plays to the end of the beat it is in, with its two heart sounds.
+test('with reduced motion turned on after the beat has played, one press still plays a beat with its sounds', async ({ browser }) => {
+  const context = await browser.newContext({ viewport: { width: 1280, height: 800 } });
+  const page = await context.newPage(), errors = [];
+  page.on('pageerror', e => errors.push(e.message));
+  await page.addInitScript(fakeAudio);
+  await page.clock.install({ time: 0 });
+  await page.goto(url);
+  await expect(page.locator('html')).toHaveAttribute('data-ready', 'true');
+  await page.clock.pauseAt(60000);
+  const click = id => page.evaluate(i => document.getElementById(i).click(), id);
+  await click('beat-speed');
+  await click('beat-play');
+  await page.clock.runFor(1250); // more than one beat at the real speed: the beat time is past 800 ms
+  await click('beat-play');
+  await click('heart-sound');
+  await page.clock.runFor(50);
+  // The press reads the setting itself (matchMedia().matches). The label follows the media change event, which Chromium's emulation did
+  // not always deliver (5 of 12 runs here; a second listener of our own also missed it 2 times in 8), so the setting is waited for, not
+  // the label.
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  await expect.poll(() => page.evaluate(() => matchMedia('(prefers-reduced-motion: reduce)').matches)).toBe(true);
+  const before = await page.evaluate(() => window.audible().length);
+  await click('beat-play');
+  await page.clock.runFor(200);
+  await expect(page.locator('#beat-play'), 'still playing 0.2 s after the press').toHaveText('拍動を止める');
+  await page.clock.runFor(1000);
+  await expect(page.locator('#beat-play'), 'stopped at the end of the beat').toHaveText('拍動を1回再生');
+  // The press started at 450 ms of the beat (1250 ms): the rest of that beat holds no sound, and the play ends at 1600 ms. So the
+  // first press books nothing, and the next press plays a whole beat with one first and one second sound.
+  await click('beat-play');
+  await page.clock.runFor(1200);
+  await expect(page.locator('#beat-play')).toHaveText('拍動を1回再生');
+  const heard = await page.evaluate(n => window.audible().slice(n).map(v => v.hz), before);
+  expect(heard.sort((a, b) => a - b)).toEqual([90, 130]);
+  expect(errors).toEqual([]);
+  await context.close();
+});
+
+// Issue #50 recheck (C1): on the model's bottom left the ECG strip lay over the vessels in many PC windows (model pixels under it: 811 at
+// 800x700, 185 at 1024x768, 49 at 1280x1024). From 761px it is in the side column, off the model, and in view when the view opens.
+for (const [width, height] of [[761, 700], [800, 700], [1024, 768], [1280, 800], [1280, 1024], [1440, 900]]) test(`PC layout at ${width}x${height}: the ECG strip is off the model`, async ({ browser }) => {
+  const context = await browser.newContext({ viewport: { width, height } });
+  const page = await context.newPage();
+  await page.goto(url);
+  await expect(page.locator('html')).toHaveAttribute('data-ready', 'true');
+  await page.locator('#mode-conduction').click();
+  await page.locator('#beat-play').click();
+  await page.locator('#beat-play').click();
+  const [ecg, canvas] = await page.evaluate(() => ['#ecg-panel', 'canvas'].map(s => { const r = document.querySelector(s).getBoundingClientRect(); return { left: r.left, right: r.right, top: r.top, bottom: r.bottom }; }));
+  const over = ecg.left < canvas.right && ecg.right > canvas.left && ecg.top < canvas.bottom && ecg.bottom > canvas.top;
+  expect(over, 'the strip lies on the model box').toBe(false);
+  expect(ecg.bottom).toBeLessThanOrEqual(height);
+  await context.close();
+});
+
+// Issue #50 recheck (F2): the phone layout, the place of the phase box and their CSS are switched by the same widths in main.js and in
+// template.html (760/761, 999/1000, 480/481 high). A change on one side only must show: on each side of each boundary, where main.js has
+// put the model and the phase box must agree with the CSS that is in force.
+for (const [width, height] of [[760, 800], [761, 800], [999, 800], [1000, 800], [760, 480], [760, 481]]) test(`at ${width}x${height} main.js and the CSS agree on the layout`, async ({ browser }) => {
+  const context = await browser.newContext({ viewport: { width, height } });
+  const page = await context.newPage();
+  await page.goto(url);
+  await expect(page.locator('html')).toHaveAttribute('data-ready', 'true');
+  await page.locator('#beat-play').click();
+  await page.locator('#beat-play').click();
+  const m = await page.evaluate(() => {
+    const box = document.getElementById('beat-phase');
+    return { pinned: Boolean(document.querySelector('canvas').closest('#pinned')), phoneCss: getComputedStyle(document.body).overflow === 'hidden',
+      boxInAside: box.parentElement.tagName === 'ASIDE', sticky: getComputedStyle(box).position === 'sticky',
+      boxUnder: box.previousElementSibling?.classList.contains('viewport') ?? false, static: getComputedStyle(box).position === 'static' };
+  });
+  expect(m.pinned, 'model moved for the phone').toBe(width <= 760);
+  expect(m.phoneCss, 'phone CSS').toBe(width <= 760);
+  expect(m.boxInAside, 'box in the side column').toBe(width >= 761 && width <= 999);
+  expect(m.sticky, 'side-column CSS').toBe(m.boxInAside);
+  expect(m.boxUnder, 'box under the model').toBe(width <= 760 && height >= 481);
+  expect(m.static, 'under-the-model CSS').toBe(m.boxUnder);
+  await context.close();
 });
