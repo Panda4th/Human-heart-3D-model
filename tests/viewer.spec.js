@@ -1054,3 +1054,46 @@ for (const [name, viewport, mobile] of [['PC', { width: 1280, height: 800 }, fal
   await page.locator('#beat-play').click();
   await context.close();
 });
+
+// Review of PR #46: from 761px the PC layout applies, but the stage is only the window minus the 330px side column (431px at 761px).
+// The heading and the mode buttons, and the cut slider and the two overlay buttons, shared a row and overlapped below about 1000px
+// (measured: the title text and the mode buttons overlapped by 39px at 900px; the slider and the overlay buttons at 761-900px).
+// Boxes are compared, and the slider is operated with the real pointer (fill() cannot show that something covers it).
+for (const width of [761, 800, 900, 1024, 1280]) test(`PC layout at width ${width}: heading, mode buttons, slider and overlay buttons do not overlap`, async ({ browser }) => {
+  const context = await browser.newContext({ viewport: { width, height: 800 } });
+  const page = await context.newPage();
+  await page.goto(url);
+  await expect(page.locator('html')).toHaveAttribute('data-ready', 'true');
+  const boxes = () => page.evaluate(() => {
+    const box = s => { const r = document.querySelector(s).getBoundingClientRect(); return { l: r.left, t: r.top, r: r.right, b: r.bottom }; };
+    const text = s => { const range = document.createRange(); range.selectNodeContents(document.querySelector(s)); const r = range.getBoundingClientRect(); return { l: r.left, t: r.top, r: r.right, b: r.bottom }; };
+    return { number: text('#mode-number'), title: text('#mode-title'), modes: box('.modes'), views: box('nav.views'), cut: box('#cut'), overlay: box('#interior-overlay'), tools: box('nav.tools'),
+      stageRight: box('.stage').r, stageBottom: box('.stage').b, height: innerHeight };
+  });
+  const apart = (a, b) => a.r <= b.l || b.r <= a.l || a.b <= b.t || b.b <= a.t;
+  for (const mode of ['exterior', 'conduction', 'interior', 'flow']) {
+    await page.locator(`#mode-${mode}`).click();
+    await settle(page);
+    const m = await boxes();
+    expect(apart(m.title, m.modes), `${mode}: title and mode buttons`).toBe(true);
+    expect(apart(m.number, m.modes), `${mode}: label and mode buttons`).toBe(true);
+    expect(m.modes.r, `${mode}: mode buttons inside the stage`).toBeLessThanOrEqual(m.stageRight);
+    expect(m.stageBottom, `${mode}: stage inside the window`).toBeLessThanOrEqual(m.height + 1);
+    if (mode === 'interior') {
+      expect(apart(m.cut, m.overlay), 'slider and overlay buttons').toBe(true);
+      expect(m.overlay.r).toBeLessThanOrEqual(m.stageRight);
+      expect(apart(m.cut, m.tools) && apart(m.overlay, m.tools), 'rows above the tool row').toBe(true);
+      // The slider answers the pointer at its left, middle and right, and the overlay buttons stay as they were.
+      const slider = await page.locator('#cut-depth').boundingBox();
+      for (const fraction of [.1, .5, .9]) {
+        const before = await page.inputValue('#cut-depth');
+        await page.mouse.click(slider.x + slider.width * fraction, slider.y + slider.height / 2);
+        expect(await page.inputValue('#cut-depth'), `slider at ${fraction}`).not.toBe(before);
+        await page.mouse.click(slider.x + slider.width * (fraction === .1 ? .9 : .1), slider.y + slider.height / 2);
+      }
+      await expect(page.locator('#interior-flow')).toHaveAttribute('aria-pressed', 'false');
+      await expect(page.locator('#interior-conduction')).toHaveAttribute('aria-pressed', 'false');
+    }
+  }
+  await context.close();
+});
