@@ -22,6 +22,13 @@ import { createValves, leafletDistance, partnerValve, valveKind, valveKinds, val
 // not, whatever the frame interval is.
 export const flowSettings = { gap: 4, ejectionFraction: .6, atrialShare: .25, spacing: 6.5, step: 4, warmUp: 4, ramp: 10 };
 
+// The parts whose route is shown by "which routes pass through the selected part" (blood-flow view). The six routes fall into two
+// sides: the right routes run from the venae cavae through the right atrium and ventricle to the pulmonary arteries, the left routes
+// from the pulmonary veins through the left atrium and ventricle to the aorta. The data has one part per kind of vessel, so a part
+// is on every route of its side (the vena cava part is on both right routes). The coronary vessels are on no route.
+export const routeParts = { right: ['vc', 'ra', 'rv', 'pa'], left: ['pv', 'la', 'lv', 'ao'] };
+export const routesThrough = (partId, routes) => routes.flatMap((r, i) => routeParts[r.side].includes(partId) ? [i] : []);
+
 const clamp01 = x => Math.min(1, Math.max(0, x));
 // Position within the route of the unwrapped position u (the route is a closed ring of the given length).
 const wrap = (u, length) => u - Math.floor(u / length) * length;
@@ -246,6 +253,8 @@ export function createFlow(flow, overrides = {}) {
     advance,
     sample,
     side: k => state[routeIndex(k)].side,
+    // Index of the route particle k belongs to.
+    route: routeIndex,
     // Arc length of particle k along its route, for tests.
     arc: k => { const ri = routeIndex(k), r = state[ri]; return wrap(r.u[k - offsets[ri]], r.length); },
   };

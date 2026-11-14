@@ -1,8 +1,9 @@
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
-import { createConduction } from './conduction.mjs';
+import { createConduction, createConductionPulse } from './conduction.mjs';
+import { ecgAt, ecgBumps, glowAt, stretchTextAt, waveAge } from './conduction-timing.mjs';
 import { createAnatomy, modelScale } from './anatomy.mjs';
-import { createFlow } from './flow.mjs';
+import { createFlow, routesThrough } from './flow.mjs';
 import { contraction, createBeat, period, phaseAt, phases, stepBeat } from './heartbeat.mjs';
 import { createHeartSound, createPlayback, createSoundScheduler } from './heartsound.mjs';
 import anatomyData from './data/bodyparts3d-heart.bin';
@@ -78,6 +79,9 @@ diffuseColor.a = min(1.0, diffuseColor.a + rim * 0.55);
   const crossSection = createCrossSection(exterior, parts, cutPlane, cutColor);
   exterior.add(conduction);
   const labelAnchors = createConduction(conduction, parts, meta.conduction);
+  // The head of the impulse (conduction-timing.mjs). Not a part: it is a helper in the heart's frame, moved by the beat's displacement.
+  const pulse = createConductionPulse(meta.conduction);
+  exterior.add(pulse.group);
   // Created after the cross-section and the conduction overlay so that it deforms their geometry too.
   const beat = createBeat(exterior, parts);
   // The overlay on the cross-section is cut by the same plane. Its materials keep one clipping plane in
@@ -86,6 +90,7 @@ diffuseColor.a = min(1.0, diffuseColor.a + rim * 0.55);
   const keepAll = 1e3;
   const conductionCut = new THREE.Plane(new THREE.Vector3(0, 0, -1), keepAll);
   conduction.traverse(o => { if (o.material) o.material.clippingPlanes = [conductionCut]; });
+  pulse.material.clippingPlanes = [conductionCut];
   const bounds = modelSphere(heart);
   // World-space box of every part, for telling whether the current cut leaves anything of it. The beat moves the walls by a few
   // millimetres, so the box is the union over the rest shape and the most contracted atria and ventricles (every point moves
@@ -105,7 +110,18 @@ diffuseColor.a = min(1.0, diffuseColor.a + rim * 0.55);
   const flowCut = new THREE.Plane(new THREE.Vector3(0, 0, -1), keepAll);
   const dots = new THREE.InstancedMesh(new THREE.SphereGeometry(1.5, 12, 8), new THREE.MeshStandardMaterial({ roughness: .45, metalness: 0, clippingPlanes: [flowCut] }), flow.count);
   const dotColors = { right: new THREE.Color(0x4a9bff), left: new THREE.Color(0xff5a4f) };
-  for (let k = 0; k < flow.count; k++) dots.setColorAt(k, dotColors[flow.side(k)]);
+  const dimColors = { right: dotColors.right.clone().multiplyScalar(.3), left: dotColors.left.clone().multiplyScalar(.3) };
+  // The routes that pass through the selected part (flow.mjs, routesThrough). While some are named, the particles of the others are
+  // drawn small and dark; empty means every route is drawn the same.
+  let routeFocus = [];
+  function paintDots() {
+    for (let k = 0; k < flow.count; k++) {
+      const side = flow.side(k);
+      dots.setColorAt(k, routeFocus.length === 0 || routeFocus.includes(flow.route(k)) ? dotColors[side] : dimColors[side]);
+    }
+    dots.instanceColor.needsUpdate = true;
+  }
+  paintDots();
   dots.userData.helper = true;
   dots.frustumCulled = false;
   dots.visible = false;
@@ -128,7 +144,7 @@ diffuseColor.a = min(1.0, diffuseColor.a + rim * 0.55);
   let flowStale = true;
   function drawFlow() {
     for (let k = 0; k < flow.count; k++) {
-      const size = flow.sample(k, dotPoint), p = beat.displace(dotPoint);
+      const size = flow.sample(k, dotPoint) * (routeFocus.length === 0 ? 1 : routeFocus.includes(flow.route(k)) ? 1.2 : .55), p = beat.displace(dotPoint);
       dotMatrix.makeScale(size, size, size).setPosition(p[0], p[1], p[2]);
       dots.setMatrixAt(k, dotMatrix);
     }
@@ -314,11 +330,52 @@ diffuseColor.a = min(1.0, diffuseColor.a + rim * 0.55);
     playback.pause();
     resyncSounds();
   }
+  // The impulse and the schematic ECG follow the beat clock. They are drawn while the beat is playing or stopped part-way (not at
+  // rest at 0), in the conduction view (and on the cross-section when the overlay is on); at rest the parts keep their plain look.
+  let electricShown = false, electricText = '', ecgKey = '';
+  const ecgTrace = $('ecg-trace'), ecgMarks = [...document.querySelectorAll('#ecg-panel text')];
+  const ecgSpan = 1000, ecgNow = 276, ecgBase = 46, ecgAmp = 34;
+  function drawEcg() {
+    // Same beat time and same size: nothing to redraw (the strip is a function of the beat time only).
+    const key = String(beatTime);
+    if (key === ecgKey) return;
+    ecgKey = key;
+    const scale = ecgNow / ecgSpan;
+    let d = '';
+    for (let x = 0; x <= ecgNow; x += 1.5) d += `${d ? 'L' : 'M'}${x.toFixed(1)} ${(ecgBase - ecgAt(beatTime - (ecgNow - x) / scale) * ecgAmp).toFixed(1)}`;
+    ecgTrace.setAttribute('d', d);
+    // Letters over the waves: P and T, and QRS at the R peak. They are drawn where the wave of a beat in view is.
+    const labels = { P: 'P', R: 'QRS', T: 'T' };
+    for (const text of ecgMarks) {
+      const bump = ecgBumps.find(b => b.name === text.dataset.wave);
+      // The newest occurrence of this wave in view, found from the beat time (which keeps growing while the beat plays).
+      const age = waveAge(beatTime, bump.mean, 6 / scale, (ecgNow - 6) / scale), x = age === null ? -1 : ecgNow - age * scale;
+      text.toggleAttribute('hidden', x < 0);
+      if (x >= 0) { text.setAttribute('x', x.toFixed(1)); text.setAttribute('y', (ecgBase - Math.max(bump.height, 0) * ecgAmp - 5).toFixed(1)); text.textContent = labels[bump.name]; }
+    }
+  }
+  function updateElectric() {
+    const view = conduction.visible, on = view && (beating || beatTime > 0);
+    if (mode === 'conduction') drawEcg();
+    if (!on && !electricShown) return;
+    electricShown = on;
+    pulse.group.visible = on;
+    pulse.update(on ? beatTime : null, beat.displace);
+    electricGlow = on ? glowAt(beatTime, pulse.lengths) : null;
+    paintConduction();
+    const text = on ? stretchTextAt(beatTime) : '';
+    if (text !== electricText) {
+      electricText = text;
+      $('beat-electric').textContent = text;
+      $('beat-electric').hidden = !text;
+    }
+  }
   function render(time) {
     const elapsed = previousTime ? (time - previousTime) / 1000 : 0;
     if (controls.autoRotate) controls.update(Math.min(elapsed, .05));
     if (beating) advanceBeat();
     if (dots.visible && flowStale) drawFlow();
+    updateElectric();
     renderer.render(scene, camera);
     updateLabels();
     frame = 0;
@@ -373,6 +430,46 @@ diffuseColor.a = min(1.0, diffuseColor.a + rim * 0.55);
     }
   }
   const dim = hex => new THREE.Color(hex).multiplyScalar(.55);
+  // Look of the conduction parts: the selected one is bright; while the impulse runs (updateElectric) a part also glows where the
+  // impulse is in it and fades after it has left.
+  let electricGlow = null;
+  function paintConduction() {
+    for (const [key, group] of parts) {
+      if (group.userData.kind !== 'conduction') continue;
+      const on = key === selected, glow = electricGlow?.[key] ?? 0;
+      group.traverse(object => {
+        if (object.isMesh) {
+          const mat = object.material;
+          mat.emissive.setHex(group.userData.color);
+          mat.emissiveIntensity = Math.max(on ? .8 : .18, glow * .95);
+        } else if (object.isLine) {
+          // The dashed line has no emissive: a selected or glowing one turns bright and nearly solid, the others dim and sparse.
+          const mat = object.material, lit = on || glow > .05;
+          mat.color.set(lit ? 0xfff4d6 : dim(group.userData.color));
+          mat.dashSize = lit ? 4 : 2.7;
+          mat.gapSize = lit ? 1 : 2.4;
+        }
+      });
+    }
+  }
+  // Blood-flow view: the particles of the routes through the selected part are emphasised, and the note names them.
+  const routeNames = { svc: '上大静脈', ivc: '下大静脈', lspv: '左上肺静脈', lipv: '左下肺静脈', rspv: '右上肺静脈', ripv: '右下肺静脈' };
+  // userChose: the part was chosen by the user in this view (a part that the view picks on entering does not dim the other routes).
+  let userChose = false;
+  function showRouteFocus() {
+    const focus = mode === 'flow' && userChose ? routesThrough(selected, flow.routes) : [];
+    const changed = focus.join() !== routeFocus.join();
+    routeFocus = focus;
+    if (changed) { paintDots(); flowStale = true; }
+    const note = $('flow-route-note');
+    note.hidden = mode !== 'flow';
+    if (mode !== 'flow') return;
+    if (!userChose) { note.textContent = '部位を選ぶと、その部位を通る経路の粒子だけを強調します（他の経路は小さく暗くなります）。'; return; }
+    const side = focus.length ? flow.routes[focus[0]].side === 'right' ? '右心系' : '左心系' : '';
+    note.textContent = focus.length
+      ? `選んだ「${parts.get(selected).userData.name}」を通る経路（${focus.map(i => routeNames[flow.routes[i].id]).join('・')}の${focus.length}本、${side}）を強調しています。他の経路の粒子は小さく暗くしています。経路は右心系の2本と左心系の4本に分かれるだけなので、同じ側の部位を選ぶと同じ経路が強調されます。`
+      : `「${parts.get(selected).userData.name}」を通る経路はありません（冠動脈・冠静脈は経路に含めていません）。全部の経路をそのまま表示しています。`;
+  }
   // from: the pick result when the part was chosen by clicking the model. A click on the cut face is remembered
   // as a point, drawn as a ring, because the cut face has one colour for every chamber.
   function select(id, from = null) {
@@ -382,22 +479,11 @@ diffuseColor.a = min(1.0, diffuseColor.a + rim * 0.55);
     crossSection.setRegion(mode === 'interior' ? id : null);
     for (const [key, group] of parts) {
       group.userData.button.setAttribute('aria-pressed', String(key === id));
-      group.traverse(object => {
-        if (object.isMesh) {
-          const mat = object.material;
-          if (group.userData.kind === 'conduction') {
-            mat.emissive.setHex(group.userData.color);
-            mat.emissiveIntensity = key === id ? .8 : .18;
-          } else mat.emissive.setHex(key === id ? 0x40201b : 0);
-        } else if (object.isLine) {
-          // The dashed line has no emissive: a selected one turns bright and nearly solid, the others dim and sparse.
-          const mat = object.material, on = key === id;
-          mat.color.set(on ? 0xfff4d6 : dim(group.userData.color));
-          mat.dashSize = on ? 4 : 2.7;
-          mat.gapSize = on ? 1 : 2.4;
-        }
-      });
+      if (group.userData.kind === 'conduction') continue;
+      group.traverse(object => { if (object.isMesh) object.material.emissive.setHex(key === id ? 0x40201b : 0); });
     }
+    paintConduction();
+    showRouteFocus();
     const data = parts.get(id).userData;
     $('name').textContent = data.name;
     $('en').textContent = data.en;
@@ -423,7 +509,7 @@ diffuseColor.a = min(1.0, diffuseColor.a + rim * 0.55);
     tag.textContent = '断面で消えた';
     tag.setAttribute('aria-hidden', 'true');
     button.append(dot, document.createTextNode(group.userData.name), tag);
-    button.onclick = () => select(id);
+    button.onclick = () => { userChose = true; select(id); };
     group.userData.button = button;
     $('parts').append(button);
   }
@@ -434,6 +520,9 @@ diffuseColor.a = min(1.0, diffuseColor.a + rim * 0.55);
     conductionCut.constant = interior ? cutPlane.constant : keepAll;
     for (const group of parts.values()) group.userData.button.hidden = !selectable(group);
     $('conduction-note').hidden = !conduction.visible;
+    $('ecg-panel').hidden = mode !== 'conduction';
+    $('propagation-note').hidden = mode !== 'conduction';
+    ecgKey = '';
     $('interior-conduction').setAttribute('aria-pressed', String(conductionOverlay));
     updateCutNotice();
   }
@@ -476,6 +565,7 @@ diffuseColor.a = min(1.0, diffuseColor.a + rim * 0.55);
     $('interior-overlay').hidden = !interior;
     $('mode-number').textContent = modeText[mode][0];
     $('mode-title').textContent = modeText[mode][1];
+    userChose = false;
     select(modeText[mode][2]);
     setView('front');
   }
@@ -562,7 +652,7 @@ diffuseColor.a = min(1.0, diffuseColor.a + rim * 0.55);
     const targets = mode === 'conduction' ? conduction.children : [...parts.values()].filter(g => g.userData.kind !== 'conduction' || conduction.visible);
     const cutView = mode === 'interior';
     const hit = pickHit(ray, targets, cutView ? [cutPlane] : [], cutView ? crossSection.solids : []);
-    if (hit) select(hit.id, hit);
+    if (hit) { userChose = true; select(hit.id, hit); }
   });
   controls.addEventListener('start', () => {
     stopRotation();

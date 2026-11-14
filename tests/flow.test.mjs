@@ -4,7 +4,7 @@ import * as THREE from 'three';
 import { readFileSync } from 'node:fs';
 import { anatomyDefinitions, createAnatomy, decodeAnatomy, interiorDefinitions, modelScale } from '../src/anatomy.mjs';
 import { contraction, createBeat, period } from '../src/heartbeat.mjs';
-import { createFlow } from '../src/flow.mjs';
+import { createFlow, routeParts, routesThrough } from '../src/flow.mjs';
 import { leafletDistance, valveNames, valveSettings } from '../src/valves.mjs';
 import { checkRoute, inside, makeSolid, makeVessel, nearestVertexDistance, rayHits, vesselClearance } from '../scripts/flow-geometry.mjs';
 
@@ -254,4 +254,33 @@ test('moved by the heartbeat displacement together, no particle comes within a p
   beat.set({ atria: 0, ventricles: 0 });
   console.log(`closest particle centre to a leaflet over 4 beats: ${best.distance.toFixed(2)} mm with the displacement (${best.name}, ${best.time} ms), ${restBest.toFixed(2)} mm at rest`);
   assert.ok(best.distance >= valveSettings.particleRadius, `${best.distance} mm from the ${best.name} valve at ${best.time} ms`);
+});
+
+// Blood-flow view: choosing a part emphasises the routes through it (main.js).
+test('the parts of each side are the cavities and vessels the route checks use, and a part is on the routes of its side', () => {
+  for (const side of ['right', 'left']) assert.deepEqual([...routeParts[side]].sort(), [...vesselsOf[side], ...expectedOrder[side]].sort(), side);
+  const routes = flow.routes;
+  assert.deepEqual(routesThrough('vc', routes), [0, 1]);
+  assert.deepEqual(routesThrough('ra', routes), [0, 1]);
+  assert.deepEqual(routesThrough('rv', routes), [0, 1]);
+  assert.deepEqual(routesThrough('pa', routes), [0, 1]);
+  for (const id of ['pv', 'la', 'lv', 'ao']) assert.deepEqual(routesThrough(id, routes), [2, 3, 4, 5], id);
+  // The coronary vessels, the valves and the muscles of the cross-section view are on no route.
+  for (const id of ['ca', 'cv', 'mv', 'tv', 'aov', 'pov', 'pm']) assert.deepEqual(routesThrough(id, routes), [], id);
+  // Every drawn exterior part that the blood-flow view lets the user choose is covered, so none is silently left out.
+  const exterior = anatomyDefinitions.map(d => d[0]);
+  const onARoute = new Set([...routeParts.right, ...routeParts.left]);
+  assert.deepEqual(exterior.filter(id => !onARoute.has(id)), ['ca', 'cv']);
+});
+
+test('a particle reports the route it belongs to, and the routes cover all particles', () => {
+  const instance = createFlow(flow);
+  const counts = new Array(instance.routes.length).fill(0);
+  for (let k = 0; k < instance.count; k++) {
+    const ri = instance.route(k);
+    assert.equal(instance.routes[ri].side, instance.side(k));
+    counts[ri]++;
+  }
+  assert.deepEqual(counts, instance.routes.map(r => r.n));
+  assert.equal(counts.reduce((a, b) => a + b), instance.count);
 });
