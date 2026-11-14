@@ -840,15 +840,18 @@ test('the heart sound controls fit a phone screen', async ({ browser }) => {
 });
 
 // The blood-flow view draws particles (blue on the right-heart routes, red on the left-heart routes) inside walls drawn at
-// opacity 0.12. A lit particle is not a pure colour, so these rules were found by measuring (Chromium/SwiftShader, at rest,
-// pixels counted at 1440 px width / 390 px width): the red rule (red - green > 120, red > 170, blue < 110) matched 0 / 0 in the
-// exterior view and 322 / 97 in the flow view; the blue rule (blue - red > 90, blue > 140) matched 207 / 38 in the exterior view
-// (the pulmonary arteries and veins are bluish) and 729 / 218 in the flow view.
+// opacity 0.07 (plus a brighter rim). A lit particle is not a pure colour, so these rules were found by measuring (Chromium/SwiftShader,
+// at rest, pixels counted at 1440 px width / 390 px width). Blue rule (blue - red > 90, blue > 140): 251 / 18 in the exterior view
+// (the pulmonary arteries and veins are bluish) and 781 / 149 in the flow view. Red rule: with the brighter key light of stage A the
+// old red rule (red - green > 120, red > 170, blue < 110) matched the lit aorta, 9855 / 2015 pixels in the exterior view, so it was
+// tightened to red - green > 150 (red > 170, blue < 110 unchanged): the brightest wall pixel has red - green 138, so the exterior
+// view still matches 0 / 0 with a margin of 12, and the flow view matches 295 / 52. The old rule gave 0 / 0 and 247 / 68 before the
+// lighting change (measured on main b666d4b at the same sizes, with the old layout's canvas).
 const particlePixels = (page, png) => inPagePixels(page, png, data => {
   let blue = 0, red = 0;
   for (let i = 0; i < data.length; i += 4) {
     if (data[i + 2] - data[i] > 90 && data[i + 2] > 140) blue++;
-    if (data[i] - data[i + 1] > 120 && data[i] > 170 && data[i + 2] < 110) red++;
+    if (data[i] - data[i + 1] > 150 && data[i] > 170 && data[i + 2] < 110) red++;
   }
   return { blue, red };
 });
@@ -879,7 +882,7 @@ for (const width of [1440, 390]) test(`flow view: particles appear, move with th
   await expect(page.locator('#name')).toHaveText('右心室');
   await c.scrollIntoViewIfNeeded();
   const rest = await stableShot(c), restPixels = await particlePixels(page, rest);
-  expect(restPixels.red).toBeGreaterThan(40);
+  expect(restPixels.red).toBeGreaterThan(25); // was 40 before the red rule was tightened: 295 at 1440 px, 52 at 390 px
   expect(restPixels.blue).toBeGreaterThan(2 * exterior.blue + 50);
   // While the beat runs the picture keeps changing; the clock decides the phase, so a pause between two pictures is enough.
   await page.locator('#beat-play').click();
@@ -927,7 +930,7 @@ test('interior view: the flow overlay shows particles on the cut, follows the be
   await expect(page.locator('#flow-overlay-note')).toBeVisible();
   await expect(page.locator('#flow-note')).toBeHidden();
   const on = await stableShot(c), onPixels = await particlePixels(page, on);
-  expect(onPixels.red).toBeGreaterThan(30);
+  expect(onPixels.red).toBeGreaterThan(20); // was 30 before the red rule was tightened: 39 at slider 0.1 (63 with the old rule on the old lighting)
   expect(onPixels.blue).toBeGreaterThan(offPixels.blue + 500);
   // A cut that keeps only the back leaves fewer particles than one near the middle.
   await page.locator('#cut-depth').fill('1.5');
@@ -976,5 +979,121 @@ test('with reduced motion the flow view plays one beat, stops, and keeps drawing
   expect(pixels.red).toBeGreaterThan(40);
   expect(after.equals(rest)).toBe(false);
   expect(errors).toEqual([]);
+  await context.close();
+});
+
+// Stage A (2026-11-14), the PC layout at 1280x800: the page fits one screen, so the beat and sound buttons are not cut off, and the
+// model's box is tall (it was 470 px, 59% of the window; the heart is larger because the camera distance is unchanged and the box is
+// taller). Measured in Chromium at 1280x800: the box is 610 px in the exterior, conduction and flow views and 560 px in the interior view.
+test('PC layout: the tool row is on screen, the model box is tall, the lower buttons share the upper text size', async ({ browser }) => {
+  const context = await browser.newContext({ viewport: { width: 1280, height: 800 } });
+  const page = await context.newPage(), errors = [];
+  page.on('pageerror', e => errors.push(e.message));
+  await page.goto(url);
+  await expect(page.locator('html')).toHaveAttribute('data-ready', 'true');
+  for (const mode of ['exterior', 'conduction', 'interior', 'flow']) {
+    await page.locator(`#mode-${mode}`).click();
+    await settle(page);
+    const m = await page.evaluate(() => {
+      const box = s => document.querySelector(s).getBoundingClientRect(), size = s => getComputedStyle(document.querySelector(s)).fontSize;
+      return { canvas: box('canvas').height, stageBottom: box('.stage').bottom, play: box('#beat-play').bottom, sound: box('#heart-sound').bottom, height: innerHeight,
+        upper: size('#mode-exterior'), views: size('#view-front'), lower: ['#in', '#rotate', '#reset', '#beat-play', '#beat-speed', '#heart-sound'].map(size) };
+    });
+    expect(m.canvas, `${mode}: model box height`).toBeGreaterThanOrEqual(540);
+    expect(m.stageBottom, `${mode}: stage inside the window`).toBeLessThanOrEqual(m.height + 1);
+    expect(m.play, `${mode}: beat button inside the window`).toBeLessThanOrEqual(m.height);
+    expect(m.sound, `${mode}: sound button inside the window`).toBeLessThanOrEqual(m.height);
+    // The lower row used to inherit 16px while the mode and view buttons had 12px.
+    expect(m.lower, `${mode}: lower buttons`).toEqual(m.lower.map(() => m.upper));
+    expect(m.views).toBe(m.upper);
+  }
+  expect(errors).toEqual([]);
+  await context.close();
+});
+
+// A notice (a part the cut removed, a clicked cut face) must not change the model's box: it used to sit in the heading, so showing it
+// shrank the box, the camera was refitted, and the picture moved under the pointer (this broke the cut-face click test about 1 in 10).
+test('PC layout: showing a notice does not move or resize the model box', async ({ browser }) => {
+  const context = await browser.newContext({ viewport: { width: 1280, height: 800 } });
+  const page = await context.newPage();
+  await page.goto(url);
+  await expect(page.locator('html')).toHaveAttribute('data-ready', 'true');
+  await page.locator('#mode-interior').click();
+  await page.getByRole('button', { name: '大動脈弁', exact: true }).click();
+  await settle(page);
+  const rect = () => page.evaluate(() => { const r = document.querySelector('canvas').getBoundingClientRect(); return [r.x, r.y, r.width, r.height]; });
+  const before = await rect();
+  await page.locator('#cut-depth').fill('0.9');
+  await expect(page.locator('#cut-notice')).toBeVisible();
+  await settle(page);
+  expect(await rect()).toEqual(before);
+  const box = await page.locator('canvas').boundingBox();
+  await page.locator('#cut-depth').fill('0');
+  await expect(page.locator('#cut-notice')).toBeHidden();
+  // The clicked-cut-face note is laid out the same way; it is shown here directly (the click that shows it is tested elsewhere).
+  await page.evaluate(() => { document.getElementById('pick-note').hidden = false; });
+  await settle(page);
+  expect(await rect()).toEqual(before);
+  const note = await page.locator('#pick-note').boundingBox();
+  expect(note.x >= box.x && note.y >= box.y && note.x + note.width <= box.x + box.width && note.y + note.height <= box.y + box.height, 'the note is on the model box').toBe(true);
+  await context.close();
+});
+
+// The phase box starts at the left edge of the text column: the heading on the PC, the description on a phone (it used to start 12px / 8px
+// from the model's edge, left of the text).
+for (const [name, viewport, mobile] of [['PC', { width: 1280, height: 800 }, false], ['phone', { width: 390, height: 844 }, true]]) test(`${name} layout: the phase box starts at the left edge of the text`, async ({ browser }) => {
+  const context = await browser.newContext({ viewport, hasTouch: mobile, isMobile: mobile });
+  const page = await context.newPage();
+  await page.goto(url);
+  await expect(page.locator('html')).toHaveAttribute('data-ready', 'true');
+  await page.locator('#beat-play').click();
+  await expect(page.locator('#beat-phase')).toBeVisible();
+  const [box, text] = await page.evaluate(mobile => [document.querySelector('#beat-phase').getBoundingClientRect().left,
+    document.querySelector(mobile ? '#name' : '#mode-title').getBoundingClientRect().left], mobile);
+  expect(Math.abs(box - text)).toBeLessThanOrEqual(1);
+  await page.locator('#beat-play').click();
+  await context.close();
+});
+
+// Review of PR #46: from 761px the PC layout applies, but the stage is only the window minus the 330px side column (431px at 761px).
+// The heading and the mode buttons, and the cut slider and the two overlay buttons, shared a row and overlapped below about 1000px
+// (measured: the title text and the mode buttons overlapped by 39px at 900px; the slider and the overlay buttons at 761-900px).
+// Boxes are compared, and the slider is operated with the real pointer (fill() cannot show that something covers it).
+for (const width of [761, 800, 900, 1024, 1280]) test(`PC layout at width ${width}: heading, mode buttons, slider and overlay buttons do not overlap`, async ({ browser }) => {
+  const context = await browser.newContext({ viewport: { width, height: 800 } });
+  const page = await context.newPage();
+  await page.goto(url);
+  await expect(page.locator('html')).toHaveAttribute('data-ready', 'true');
+  const boxes = () => page.evaluate(() => {
+    const box = s => { const r = document.querySelector(s).getBoundingClientRect(); return { l: r.left, t: r.top, r: r.right, b: r.bottom }; };
+    const text = s => { const range = document.createRange(); range.selectNodeContents(document.querySelector(s)); const r = range.getBoundingClientRect(); return { l: r.left, t: r.top, r: r.right, b: r.bottom }; };
+    return { number: text('#mode-number'), title: text('#mode-title'), modes: box('.modes'), views: box('nav.views'), cut: box('#cut'), overlay: box('#interior-overlay'), tools: box('nav.tools'),
+      stageRight: box('.stage').r, stageBottom: box('.stage').b, height: innerHeight };
+  });
+  const apart = (a, b) => a.r <= b.l || b.r <= a.l || a.b <= b.t || b.b <= a.t;
+  for (const mode of ['exterior', 'conduction', 'interior', 'flow']) {
+    await page.locator(`#mode-${mode}`).click();
+    await settle(page);
+    const m = await boxes();
+    expect(apart(m.title, m.modes), `${mode}: title and mode buttons`).toBe(true);
+    expect(apart(m.number, m.modes), `${mode}: label and mode buttons`).toBe(true);
+    expect(m.modes.r, `${mode}: mode buttons inside the stage`).toBeLessThanOrEqual(m.stageRight);
+    expect(m.stageBottom, `${mode}: stage inside the window`).toBeLessThanOrEqual(m.height + 1);
+    if (mode === 'interior') {
+      expect(apart(m.cut, m.overlay), 'slider and overlay buttons').toBe(true);
+      expect(m.overlay.r).toBeLessThanOrEqual(m.stageRight);
+      expect(apart(m.cut, m.tools) && apart(m.overlay, m.tools), 'rows above the tool row').toBe(true);
+      // The slider answers the pointer at its left, middle and right, and the overlay buttons stay as they were.
+      const slider = await page.locator('#cut-depth').boundingBox();
+      for (const fraction of [.1, .5, .9]) {
+        const before = await page.inputValue('#cut-depth');
+        await page.mouse.click(slider.x + slider.width * fraction, slider.y + slider.height / 2);
+        expect(await page.inputValue('#cut-depth'), `slider at ${fraction}`).not.toBe(before);
+        await page.mouse.click(slider.x + slider.width * (fraction === .1 ? .9 : .1), slider.y + slider.height / 2);
+      }
+      await expect(page.locator('#interior-flow')).toHaveAttribute('aria-pressed', 'false');
+      await expect(page.locator('#interior-conduction')).toHaveAttribute('aria-pressed', 'false');
+    }
+  }
   await context.close();
 });

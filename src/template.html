@@ -28,7 +28,7 @@ canvas:focus-visible{outline:2px solid #f0bb90;outline-offset:-4px}
 button{font:inherit;color:inherit;background:#1b2a31;border:1px solid #ffffff30;border-radius:8px;min-height:44px;padding:10px 13px;cursor:pointer}
 button:hover{background:#30434b}button:focus-visible,a:focus-visible,summary:focus-visible{outline:2px solid #f0bb90;outline-offset:3px}
 button[aria-pressed=true]{border-color:#dca27f;background:#3a3330}button:disabled{opacity:.45;cursor:default}
-.modes button,.views button{font-size:12px}.views button{min-height:38px}
+.modes button,.views button,.tools button{font-size:12px}.views button{min-height:38px}
 aside{padding:28px 24px;border-left:1px solid #ffffff15;background:#152027}
 aside h2{font-size:11px;font-weight:500;letter-spacing:.12em;color:#a8b9bd;margin:0 0 16px}
 .part{width:100%;display:flex;align-items:center;text-align:left;margin:7px 0;padding:11px 12px;font-size:13px}
@@ -42,6 +42,41 @@ aside h2{font-size:11px;font-weight:500;letter-spacing:.12em;color:#a8b9bd;margi
 a{color:#c3d8e0;text-underline-offset:3px}.reference{border:1px solid #ffffff26;border-radius:10px;padding:14px;margin-top:24px}.reference p{margin:8px 0 0;font-size:12px;line-height:1.8;color:#a6b9be}.reference a{font-size:13px}
 #error{position:absolute;top:30%;left:8%;right:8%;padding:24px;background:#382929;z-index:3;line-height:1.8}
 footer{grid-column:1/-1;padding:18px 4%;border-top:1px solid #ffffff15;color:#a6b9be;font-size:11px}summary{cursor:pointer}footer pre{white-space:pre-wrap;line-height:1.6}
+@media(min-width:761px){
+/* PC: one screen. The stage is as tall as the window below the header; the model fills what the heading and the tool row leave.
+   The heading's children are laid out in the stage grid itself (display:contents), so the view buttons, the orientation line and the two
+   notices (selected part removed by the cut, clicked cut face) sit on the model's cell instead of pushing it: the model's box must not
+   change size when a notice appears, or the picture jumps under the pointer. The camera distance (fitDistance) is not changed: a
+   taller canvas is what makes the heart larger. Below 560px of height the page scrolls. */
+header{min-height:0;height:56px;padding:0 4%}
+.stage{display:grid;grid-template-columns:minmax(0,1fr);grid-template-rows:auto auto auto minmax(0,1fr) auto auto auto;height:calc(100dvh - 56px);min-height:560px;background:#17242b}
+/* A flat colour instead of the base rule's radial glow: with a gradient (or a bitmap) under the transparent canvas, two screenshots of
+   the same still picture differed by one level in a few pixels about half of the time in this layout (Chromium software rendering;
+   ellipse and circle gradients, on the stage, the viewport or the canvas element: 3 of 6 runs failed each; flat: 0 of 6), so the
+   browser tests that compare two pictures never saw them settle. The phone layout keeps its glow (it does not show the problem). */
+aside{height:calc(100dvh - 56px);min-height:560px;overflow-y:auto}
+.stage-heading{display:contents}
+#mode-number{grid-row:1;grid-column:1;align-self:end;margin:14px 0 4px 5%}
+#mode-title{grid-row:2;grid-column:1;font-size:24px;margin:0 0 10px 5%}
+.modes{grid-row:3;grid-column:1;justify-self:start;margin:0 5% 10px}
+.viewport{grid-row:4;grid-column:1;height:auto;min-height:0}
+canvas{position:absolute;inset:0}
+nav.views{grid-row:4;grid-column:1/-1;position:relative;z-index:2;align-self:start;justify-self:end;flex-direction:column;gap:6px;margin:12px 5% 0 0}
+#orientation{grid-row:4;grid-column:1/-1;position:relative;z-index:2;align-self:end;justify-self:center;margin:0 0 8px;pointer-events:none}
+#cut-notice,#pick-note{grid-row:4;grid-column:1/-1;position:relative;z-index:2;align-self:end;justify-self:start;width:min(320px,40%);margin:0 0 36px 5%;padding:8px 10px;background:#152027;border-radius:0 8px 8px 0}
+#cut{grid-row:5;grid-column:1/-1;justify-self:start;margin:6px 5%}
+#interior-overlay{grid-row:6;grid-column:1/-1;justify-self:start;margin:0 5% 6px}
+nav.tools{grid-row:7;grid-column:1/-1;padding:6px 12px 12px}
+.beat-phase{left:5%}
+}
+@media(min-width:1000px){
+/* The stage is the window minus the 330px side column. From about 1000px it is wide enough (about 670px) for the heading and the four
+   mode buttons side by side, and for the cut slider and the two overlay buttons in one row; below that each gets its own row, so
+   nothing overlaps (measured at 761, 800, 900 and 1024px: they overlapped below 1000px when they shared a row). */
+.modes{grid-row:1/3;justify-self:end;margin:0 5% 10px 0}
+#cut{grid-row:5}
+#interior-overlay{grid-row:5;justify-self:end;margin:6px 5%}
+}
 @media(max-width:760px){
 /* Phone: the page itself does not scroll. main.js moves the model and the selected part's description into
    #pinned above <main>, and only <main> scrolls, so nothing slides underneath the model.
@@ -59,7 +94,7 @@ main{flex:1;min-height:0;overflow-y:auto;align-items:stretch;overscroll-behavior
 .stage-heading{order:0;padding:16px 20px 0}.stage-heading h1{font-size:21px;margin-bottom:12px}
 #steps{order:1;padding:0 20px}#cut{order:2;margin-top:12px}#interior-overlay{order:3}nav.views{order:4}
 /* The model is short on a phone: the phase box keeps the name and the one-line valve state, and leaves out the sentence. */
-.beat-phase{left:8px;top:8px;padding:5px 9px}#beat-phase-valves{display:none}#orientation{order:5}nav.tools{order:6}
+.beat-phase{left:20px;top:8px;padding:5px 9px}#beat-phase-valves{display:none}#orientation{order:5}nav.tools{order:6}
 aside h2{order:7;margin:12px 20px 8px}#parts{order:8;padding:0 20px;display:grid;grid-template-columns:1fr 1fr;gap:0 9px}.part{font-size:12px}
 aside .note,aside .reference{order:9;margin-left:20px;margin-right:20px}main>footer{order:10;margin-top:18px}
 .tools button{font-size:12px;padding:10px}.note{margin-top:18px}
@@ -118,7 +153,7 @@ header{height:44px}
   <p class="note" id="interior-note" hidden>心臓を前後方向の平面で切り、切った面より前を取り除いて表示しています。断面は心臓に固定されていて、回転すると切り口を斜めから見られます。切り口の色は識別用で、切り口の面を作るのは心臓の壁だけです。血管は元データに壁の厚みがなく、切ると薄い殻の内側（内腔）が見えます。弁と乳頭筋はBodyParts3D 4.0の形状で、弁の開き具合は元データの1時点のもので、拍動による変化は表しません。弁から乳頭筋へ伸びる糸状の部分は腱索とみられますが、元データでは弁尖と同じ部品です。心室中隔と心室の心筋は個別の形状がないため、区別して選べません。左心室の後ろの乳頭筋は元データにありません。この表示で選べるのは心房・心室・弁・乳頭筋で、血管は外観で選べます。「刺激伝導系を重ねる」を押すと、刺激伝導系も同じ断面で切って重ね、選べるようになります。その位置は推定です。壁や弁の奥にある部位のラベルは破線で「（壁や弁の奥）」と示します。選んだ心房・心室の切り口は明るい色になります。切り口は前面から見たときに見え、背面からは見えません。</p>
   <p class="note" id="anatomy-note">BodyParts3D（© ライフサイエンス統合データベースセンター、<a href="https://creativecommons.org/licenses/by/4.0/deed.ja" target="_blank" rel="noopener noreferrer">CC BY 4.0</a>）の成人男性1体の心臓と周囲の血管を、面数を減らして表示しています。心室・心房の色分けは、各内腔に最も近い壁を自動で割り当てた推定で、実際の境界とは一致しません。血管は心臓の近くで切っています。</p>
   <p class="note" id="flow-overlay-note" hidden>血流の粒子を、同じ断面で切って重ねています。説明用の模式で、血液の実際の流線や速度ではありません。「拍動を再生」で粒子が動きます。この画面の弁は元データの形（開閉途中の1時点）のままで、弁の開閉は動きません。粒子の経路は弁尖と交差するため、粒子が弁尖をすり抜けて見える所があります（血流の画面では、代わりに模式の弁尖を描いています）。切断面より前にある粒子は取り除かれます。</p>
-  <p class="note" id="flow-note" hidden>血流は説明用の模式です。血液の実際の流線や速度ではありません。粒子は、血管と心腔の中央を通る6本の経路（上大静脈・下大静脈から肺動脈へ、4本の肺静脈から大動脈弓へ）に沿って動きます。青は右心系、赤は左心系の経路で、色は識別用です。壁は不透明度0.12で透かしてあり、粒子と壁の前後は見分けにくいことがあります。「拍動を再生」を押すと動きます。拍動と同じ時間軸で、房室弁（三尖弁・僧帽弁）は心房の収縮中と、心室が緩んだあとの充満の間に開いて粒子が心房から心室へ進み、動脈弁（肺動脈弁・大動脈弁）は心室の収縮の後半（駆出）にだけ開いて心室から動脈へ進みます。弁が閉じている間、粒子はその手前で待ちます。この画面の弁は、血流を見せるための模式の弁尖です（元データの弁は描きません）。尖の数だけ部位の説明に合わせ（三尖弁3、僧帽弁2、動脈弁は各3）、形、大きさ、開閉の速さは表示用に決めたものです。粒子は、弁尖が完全に開いてから通り、弁尖は近くに粒子がいない間だけ動きます。そのため閉じるのは、弁の窓が終わってから最大で約0.05秒遅れます。拍動の説明にある「4つの弁がすべて閉じたまま」の時間（等容性収縮の50ミリ秒、等容性弛緩の80ミリ秒）のうち、この画面の弁尖が4つとも閉じるのは、収縮期で約0.01秒、弛緩期で約0.02秒だけです（閉じ終えるまでと開き始めるまでの時間を除くため）。心房の収縮で心室へ入る量は、1拍の充満の約25%にしました（OpenStaxは「残り20〜30%」）。等容性収縮の50ミリ秒、等容性弛緩の80ミリ秒、1拍で心室から出る割合（心室部分の60%）、粒子の速さと数は、資料にない表示用の値です。経路が元データの弁尖と交差する問題は、この画面では模式の弁尖に置き換えて避けていますが、元データの弁尖と模式の弁尖の位置が合っているかは確かめていません。</p>
+  <p class="note" id="flow-note" hidden>血流は説明用の模式です。血液の実際の流線や速度ではありません。粒子は、血管と心腔の中央を通る6本の経路（上大静脈・下大静脈から肺動脈へ、4本の肺静脈から大動脈弓へ）に沿って動きます。青は右心系、赤は左心系の経路で、色は識別用です。壁は透かしてあり（中はほぼ透明で、縁だけ明るく描きます）、粒子と壁の前後は見分けにくいことがあります。「拍動を再生」を押すと動きます。拍動と同じ時間軸で、房室弁（三尖弁・僧帽弁）は心房の収縮中と、心室が緩んだあとの充満の間に開いて粒子が心房から心室へ進み、動脈弁（肺動脈弁・大動脈弁）は心室の収縮の後半（駆出）にだけ開いて心室から動脈へ進みます。弁が閉じている間、粒子はその手前で待ちます。この画面の弁は、血流を見せるための模式の弁尖です（元データの弁は描きません）。尖の数だけ部位の説明に合わせ（三尖弁3、僧帽弁2、動脈弁は各3）、形、大きさ、開閉の速さは表示用に決めたものです。粒子は、弁尖が完全に開いてから通り、弁尖は近くに粒子がいない間だけ動きます。そのため閉じるのは、弁の窓が終わってから最大で約0.05秒遅れます。拍動の説明にある「4つの弁がすべて閉じたまま」の時間（等容性収縮の50ミリ秒、等容性弛緩の80ミリ秒）のうち、この画面の弁尖が4つとも閉じるのは、収縮期で約0.01秒、弛緩期で約0.02秒だけです（閉じ終えるまでと開き始めるまでの時間を除くため）。心房の収縮で心室へ入る量は、1拍の充満の約25%にしました（OpenStaxは「残り20〜30%」）。等容性収縮の50ミリ秒、等容性弛緩の80ミリ秒、1拍で心室から出る割合（心室部分の60%）、粒子の速さと数は、資料にない表示用の値です。経路が元データの弁尖と交差する問題は、この画面では模式の弁尖に置き換えて避けていますが、元データの弁尖と模式の弁尖の位置が合っているかは確かめていません。</p>
   <p class="note" id="sound-status" role="status" hidden></p>
   <p class="note" id="sound-note">「心音を鳴らす」は初期は切れています。押すと、拍動に合わせて説明用の合成心音が鳴ります（Ⅰ音は心室の収縮の始まり、Ⅱ音は心室の弛緩の始まりに合わせます）。聴診で聞く実際の音の再現ではなく、外部の音源は使っていません。音は拍動と同じ時計から予約し、ゆっくり再生では鳴る間隔だけが伸びます。端末の出力遅延やiPhoneの消音スイッチの影響は確認していません。</p>
   <p class="note" id="beat-note" hidden>拍動は説明用の模式です。心房・心室の順序と各時期の長さ（心房の収縮 約0.1秒、心室の収縮 約0.27秒、心室の弛緩 約0.43秒）はOpenStax Anatomy and Physiology 2e 19.3に合わせました。合計0.8秒は毎分75回にあたります。「実際の速さ」を押さない間は5倍に引き延ばしています。縮み方は各心腔の中心へ向かって寄せるだけで、縮む量と時間の中での変化の形は表示用に決めたもので実測ではありません。心臓の長軸方向の短縮やねじれ、壁が厚くなる変化は表していません。弁の形は元データの1時点のままで動かず、開閉は左上の文字だけで示します（「血流」画面だけは、模式の弁尖が開閉します）。止めるとその時点の形のまま止まります。</p>
