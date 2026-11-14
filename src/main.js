@@ -645,6 +645,10 @@ diffuseColor.a = min(1.0, diffuseColor.a + rim * 0.55);
     userChose = false;
     select(modeText[mode][2]);
     setView('front');
+    // On a PC the ECG strip is at the top of the side column, and the column kept its scroll from the previous view: after reading down
+    // the exterior's list the strip lay above the visible part (review of PR #52). Entering the conduction view shows the column's top.
+    const aside = document.querySelector('aside');
+    if (mode === 'conduction' && $('ecg-panel').parentElement === aside) aside.scrollTop = 0;
   }
   $('mode-exterior').onclick = () => setMode('exterior');
   $('mode-conduction').onclick = () => setMode('conduction');

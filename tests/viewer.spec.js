@@ -1546,8 +1546,10 @@ for (const [name, edit, text] of [
 });
 
 // Issue #50 recheck (B3): after the beat had played on normally, turning on "reduce motion" and pressing "拍動を1回再生" ended the play at
-// once: the beat clock counts on across beats, and the one-beat play stopped at the end of the first beat (800 ms), already behind it.
-// It now plays to the end of the beat it is in, with its two heart sounds.
+// once: the beat clock counts on across beats, and the one-beat play (and the booking of its sounds) stopped at the end of the first beat
+// (800 ms), already behind it. It now plays to the end of the beat it is in, with the sounds still ahead in that beat. The play starts at
+// 1000 ms (200 ms into the beat), where the second sound (370 ms) is still ahead: the sound limit put back to 800 ms books nothing there
+// (review of PR #52: a start at 1250 ms, after both sounds, did not show it).
 test('with reduced motion turned on after the beat has played, one press still plays a beat with its sounds', async ({ browser }) => {
   const context = await browser.newContext({ viewport: { width: 1280, height: 800 } });
   const page = await context.newPage(), errors = [];
@@ -1560,7 +1562,7 @@ test('with reduced motion turned on after the beat has played, one press still p
   const click = id => page.evaluate(i => document.getElementById(i).click(), id);
   await click('beat-speed');
   await click('beat-play');
-  await page.clock.runFor(1250); // more than one beat at the real speed: the beat time is past 800 ms
+  await page.clock.runFor(1000); // past the first beat at the real speed: the beat time is 1000 ms, 200 ms into its beat
   await click('beat-play');
   await click('heart-sound');
   await page.clock.runFor(50);
@@ -1569,19 +1571,21 @@ test('with reduced motion turned on after the beat has played, one press still p
   // the label.
   await page.emulateMedia({ reducedMotion: 'reduce' });
   await expect.poll(() => page.evaluate(() => matchMedia('(prefers-reduced-motion: reduce)').matches)).toBe(true);
-  const before = await page.evaluate(() => window.audible().length);
+  const heard = from => page.evaluate(n => window.audible().slice(n).map(v => v.hz).sort((a, b) => a - b), from);
+  const start = await page.evaluate(() => window.audible().length);
   await click('beat-play');
   await page.clock.runFor(200);
   await expect(page.locator('#beat-play'), 'still playing 0.2 s after the press').toHaveText('拍動を止める');
   await page.clock.runFor(1000);
   await expect(page.locator('#beat-play'), 'stopped at the end of the beat').toHaveText('拍動を1回再生');
-  // The press started at 450 ms of the beat (1250 ms): the rest of that beat holds no sound, and the play ends at 1600 ms. So the
-  // first press books nothing, and the next press plays a whole beat with one first and one second sound.
+  // The rest of that beat (200 to 800 ms) holds the second sound only.
+  expect(await heard(start), 'sounds of the first press').toEqual([130]);
+  // The next press plays a whole beat, with one first and one second sound.
+  const next = await page.evaluate(() => window.audible().length);
   await click('beat-play');
   await page.clock.runFor(1200);
   await expect(page.locator('#beat-play')).toHaveText('拍動を1回再生');
-  const heard = await page.evaluate(n => window.audible().slice(n).map(v => v.hz), before);
-  expect(heard.sort((a, b) => a - b)).toEqual([90, 130]);
+  expect(await heard(next), 'sounds of the second press').toEqual([90, 130]);
   expect(errors).toEqual([]);
   await context.close();
 });
@@ -1593,13 +1597,17 @@ for (const [width, height] of [[761, 700], [800, 700], [1024, 768], [1280, 800],
   const page = await context.newPage();
   await page.goto(url);
   await expect(page.locator('html')).toHaveAttribute('data-ready', 'true');
+  // The side column is scrolled down first, as after reading the exterior's list (review of PR #52: the strip was left above the
+  // visible part of the column when the view was entered from there).
+  await page.evaluate(() => { document.querySelector('aside').scrollTop = 500; });
   await page.locator('#mode-conduction').click();
   await page.locator('#beat-play').click();
   await page.locator('#beat-play').click();
-  const [ecg, canvas] = await page.evaluate(() => ['#ecg-panel', 'canvas'].map(s => { const r = document.querySelector(s).getBoundingClientRect(); return { left: r.left, right: r.right, top: r.top, bottom: r.bottom }; }));
+  const [ecg, canvas, aside] = await page.evaluate(() => ['#ecg-panel', 'canvas', 'aside'].map(s => { const r = document.querySelector(s).getBoundingClientRect(); return { left: r.left, right: r.right, top: r.top, bottom: r.bottom }; }));
   const over = ecg.left < canvas.right && ecg.right > canvas.left && ecg.top < canvas.bottom && ecg.bottom > canvas.top;
   expect(over, 'the strip lies on the model box').toBe(false);
-  expect(ecg.bottom).toBeLessThanOrEqual(height);
+  expect(ecg.top, 'the strip starts inside the side column').toBeGreaterThanOrEqual(Math.max(aside.top, 0));
+  expect(ecg.bottom, 'the strip ends inside the side column').toBeLessThanOrEqual(Math.min(aside.bottom, height));
   await context.close();
 });
 
