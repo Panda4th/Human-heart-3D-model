@@ -3,10 +3,11 @@
 
 // The breakpoints of the CSS media queries in template.html. CSS cannot read a variable inside a media query, so the CSS writes the
 // same numbers; tests/layout.spec.js checks that this file and the CSS place the elements the same way on both sides of each one.
-export const phoneMaxWidth = 760; // a phone layout up to this width
-export const phoneMaxSidewaysHeight = 480; // a phone layout this low or lower is a phone held sideways
-export const sideColumnMaxWidth = 999; // a PC window up to this width puts the phase box at the top of the side column
-export const phoneQuery = `(max-width:${phoneMaxWidth}px)`;
+// The tests write the widths themselves on purpose (a change on one side only must fail them), so these are not exported.
+const phoneMaxWidth = 760; // a phone layout up to this width
+const phoneMaxSidewaysHeight = 480; // a phone layout this low or lower is a phone held sideways
+const sideColumnMaxWidth = 999; // a PC window up to this width puts the phase box at the top of the side column
+const phoneQuery = `(max-width:${phoneMaxWidth}px)`;
 
 // Phone layout: the model, the description and the two cut notices go to #pinned above the scrolling <main>, and back to their
 // places on wider screens. Moving the canvas keeps its WebGL context. See the phone rules in template.html.

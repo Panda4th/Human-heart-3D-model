@@ -2,9 +2,10 @@
 // Moved out of main.js (Issue #50 E4).
 import { ecgAt, ecgBumps, waveAge } from './conduction-timing.mjs';
 
-// The strip shows the last `span` ms of the beat clock across `now` units of the SVG, with the current time at its right end; `base`
-// is the baseline's y and `amp` the height of an R wave of 1 (SVG units, viewBox 320x64 in template.html).
-export const ecgSpan = 1000, ecgNow = 276, ecgBase = 46, ecgAmp = 34;
+// The strip shows the last ecgSpan ms of the beat clock across ecgNow units of the SVG, with the current time at its right end;
+// ecgBase is the baseline's y and ecgAmp the height of an R wave of 1 (SVG units, viewBox 320x64 in template.html). tests/conduction.spec.js
+// writes 46 and 34 itself on purpose (a change here must fail it), so these are not exported.
+const ecgSpan = 1000, ecgNow = 276, ecgBase = 46, ecgAmp = 34;
 
 export function createEcgStrip(trace, marks) {
   const scale = ecgNow / ecgSpan, names = { P: 'P', R: 'QRS', T: 'T' };
