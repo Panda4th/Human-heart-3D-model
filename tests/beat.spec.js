@@ -432,3 +432,63 @@ test('with reduced motion turned on after the beat has played, one press still p
   expect(errors).toEqual([]);
   await context.close();
 });
+
+// Issue #50 second recheck (F1/F2): removing the clearInterval of the booking timer (sound-control.mjs) left every sound test
+// passing: the bookings did not double (the scheduler books each sound once), but a timer was added at each play, stop or speed
+// change and kept running. The page's timers are counted here.
+const countIntervals = () => {
+  const live = new Set(), set = window.setInterval, clear = window.clearInterval;
+  window.setInterval = (...a) => { const id = set(...a); live.add(id); return id; };
+  window.clearInterval = id => { live.delete(id); return clear(id); };
+  window.liveIntervals = () => live.size;
+};
+test('the heart sound keeps one booking timer while it plays and none once stopped', async ({ browser }) => {
+  const context = await browser.newContext({ viewport: { width: 1280, height: 800 } });
+  const page = await context.newPage(), errors = [];
+  page.on('pageerror', e => errors.push(e.message));
+  await page.addInitScript(countIntervals);
+  await page.addInitScript(fakeAudio);
+  await page.goto(url);
+  await expect(page.locator('html')).toHaveAttribute('data-ready', 'true');
+  const click = id => page.evaluate(i => document.getElementById(i).click(), id);
+  const timers = () => page.evaluate(() => window.liveIntervals());
+  await click('heart-sound');
+  await expect(page.locator('#heart-sound')).toHaveAttribute('aria-pressed', 'true');
+  for (let i = 0; i < 5; i++) {
+    await click('beat-play'); // play
+    await click('beat-speed');
+    await click('beat-speed');
+    await page.waitForTimeout(100);
+    expect(await timers(), `playing, round ${i + 1}`).toBe(1);
+    await click('beat-play'); // stop
+    expect(await timers(), `stopped, round ${i + 1}`).toBe(0);
+  }
+  await click('beat-play');
+  await click('heart-sound'); // sound off while the beat plays
+  expect(await timers(), 'sound off').toBe(0);
+  expect(errors).toEqual([]);
+  await context.close();
+});
+
+// Issue #50 second recheck (F2): with reduced motion the sounds are booked only up to the end of the beat being played (limit in
+// main.js). Setting the limit to Infinity left the tests passing: the frame that ends the beat cancels whatever was booked after it,
+// so the limit shows only when that frame is late (a busy or throttled page). Here the frames stop right after the press; the booking
+// timer goes on, and nothing after the beat may be booked.
+test('with reduced motion no sound is booked past the end of the beat even when no frame comes', async ({ browser }) => {
+  const context = await browser.newContext({ viewport: { width: 1280, height: 800 }, reducedMotion: 'reduce' });
+  const page = await context.newPage(), errors = [];
+  page.on('pageerror', e => errors.push(e.message));
+  await page.addInitScript(fakeAudio);
+  await page.goto(url);
+  await expect(page.locator('html')).toHaveAttribute('data-ready', 'true');
+  await page.waitForFunction(() => matchMedia('(prefers-reduced-motion: reduce)').matches);
+  const click = id => page.evaluate(i => document.getElementById(i).click(), id);
+  await click('heart-sound');
+  await expect(page.locator('#heart-sound')).toHaveAttribute('aria-pressed', 'true');
+  await click('beat-speed'); // real speed: one beat is 0.8 s
+  await page.evaluate(() => { document.getElementById('beat-play').click(); window.requestAnimationFrame = () => 1; });
+  await page.waitForTimeout(3000); // the booking looks 2 s ahead; this covers the next beat's sounds too
+  expect((await page.evaluate(() => window.audible())).map(v => v.hz)).toEqual([90, 130]);
+  expect(errors).toEqual([]);
+  await context.close();
+});

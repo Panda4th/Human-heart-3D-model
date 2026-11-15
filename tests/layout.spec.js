@@ -403,8 +403,10 @@ for (const [width, height] of [[760, 800], [761, 800], [999, 800], [1000, 800], 
 });
 
 // Issue #50 C5: "−" and "＋", the two sliders and the licence summary were under 44px with no reason recorded. On a phone they are
-// 44px now; in a PC window only the summary is (the reason for the others is in the CSS).
-for (const [width, height, mobile] of [[390, 844, true], [667, 375, true], [1280, 800, false]]) test(`control sizes at ${width}x${height}`, async ({ browser }) => {
+// 44px now; in a PC window only the summary is (the reason for the others is in the CSS). Issue #50 second recheck (E3): the 44px rule
+// is one more media query that writes 760px, so it is also checked at 760 and 761px wide: it applies exactly where the phone layout
+// does (the model in #pinned), and a change of that width elsewhere that leaves this rule behind fails here.
+for (const [width, height, mobile] of [[390, 844, true], [667, 375, true], [760, 800, false], [761, 800, false], [1280, 800, false]]) test(`control sizes at ${width}x${height}`, async ({ browser }) => {
   const context = await browser.newContext({ viewport: { width, height }, hasTouch: mobile, isMobile: mobile });
   const page = await context.newPage();
   await page.addInitScript(fakeAudio);
@@ -413,10 +415,26 @@ for (const [width, height, mobile] of [[390, 844, true], [667, 375, true], [1280
   await page.locator('#mode-interior').click();
   const sizes = await page.evaluate(() => Object.fromEntries(['#in', '#out', '#cut-depth', '#heart-volume', 'footer summary']
     .map(s => { const b = document.querySelector(s).getBoundingClientRect(); return [s, { width: b.width, height: b.height }]; })));
+  const phone = await page.evaluate(() => Boolean(document.querySelector('canvas').closest('#pinned')));
+  expect(phone, 'phone layout').toBe(width <= 760);
   expect(sizes['footer summary'].height, 'licence summary').toBeGreaterThanOrEqual(44);
-  if (mobile) {
-    for (const s of ['#in', '#out']) expect(sizes[s].width, s).toBeGreaterThanOrEqual(44);
-    for (const s of ['#cut-depth', '#heart-volume']) expect(sizes[s].height, s).toBeGreaterThanOrEqual(44);
-  }
+  for (const s of ['#in', '#out']) expect(sizes[s].width >= 44, `${s} width ${sizes[s].width}`).toBe(phone);
+  for (const s of ['#cut-depth', '#heart-volume']) expect(sizes[s].height >= 44, `${s} height ${sizes[s].height}`).toBe(phone);
+  await context.close();
+});
+
+// Issue #50 second recheck (C4): on a phone the model, the phase box and the description are moved out of <main> into #pinned, and
+// were outside every landmark (axe "region"). #pinned is a labelled region on a phone and hidden in a PC window, where it is empty.
+for (const [width, height, mobile] of [[390, 844, true], [1280, 800, false]]) test(`the model, the phase box and the description are inside a landmark at ${width}x${height}`, async ({ browser }) => {
+  const context = await browser.newContext({ viewport: { width, height }, isMobile: mobile, hasTouch: mobile });
+  const page = await context.newPage();
+  await page.goto(url);
+  await expect(page.locator('html')).toHaveAttribute('data-ready', 'true');
+  await page.evaluate(() => { document.getElementById('beat-play').click(); document.getElementById('beat-play').click(); });
+  await expect(page.locator('#beat-phase')).toBeVisible();
+  const outside = await page.evaluate(() => ['canvas', '#beat-phase', '.detail']
+    .filter(s => !document.querySelector(s).closest('header, main, aside, footer, nav, section[aria-label], [role=region][aria-label]')));
+  expect(outside).toEqual([]);
+  expect(await page.locator('#pinned').isVisible()).toBe(mobile);
   await context.close();
 });
