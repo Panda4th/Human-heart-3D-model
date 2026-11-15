@@ -803,6 +803,7 @@ Issue #50の最終チェック（ChatGPTの独立レビュー、対象main `d491
 - **C4 目印の領域（landmark）**：スマホ幅では、モデル・位相の枠・説明欄を`<main>`の外の`#pinned`へ移すため、axeの`region`（best practice）に4件当たっていた（`ba6bcf3`にもあった）。`#pinned`を名前付きの`<section>`にし、空になるPC幅では隠す。axeの`region`は0件。テストを足した（390×844は修正前の版で失敗する）。
 - **E3 44pxの規則の境界**：#53で足した「スマホ幅では操作部品を44px」のメディアクエリは、CSSとJSの境界の一致を見るテストの外だった。操作部品の大きさのテストを760×800と761×800でも流し、44pxになる幅とスマホの配置になる幅が一致することを確かめる。その規則だけを800pxにすると、761×800で失敗する。
 - **G4**：ファイル表に`README.md`の行がなかった。
+- **確認**（main `ba168a0`、3回目の再チェックで測った。結果はIssue #50のコメント）：単体99件、Chromium（クラウド、ソフトウェア描画、1 worker）98件が、それぞれ3回すべて成功。Chromiumは92件から6件増えた（`beat.spec.js`に2件、`layout.spec.js`に4件）。足したテストは、複製で該当箇所を壊すとそのテストだけが失敗し（`clearInterval(pump)`の削除、予約の上限を`Infinity`に、`#pinned`の`hidden`の切り替えと`aria-label`の削除、44pxの規則だけを800pxに）、そのままの版で5回とも成功した。axeは390×844と1280×800の外観・刺激伝導系・内部・血流で違反0。GitHub Actionsの「Viewer checks」#279は、browserとwebkitの両ジョブ（`npm run test:webkit`のステップを含む）が成功（LinuxのWebKitによる確認で、iOS Safariではない）。iPhone実機は未確認。
 
 ### 過去の記録の移動先（2026-11-14）
 
