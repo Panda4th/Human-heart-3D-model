@@ -34,6 +34,14 @@ button[aria-pressed=true]{border-color:#dca27f;background:#3a3330}button:disable
 /* Every button is at least 44px tall. The view buttons, the overlay buttons and "見える位置へ動かす" were 38px from 2026-11-07 to 2026-11-14,
    with no reason recorded (Issue #50 C5), and now follow the rule. */
 .modes button,.views button,.tools button{font-size:12px}
+/* The other controls (Issue #50 C5): "−" and "＋" were 30-40px wide, the two sliders 16px tall and the licence summary 15px tall, with no
+   reason recorded. On a phone they are 44px; there the tool row is in the scrolling part and the model's box keeps its size. In a PC
+   window they keep their size, because 44px took room from the model's box (window widened in 1px steps from 761 to 1600px, 800px high):
+   the sliders taller by 24px made the box 24px shorter in the interior view from 761 to 999px (420 -> 396px at 761x800), and the wider
+   "−" and "＋" wrapped the tool row onto one more line at 915-926px and 1046-1057px (-24 to -48px). A touch screen in a PC-width window
+   (a tablet) therefore gets the smaller controls; that has not been tried on a device. */
+summary{min-height:44px;line-height:44px}
+@media(max-width:760px){#in,#out{min-width:44px}input[type=range]{height:44px;margin:0}}
 aside{padding:28px 24px;border-left:1px solid #ffffff15;background:#152027}
 aside h2{font-size:11px;font-weight:500;letter-spacing:.12em;color:#a8b9bd;margin:0 0 16px}
 .part{width:100%;display:flex;align-items:center;text-align:left;margin:7px 0;padding:11px 12px;font-size:13px}
@@ -207,7 +215,7 @@ main{min-height:60px}.detail{min-height:40px}.detail-note{min-height:44px}
   <p class="note" id="flow-note" hidden>血流は説明用の模式です。血液の実際の流線や速度ではありません。粒子は、血管と心腔の中央を通る6本の経路（上大静脈・下大静脈から肺動脈へ、4本の肺静脈から大動脈弓へ）に沿って動きます。青は右心系、赤は左心系の経路で、色は識別用です。壁は透かしてあり（中はほぼ透明で、縁だけ明るく描きます）、粒子と壁の前後は見分けにくいことがあります。「拍動を再生」を押すと動きます。拍動と同じ時間軸で、房室弁（三尖弁・僧帽弁）は心房の収縮中と、心室が緩んだあとの充満の間に開いて粒子が心房から心室へ進み、動脈弁（肺動脈弁・大動脈弁）は心室の収縮の後半（駆出）にだけ開いて心室から動脈へ進みます。弁が閉じている間、粒子はその手前で待ちます。この画面の弁は、血流を見せるための模式の弁尖です（元データの弁は描きません）。尖の数だけ部位の説明に合わせ（三尖弁3、僧帽弁2、動脈弁は各3）、形、大きさ、開閉の速さは表示用に決めたものです。粒子は、弁尖が完全に開いてから通り、弁尖は近くに粒子がいない間だけ動きます。そのため閉じるのは、弁の窓が終わってから最大で約0.05秒遅れます。拍動の説明にある「4つの弁がすべて閉じたまま」の時間（等容性収縮の50ミリ秒、等容性弛緩の80ミリ秒）のうち、この画面の弁尖が4つとも閉じるのは、収縮期で約0.01秒、弛緩期で約0.02秒だけです（閉じ終えるまでと開き始めるまでの時間を除くため）。心房の収縮で心室へ入る量は、1拍の充満の約25%にしました（OpenStaxは「残り20〜30%」）。等容性収縮の50ミリ秒、等容性弛緩の80ミリ秒、1拍で心室から出る割合（心室部分の60%）、粒子の速さと数は、資料にない表示用の値です。経路が元データの弁尖と交差する問題は、この画面では模式の弁尖に置き換えて避けていますが、元データの弁尖と模式の弁尖の位置が合っているかは確かめていません。</p>
   <p class="note" id="sound-status" role="status" hidden></p>
   <p class="note" id="sound-note">「心音を鳴らす」は初期は切れています。押すと、拍動に合わせて説明用の合成心音が鳴ります（Ⅰ音は心室の収縮の始まり、Ⅱ音は心室の弛緩の始まりに合わせます）。聴診で聞く実際の音の再現ではなく、外部の音源は使っていません。音は拍動と同じ時計から予約し、ゆっくり再生では鳴る間隔だけが伸びます。端末の出力遅延やiPhoneの消音スイッチの影響は確認していません。</p>
-  <p class="note" id="beat-note" hidden>拍動は説明用の模式です。心房・心室の順序と各時期の長さ（心房の収縮 約0.1秒、心室の収縮 約0.27秒、心室の弛緩 約0.43秒）はOpenStax Anatomy and Physiology 2e 19.3に合わせました。合計0.8秒は毎分75回にあたります。「実際の速さ」を押さない間は5倍に引き延ばしています。縮み方は各心腔の中心へ向かって寄せるだけで、縮む量と時間の中での変化の形は表示用に決めたもので実測ではありません。心臓の長軸方向の短縮やねじれ、壁が厚くなる変化は表していません。弁の形は元データの1時点のままで動かず、開閉は拍動の時期の表示（モデルの左上。幅の狭い画面では、モデルの下か右の欄）の文字だけで示します（「血流」画面だけは、模式の弁尖が開閉します）。止めるとその時点の形のまま止まります。</p>
+  <p class="note" id="beat-note" hidden>拍動は説明用の模式です。心房・心室の順序と各時期の長さ（心房の収縮 約0.1秒、心室の収縮 約0.27秒、心室の弛緩 約0.43秒）はOpenStax Anatomy and Physiology 2e 19.3に合わせました。合計0.8秒は毎分75回にあたります。「実際の速さ」を押さない間は5倍に引き延ばしています。縮み方は各心腔の中心へ向かって寄せるだけで、縮む量と時間の中での変化の形は表示用に決めたもので実測ではありません。心臓の長軸方向の短縮やねじれ、壁が厚くなる変化は表していません。弁の形は元データの1時点のままで動かず、開閉は拍動の時期の表示（モデルの左上。幅のやや狭い画面では右の欄の上端、縦持ちのスマートフォンではモデルのすぐ下）の文字だけで示します（「血流」画面だけは、模式の弁尖が開閉します）。止めるとその時点の形のまま止まります。</p>
   <p class="note">ドラッグで回転、スクロール／ピンチで拡大縮小。キーボードでも操作できます。<br>色は識別用です。医療用途ではありません。</p>
   <div class="reference"><a id="msd-reference" href="https://www.msdmanuals.com/ja-jp/home/multimedia/3dmodel/心臓の刺激伝導系" target="_blank" rel="noopener noreferrer">MSDの参考3Dモデルを開く ↗</a><p>BioDigital提供。別タブで開きます（要ネット接続）。本モデルの刺激伝導系は独自に作成した模式図です。</p></div>
   <p class="note">説明の参考：<a href="https://www.nhlbi.nih.gov/health/heart/anatomy" target="_blank" rel="noopener noreferrer">NHLBI：心臓の構造</a> ／ <a href="https://www.nhlbi.nih.gov/health/heart/heart-beats" target="_blank" rel="noopener noreferrer">拍動の仕組み</a> ／ <a href="https://www.medlineplus.gov/ency/anatomyvideos/000021.htm" target="_blank" rel="noopener noreferrer">MedlinePlus：刺激伝導系</a></p>

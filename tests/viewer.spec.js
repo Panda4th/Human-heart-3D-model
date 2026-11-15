@@ -12,6 +12,9 @@ const inPagePixels = (page, png, rule, ...args) => page.evaluate(async ([b64, so
   return (0, eval)(`(${source})`)(data, ...args);
 }, [png.toString('base64'), rule.toString(), args]);
 // Number of pixels that belong to the model: the background is blue-grey and dark, the heart is clearly redder or brighter.
+// 90 and 25 date from 9633c4a with no reason recorded; the reason below was worked out afterwards from the current page (Issue #50 F3).
+// The canvas is transparent and the background behind it is the CSS of the stage: at most #293d44 (brightest channel 68, red minus
+// blue -27), and #17242b in a PC window (43, -20). A pixel brighter than 90 or with red above blue by more than 25 is not plain background.
 const modelPixels = (page, png) => inPagePixels(page, png, data => {
   let count = 0;
   for (let i = 0; i < data.length; i += 4) if (Math.max(data[i], data[i + 1], data[i + 2]) > 90 || data[i] - data[i + 2] > 25) count++;
@@ -23,6 +26,9 @@ const settle = page => page.evaluate(() => new Promise(done => requestAnimationF
 // Under load the screenshot can still show the previous frame for a while after the frame was drawn (seen in CI on
 // main 91d3d5d, and locally with all CPUs busy: 5 of 10 runs). Take pictures until two in a row are the same. A picture
 // that keeps changing, as while the model rotates, never settles and fails the test.
+// Pictures are compared byte for byte, with no tolerance (Issue #50 F3): with software rendering (SwiftShader, as set in
+// playwright.config.js) the same state draws the same pixels in the same browser. On a real GPU or with another browser build that need
+// not hold; the tests are run only with SwiftShader.
 const stableShot = async (locator, tries = 40) => {
   let previous = await locator.screenshot();
   for (let i = 0; i < tries; i++) {
@@ -962,7 +968,7 @@ test('interior view: the flow overlay shows particles on the cut, follows the be
   await expect(page.locator('#flow-note')).toBeHidden();
   const on = await stableShot(c), onPixels = await particlePixels(page, on);
   expect(onPixels.red).toBeGreaterThan(20); // was 30 before the red rule was tightened: 39 at slider 0.1 (63 with the old rule on the old lighting)
-  expect(onPixels.blue).toBeGreaterThan(offPixels.blue + 500);
+  expect(onPixels.blue).toBeGreaterThan(offPixels.blue + 500); // about half the increase measured above (204 -> 1176)
   // A cut that keeps only the back leaves fewer particles than one near the middle.
   await page.locator('#cut-depth').fill('1.5');
   const back = await particlePixels(page, await stableShot(c));
@@ -1170,6 +1176,8 @@ test('conduction view: the impulse and the ECG follow the beat clock', async ({ 
     await click('beat-play'); // the stop draws the beat exactly where the clock is
     await page.clock.runFor(30);
     await expect(page.locator('#beat-electric')).toHaveText(text);
+    // 0.2: main.js writes y with one decimal (an error of up to 0.05), and the last point is at the beat time itself (276 is a multiple of
+    // the 1.5 step). The tolerance had no reason recorded; this one was written for Issue #50 F3.
     expect(Math.abs(await lastY() - (46 - ecgAt(ms) * 34)), `strip at ${ms} ms`).toBeLessThan(.2);
     await page.clock.resume();
     counts[ms] = await whitePixels(page, await stableShot(c));
@@ -1633,5 +1641,50 @@ for (const [width, height] of [[760, 800], [761, 800], [999, 800], [1000, 800], 
   expect(m.sticky, 'side-column CSS').toBe(m.boxInAside);
   expect(m.boxUnder, 'box under the model').toBe(width <= 760 && height >= 481);
   expect(m.static, 'under-the-model CSS').toBe(m.boxUnder);
+  await context.close();
+});
+
+// Issue #50 B2: a click on the model starts the orbit controls without turning the camera, and the orientation line said "自由視点"
+// though the view was still the named one. The same held for a wheel zoom. Only a turn of the camera leaves the named view.
+test('a click or a wheel zoom on the model keeps the named view; a drag leaves it', async ({ browser }) => {
+  const context = await browser.newContext({ viewport: { width: 1280, height: 800 } });
+  const page = await context.newPage(), errors = [];
+  page.on('pageerror', e => errors.push(e.message));
+  await page.goto(url);
+  await expect(page.locator('html')).toHaveAttribute('data-ready', 'true');
+  await page.locator('#view-back').click();
+  await expect(page.locator('#orientation')).toContainText('背面');
+  const box = await page.locator('canvas').boundingBox(), x = box.x + box.width / 2, y = box.y + box.height / 2;
+  await page.mouse.click(x, y);
+  await settle(page);
+  await expect(page.locator('#orientation')).toContainText('背面');
+  await page.mouse.move(x, y);
+  await page.mouse.wheel(0, -200);
+  await settle(page);
+  await expect(page.locator('#orientation')).toContainText('背面');
+  await page.mouse.down();
+  await page.mouse.move(x + 80, y, { steps: 5 });
+  await page.mouse.up();
+  await expect(page.locator('#orientation')).toContainText('自由視点');
+  expect(errors).toEqual([]);
+  await context.close();
+});
+
+// Issue #50 C5: "−" and "＋", the two sliders and the licence summary were under 44px with no reason recorded. On a phone they are
+// 44px now; in a PC window only the summary is (the reason for the others is in the CSS).
+for (const [width, height, mobile] of [[390, 844, true], [667, 375, true], [1280, 800, false]]) test(`control sizes at ${width}x${height}`, async ({ browser }) => {
+  const context = await browser.newContext({ viewport: { width, height }, hasTouch: mobile, isMobile: mobile });
+  const page = await context.newPage();
+  await page.addInitScript(fakeAudio);
+  await page.goto(url);
+  await expect(page.locator('html')).toHaveAttribute('data-ready', 'true');
+  await page.locator('#mode-interior').click();
+  const sizes = await page.evaluate(() => Object.fromEntries(['#in', '#out', '#cut-depth', '#heart-volume', 'footer summary']
+    .map(s => { const b = document.querySelector(s).getBoundingClientRect(); return [s, { width: b.width, height: b.height }]; })));
+  expect(sizes['footer summary'].height, 'licence summary').toBeGreaterThanOrEqual(44);
+  if (mobile) {
+    for (const s of ['#in', '#out']) expect(sizes[s].width, s).toBeGreaterThanOrEqual(44);
+    for (const s of ['#cut-depth', '#heart-volume']) expect(sizes[s].height, s).toBeGreaterThanOrEqual(44);
+  }
   await context.close();
 });
