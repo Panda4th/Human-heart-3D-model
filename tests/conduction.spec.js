@@ -46,7 +46,6 @@ for (const width of [1440, 390]) test(`the two bundle branches are selected and 
   await settle(page);
   expect((await stableShot(c)).equals(right)).toBe(false);
   await expect(page.locator('#description')).toContainText('幅のある面');
-  await expect(page.locator('#description')).toContainText('全員共通の3本');
   await page.screenshot({path:testInfo.outputPath('left-bundle-front.png'),fullPage:!mobile});
   await page.locator('#view-left').click();
   await settle(page); await stableShot(c);

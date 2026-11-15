@@ -391,11 +391,11 @@ diffuseColor.a = min(1.0, diffuseColor.a + rim * 0.55);
     const note = $('flow-route-note');
     note.hidden = mode !== 'flow';
     if (mode !== 'flow') return;
-    if (!userChose) { note.textContent = '部位を選ぶと、その部位を通る経路の粒子だけを強調します（他の経路は小さく暗くなります）。'; return; }
+    if (!userChose) { note.textContent = '部位を選ぶと、その部位を通る経路の粒子だけを強調します。'; return; }
     const side = focus.length ? flow.routes[focus[0]].side === 'right' ? '右心系' : '左心系' : '';
     note.textContent = focus.length
-      ? `選んだ「${parts.get(selected).userData.name}」を通る経路（${focus.map(i => routeNames[flow.routes[i].id]).join('・')}の${focus.length}本、${side}）を強調しています。他の経路の粒子は小さく暗くしています。経路は右心系の2本と左心系の4本に分かれるだけなので、同じ側の部位を選ぶと同じ経路が強調されます。`
-      : `「${parts.get(selected).userData.name}」を通る経路はありません（冠動脈・冠静脈は経路に含めていません）。全部の経路をそのまま表示しています。`;
+      ? `選んだ「${parts.get(selected).userData.name}」を通る経路（${focus.map(i => routeNames[flow.routes[i].id]).join('・')}の${focus.length}本、${side}）を強調しています。`
+      : `「${parts.get(selected).userData.name}」を通る経路はありません。全部の経路を表示しています。`;
   }
   // from: the pick result when the part was chosen by clicking the model. A click on the cut face is remembered
   // as a point, drawn as a ring, because the cut face has one colour for every chamber.

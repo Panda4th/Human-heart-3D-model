@@ -341,7 +341,9 @@ test('turning a phone keeps the focus and the description scroll', async ({ brow
   await page.goto(url);
   await expect(page.locator('html')).toHaveAttribute('data-ready', 'true');
   await page.locator('#mode-conduction').click();
-  await page.evaluate(() => { document.querySelector('.detail').scrollTop = 40; });
+  // The description must be long enough to scroll whatever the wording is (the part descriptions were shortened on 2026-11-15 and no longer
+  // overflowed the box at 360x640, so scrollTop stayed 0): the text is lengthened here for the test.
+  await page.evaluate(() => { document.getElementById('description').textContent += '。説明の長さに依存しないよう足した文。'.repeat(30); document.querySelector('.detail').scrollTop = 40; });
   await page.locator('#view-front').focus();
   await page.setViewportSize({ width: 640, height: 360 });
   await page.waitForTimeout(300);
