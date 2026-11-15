@@ -1,6 +1,6 @@
 {
   "name": "human-heart-3d-model",
-  "version": "0.5.0",
+  "version": "1.0.0",
   "description": "3D model of the human heart to turn and study in one offline HTML file (BodyParts3D, Three.js). A hobby project, not for medical use.",
   "scripts": {
     "build": "node scripts/build.mjs",
