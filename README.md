@@ -589,6 +589,26 @@ zipはリポジトリに入れない。
 | `src/template.html` | 日本語画面 |
 | `scripts/build.mjs` | Three.jsと権利表記を単一HTMLへ埋め込む |
 | `index.html` | 配布用生成物 |
+| `src/heartsound.mjs` | 合成心音と、拍動の時計からの発音の予約。Web Audioは引数で受け、Nodeでテストできる |
+| `src/valves.mjs` | 血流画面の模式弁尖の形。WebGLに依存しない |
+| `scripts/build-standalone.mjs` | 単一HTMLの組み立て。`build.mjs`と、検査・計測用の一時ページで共有 |
+| `scripts/inspect-conduction.mjs`、`scripts/render-conduction.py` | 刺激伝導系の形状をJSONに書き出し、ブラウザーなしで診断用の図を描く（Python、numpy・Pillow） |
+| `scripts/inspect-cut-picks.mjs` | 切り口のクリック判定を、3方向の光線の基準と225点で比べる |
+| `scripts/inspect-section-endpoints.mjs` | スライダーの両端付近（−1.8、−1.5、1.5、1.8）で、断面が各部位の三角形をいくつ切るか数える |
+| `scripts/inspect-motion.mjs` | 検査用の一時ページで拍動・血流を撮影・録画する（CIの「Motion inspection」） |
+| `scripts/measure-beat-cost.mjs`、`scripts/measure-pick-cost.mjs` | 拍動中と静止時の、変形とクリック判定のCPU時間（Node） |
+| `scripts/measure-viewer-frame-cost.mjs` | ブラウザーでの1フレームのCPU時間（検査用の一時ページ） |
+| `tests/*.test.mjs` | 単体テスト（Node、`npm run test:unit`） |
+| `tests/viewer.spec.js` | Chromiumのブラウザーテスト（`npm test`） |
+| `tests/webkit-smoke.spec.js` | WebKitでの起動と基本操作の確認（`npm run test:webkit`。iOSのSafariではない） |
+| `playwright.config.js` | ブラウザーテストの設定（1 worker、1件60秒の制限。Chromiumはソフトウェア描画、WebKitはiPhone 13の画面サイズ） |
+| `.github/workflows/viewer.yml` | CI：単体、ビルドの一致、Chromium、WebKit |
+| `.github/workflows/motion-inspection.yml` | CI：拍動・血流の撮影（関係するファイルを変えたPRと手動） |
+| `THIRD_PARTY_NOTICES.txt` | Three.jsとBodyParts3Dの権利表記。ビルドでHTMLに埋め込む |
+| `AGENTS.md` | AI共通の作業ルール |
+| `docs/references/` | 刺激伝導系の照合資料と、図・目印の検証記録 |
+| `docs/validation/` | 日付つきの検証・計測の記録（画像、動画、JSONを含む） |
+| `package.json`、`package-lock.json`、`.gitignore` | 依存（Three.js、esbuild、Playwright、meshoptimizer）とコマンド、無視するファイル |
 
 ## 設計判断
 
@@ -741,6 +761,22 @@ Issue #50の最終チェック（ChatGPTの独立レビュー、対象main `d491
 - **確かめたこと**：新しいブラウザーテストのうち、B3とC1の7件は修正前の`index.html`で失敗する。配置の一致（6件）とスマホ幅の経路強調は、修正前も成功する（ずれの見張り）。単体の1回再生の検査は修正前の`stepBeat`で失敗する。わざと壊した3件（`lateLimit`を10秒、`main.js`のスマホ判定を700px、喪失時の`beating = false`を削除）は、新しいテストで失敗する。B3のテストは12回中12回成功。全件の結果はコミット本文。
 - **再チェックで残した小と既知**：小18件は直していない（Issue #50のコメントに一覧）。「offline model and interactions at width 1440」は、今回のクラウドの環境で1 workerでは3回とも成功、2 workerでは18回中2回失敗（1回は「画像が落ち着かない」、1回は開始4秒の別の検査で、記録が上書きされ内容は取れなかった）。原因は未特定のまま。
 
+### 小の指摘への対応・文言と記録（2026-11-15）
+
+再チェック（`ba6bcf3`）の小18件を、ユーザーの判断で直す。2回に分け、この回は文言・記録・CIの11件（B2、C2、C5、D5、E7、F3、F6、G2、G4、G6、G7）。保守性の整理の7件（E1、E3、E4、E6、E10、F5、G8）は次の回。
+
+- **B2 「自由視点」の表示**：モデルをクリックしただけ、またはホイールで拡大縮小しただけで、向きの表示が「自由視点」になった。OrbitControlsは、カメラを回さなくても押した時点で`start`を出すため。`start`の時点の視線の向きを覚え、向きが変わったときだけ「自由視点」にする。
+- **C2・G2 拍動の注**：弁の状態の表示の場所を「幅の狭い画面では、モデルの下か右の欄」と書いていたが、横持ちのスマホではモデルの左上のまま。「幅のやや狭い画面では右の欄の上端、縦持ちのスマートフォンではモデルのすぐ下」に替えた。
+- **C5 44px未満の操作**：スマホ幅（760px以下）では、「−」「＋」の幅と、断面・音量のスライダーの高さを44pxにした。ライセンスの欄（summary、15px）は全幅で44px。PC幅では「−」「＋」とスライダーを元の大きさのまま残す。44pxにすると、窓の幅761〜1600px（高さ800px）を1pxずつ変えて測った範囲で、モデルの表示欄が縮んだため：スライダーで、内部の画面の761〜999pxが24px（761×800で420→396px）、「−」「＋」で、操作の行が1段増える915〜926pxと1046〜1057pxが24〜48px。音量のスライダーも、761〜1053pxで操作の行の2段目に1つだけ残り、44pxにすると表示欄が24px縮んだ（1024×768で548→524px）。このためPC幅の窓をタッチで使う場合（タブレット）は小さいままで、実機では試していない。スマホ幅では、表示欄の高さは変わらない（320×640、390×844、568×320、667×375、760×412で同じ）。
+- **D5 参考資料の取得経路**：「参考と権利」の「構造と説明を照合した資料」は、どの記述をどの経路で照合したかの記録がない。「参考にした資料」に改め、記録がないことを書いた。
+- **E7 古い記録**：`docs/validation/issue-17-browser-frame-cost-2026-11-12.md`の「拍動を進める時間を250msに制限する」は、2026-11-13の`c6cad91`でなくなった動作。記録の版の動作だと追記した。
+- **F3 テストの閾値の根拠**：理由の記録がなかった4つに、テストのコメントで理由を書いた。値は変えていない。モデルの画素の判定（明るさ90、赤−青25）は、`9633c4a`で入ったときの理由が残っていないので、現在の背景色（最も明るい#293d44で、明るさ68、赤−青は−27）から後で説明をつけた。ほかは、血流の重ね表示の「青が500以上増える」（実測で204→1176）、心電図の最後の点の許容0.2（座標は小数1桁で書くので誤差は0.05まで）、画像の完全一致（ソフトウェア描画では同じ状態が同じ画素になる。実GPUでは試していない）。
+- **F6 CIの警告**：Node 20で動くactionsの非推奨の警告が出ていた（`actions/checkout@v4`、`actions/setup-node@v4`、`actions/upload-artifact@v4`）。Node 24で動く最初の版（checkout v5、setup-node v5、upload-artifact v6）に上げた。各版の`action.yml`の`runs.using`を直接読んで確かめた（2026-11-15）。upload-artifact v5は既定でまだNode 20だった。
+- **G4 ファイル表**：「AI向け開発手順」の表は追跡ファイル131件のうち13件だけだった。残りのソース、スクリプト、テスト、CI、権利表記、文書の置き場を足した（`docs/`の中はフォルダー単位）。
+- **G6 リンクのない記録**：`docs/validation/`の5件を「過去の記録の移動先」からリンクした。ファイルは変えていない。
+- **G7 本文のないマージコミット**：main `be008e1`から20件のうち7件（再チェックの`ba6bcf3`の時点では5件）。履歴を書き換えないため直していない（前回と同じ扱い）。今後のマージの本文はGitHubでマージするときに書くもので、ここでは変えられない。
+- **テスト**：ブラウザーテストを4件足した（B2が1件、C5が390×844・667×375・1280×800の3件）。4件とも、修正前の`index.html`で失敗する。
+
 ### 過去の記録の移動先（2026-11-14）
 
 READMEを現在の仕様と設計判断に絞るため、日付つきの過去の検証記録を`docs/validation/`へ移した（文面は移動しただけ）。
@@ -750,9 +786,15 @@ READMEを現在の仕様と設計判断に絞るため、日付つきの過去�
 - [自己レビューと対応（2026-11-07）](docs/validation/self-review-2026-11-07.md)
 - [過去の「offline model」失敗の調査と、これまでの実装と実機の確認記録](docs/validation/verification-history.md)
 
+どこからもリンクされていなかった記録（2026-11-15、Issue #50 G6。ファイルは変えていない）：
+
+- [Issue #17 切り口の心腔名が異なる11点の追試（2026-11-09）](docs/validation/issue-17-cut-pick-validation-2026-11-09.md)
+- [Issue #17 の実ビューア検証（2026-11-09）](docs/validation/issue-17-viewer-validation-2026-11-09.md)
+- 拍動の再生の録画フレーム（[血流](docs/validation/motion-playback-flow-2026-11-08.jpg)、[スマートフォン幅](docs/validation/motion-playback-phone-2026-11-08.jpg)）と[血流の前面の録画（MP4）](docs/validation/motion-flow-playback-2026-11-08.mp4)（2026-11-08。同じ日の`432d4b7`で記録を書き直したとき、READMEからのリンクが外れた）
+
 ## 参考と権利
 
-構造と説明を照合した資料：
+構造と説明の参考にした資料（2026-11-07、`aecfa52`で追加。それまでは「構造説明の参考」と書いていた。どの記述を、どの経路で読んで照合したかの記録は残っていない。画面の「説明の参考」には、このうちNHLBIの構造・拍動の仕組みとMedlinePlusの3件を載せている）：
 
 - [NHLBI：心臓の構造](https://www.nhlbi.nih.gov/health/heart/anatomy)、[血流](https://www.nhlbi.nih.gov/health/heart/blood-flow)、[拍動の仕組み](https://www.nhlbi.nih.gov/health/heart/heart-beats)
 - [MSD：心臓の生物学](https://www.msdmanuals.com/ja-jp/home/06-心臓と血管の病気/心臓と血管の生物学/心臓の生物学)

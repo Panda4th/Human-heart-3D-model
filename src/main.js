@@ -739,10 +739,21 @@ diffuseColor.a = min(1.0, diffuseColor.a + rim * 0.55);
     const hit = pickHit(ray, targets, cutView ? [cutPlane] : [], cutView ? crossSection.solids : []);
     if (hit) { userChose = true; select(hit.id, hit); }
   });
+  // A click on the model and a wheel or pinch zoom also start the controls without turning the camera, so the label names the free
+  // view only once the camera's direction has changed (Issue #50 B2: a click alone showed "自由視点").
+  let turnFrom = null;
+  const viewDirection = () => camera.position.clone().sub(controls.target).normalize();
   controls.addEventListener('start', () => {
     stopRotation();
-    setOrientation('自由視点');
+    turnFrom = viewDirection();
   });
+  controls.addEventListener('change', () => {
+    if (turnFrom && viewDirection().angleTo(turnFrom) > 1e-4) {
+      setOrientation('自由視点');
+      turnFrom = null;
+    }
+  });
+  controls.addEventListener('end', () => { turnFrom = null; });
   canvas.addEventListener('keydown', event => {
     if (!['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', '+', '-', '=', 'Home'].includes(event.key)) return;
     event.preventDefault();
