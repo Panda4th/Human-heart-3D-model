@@ -129,9 +129,9 @@ header{flex:none;height:72px;min-height:0;padding:0 20px}.brand{font-size:16px}.
 main{flex:1;min-height:100px;overflow-y:auto;align-items:stretch;overscroll-behavior:contain;display:flex;flex-direction:column;border-top:1px solid #ffffff26}
 .stage,aside{display:contents}
 .viewport{flex:0 1 auto;min-height:120px;height:clamp(220px,36dvh,420px);background:radial-gradient(ellipse at 50% 45%,#293d44 0%,#17242b 55%,#11191e 90%)}
-.detail{flex:0 3 auto;min-height:48px;height:clamp(120px,22dvh,230px);overflow:auto;margin:0;padding:12px 20px;background:#152027;border-top:0}
+.detail{flex:0 3 auto;min-height:48px;height:auto;max-height:clamp(120px,22dvh,230px);overflow:auto;margin:0;padding:8px 20px 10px;background:#152027;border-top:0}
 .detail-note{flex:0 3 auto;min-height:52px;margin:0;padding:6px 20px;max-height:96px;overflow:auto;border-left:0;border-top:1px solid #ffffff20;background:#152027}.detail-note button{display:inline-block;margin:4px 0 0}
-.detail h3{font-size:19px}.detail p{font-size:12.5px;line-height:1.7;margin:6px 0 0}
+.detail h3{font-size:19px;margin:0 0 4px}.detail p{font-size:12.5px;line-height:1.7;margin:4px 0 0}
 .stage-heading{order:0;padding:16px 20px 0}.stage-heading h1{font-size:21px;margin-bottom:12px}
 #steps{order:1;padding:0 20px}#ecg-panel{order:1;margin:10px 20px 0}#cut{order:2;margin-top:12px}#interior-overlay{order:3}nav.views{order:4}
 /* The model is short on a phone: the phase box keeps the name and the one-line valve state, and leaves out the sentence. */
@@ -151,7 +151,7 @@ aside .note,aside .reference{order:9;margin-left:20px;margin-right:20px}main>foo
    screen and leave <main> about 0px tall, so the buttons could not be reached. Shrink them so <main> keeps room. */
 header{height:44px}
 .viewport{height:clamp(110px,42dvh,200px);min-height:96px}
-.detail{height:clamp(64px,22dvh,120px);padding:8px 20px}
+.detail{height:auto;max-height:clamp(64px,22dvh,120px);padding:6px 20px}
 .detail-note{max-height:60px;padding:4px 20px}
 /* The smallest heights of the pinned part and <main> must fit a screen 300px tall (44+96+40+44+60 = 284), or the cut notice ran over
    the buttons at 568x320 (20px) and 667x300 (40px) (review of PR #51). */
