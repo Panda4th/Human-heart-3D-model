@@ -34,6 +34,9 @@ export function arrangeLayout(canvas, $) {
   // covered more, and a row of its own under the model took about 95px from the model's box (Issue #50 recheck, C1).
   const ecgAside = () => document.querySelector('aside').prepend($('ecg-panel'));
   const place = () => {
+    // #pinned is a labelled region, so that the model and the description are inside a landmark on a phone (axe "region",
+    // Issue #50 second recheck C4). It is empty in a PC window, and hidden there.
+    $('pinned').hidden = !phone.matches;
     for (const [el, home] of moved) phone.matches ? $('pinned').append(el) : home.after(el);
     for (const [el, home, after] of reordered) phone.matches ? after().after(el) : home.after(el);
     if (!phone.matches) ecgAside();

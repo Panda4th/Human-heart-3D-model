@@ -420,3 +420,19 @@ for (const [width, height, mobile] of [[390, 844, true], [667, 375, true], [1280
   }
   await context.close();
 });
+
+// Issue #50 second recheck (C4): on a phone the model, the phase box and the description are moved out of <main> into #pinned, and
+// were outside every landmark (axe "region"). #pinned is a labelled region on a phone and hidden in a PC window, where it is empty.
+for (const [width, height, mobile] of [[390, 844, true], [1280, 800, false]]) test(`the model, the phase box and the description are inside a landmark at ${width}x${height}`, async ({ browser }) => {
+  const context = await browser.newContext({ viewport: { width, height }, isMobile: mobile, hasTouch: mobile });
+  const page = await context.newPage();
+  await page.goto(url);
+  await expect(page.locator('html')).toHaveAttribute('data-ready', 'true');
+  await page.evaluate(() => { document.getElementById('beat-play').click(); document.getElementById('beat-play').click(); });
+  await expect(page.locator('#beat-phase')).toBeVisible();
+  const outside = await page.evaluate(() => ['canvas', '#beat-phase', '.detail']
+    .filter(s => !document.querySelector(s).closest('header, main, aside, footer, nav, section[aria-label], [role=region][aria-label]')));
+  expect(outside).toEqual([]);
+  expect(await page.locator('#pinned').isVisible()).toBe(mobile);
+  await context.close();
+});
