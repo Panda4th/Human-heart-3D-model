@@ -161,7 +161,7 @@ export function checkRoute(curve, regions, expectedOrder, { minWall = 1, maxGap 
     nearValve.push(Object.values(regions.valves).some(v => Math.hypot(p[0] - v.center[0], p[1] - v.center[1], p[2] - v.center[2]) < valveGate));
   }
   const order = [], gaps = [], problems = [];
-  kinds.forEach((kind, i) => { if (kind !== 'vessel' && kind !== 'gap' && order.at(-1) !== kind) order.push(kind); });
+  kinds.forEach(kind => { if (kind !== 'vessel' && kind !== 'gap' && order.at(-1) !== kind) order.push(kind); });
   for (let i = 0; i < kinds.length;) {
     if (kinds[i] !== 'gap') { i++; continue; }
     let j = i; while (j < kinds.length && kinds[j] === 'gap') j++;

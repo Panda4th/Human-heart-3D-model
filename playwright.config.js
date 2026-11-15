@@ -7,7 +7,8 @@ module.exports=defineConfig({
   projects:[
     {
       name:'chromium',
-      testMatch:'**/viewer.spec.js',
+      testMatch:'**/*.spec.js',
+      testIgnore:'**/webkit-smoke.spec.js',
       use:{launchOptions:{
         ...(process.env.CHROMIUM_PATH?{executablePath:process.env.CHROMIUM_PATH}:{}),
         args:['--no-sandbox','--use-angle=swiftshader','--enable-unsafe-swiftshader']

@@ -75,7 +75,7 @@ function instrument(source) {
       const sample = frameSample;
       sample.renderMs = performance.now() - frameStart;
       sample.rafIntervalMs = frameCapture.previous === null ? null : time - frameCapture.previous;
-      sample.phase = shownPhase;
+      sample.phase = phaseView.shown;
       frameCapture.previous = time;
       if (frameCapture.warmup > 0) {
         frameCapture.warmup--;

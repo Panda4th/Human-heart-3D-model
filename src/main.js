@@ -1,10 +1,14 @@
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { createConduction, createConductionPulse } from './conduction.mjs';
-import { ecgAt, ecgBumps, glowAt, stretchText, stretchTextAt, waveAge } from './conduction-timing.mjs';
+import { glowAt, stretchTextAt } from './conduction-timing.mjs';
+import { createEcgStrip } from './ecg-strip.mjs';
 import { createAnatomy, modelScale } from './anatomy.mjs';
 import { createFlow, routesThrough } from './flow.mjs';
-import { beatEnd, contraction, createBeat, period, phaseAt, phases, stepBeat } from './heartbeat.mjs';
+import { beatEnd, contraction, createBeat, period, stepBeat } from './heartbeat.mjs';
+import { arrangeLayout } from './layout.mjs';
+import { createPhaseBox } from './phase-box.mjs';
+import { createSoundControl } from './sound-control.mjs';
 import { createHeartSound, createPlayback, createSoundScheduler } from './heartsound.mjs';
 import anatomyData from './data/bodyparts3d-heart.bin';
 import { createCrossSection, cutColor, fieldOfView, fitDistance, modelSphere, pickHit, removedByCut, selectableIn, TapGesture } from './viewer-state.mjs';
@@ -17,64 +21,18 @@ function showError(message) {
   document.documentElement.dataset.ready = 'false';
   document.querySelectorAll('[data-viewer-control]').forEach(b => b.disabled = true);
 }
-// Phone layout: the model, the description and the two cut notices go to #pinned above the scrolling <main>, and back to their
-// places on wider screens. Moving the canvas keeps its WebGL context. See the phone rules in template.html.
-{
-  const phone = matchMedia('(max-width:760px)');
-  const moved = [canvas.closest('.viewport'), document.querySelector('.detail'), $('cut-notice'), $('pick-note')].map(el => {
-    const home = document.createComment('');
-    el.before(home);
-    return [el, home];
-  });
-  // On a phone, CSS `order` shows the ECG strip and the step buttons right under the mode buttons and the view buttons under the
-  // interior overlay buttons; the keyboard follows the DOM, so they are moved there too, or Tab went back up the page (Issue #50 C3).
-  const reordered = [
-    [$('ecg-panel'), () => document.querySelector('.stage-heading')],
-    [$('steps'), () => $('ecg-panel')],
-    [document.querySelector('nav.views'), () => $('interior-overlay')],
-  ].map(([el, after]) => {
-    const home = document.createComment('');
-    el.before(home);
-    return [el, home, after];
-  });
-  // On a PC the ECG strip (conduction view) goes to the top of the side column. On the model's bottom left it lay over the vessels in
-  // many windows from 761 to 1280px (model pixels under it: 811 at 800x700, 185 at 1024x768, 49 at 1280x1024); on the bottom right it
-  // covered more, and a row of its own under the model took about 95px from the model's box (Issue #50 recheck, C1).
-  const ecgAside = () => document.querySelector('aside').prepend($('ecg-panel'));
-  const place = () => {
-    for (const [el, home] of moved) phone.matches ? $('pinned').append(el) : home.after(el);
-    for (const [el, home, after] of reordered) phone.matches ? after().after(el) : home.after(el);
-    if (!phone.matches) ecgAside();
-  };
-  // The phase box (shown once the beat has been played) lies on the model's top left corner where the model leaves room for it. In a
-  // PC window below 1000px and on an upright phone the model fills its box, and the box covered the top of the vessels in every corner
-  // (Issue #50 B2/C1), so there it leaves the model: on an upright phone it goes under the model (the model keeps its size, the
-  // scrolling part below gets shorter), in a PC window from 761 to 999px to the top of the side column. A phone held sideways keeps it on
-  // the model, whose box is wide and low there. See the rules in template.html.
-  const phaseBox = $('beat-phase'), phaseHome = document.createComment('');
-  phaseBox.before(phaseHome);
-  const upright = matchMedia('(max-width:760px) and (min-height:481px)'), narrow = matchMedia('(min-width:761px) and (max-width:999px)');
-  // Elements are moved only when their place changes: re-attaching the model and the description loses the focus and the
-  // description's scroll position (review of PR #51), so `place` runs only when the phone layout starts or ends, and the phase box
-  // moves only when its own place changes. `place` moves the model, so after it the box is placed again. In the side column the box is
-  // prepended, so it stays above the ECG strip.
-  let phaseAt = null;
-  const placePhase = (force = false) => {
-    const at = upright.matches ? 'under' : narrow.matches ? 'aside' : 'home';
-    if (at === phaseAt && !force) return;
-    phaseAt = at;
-    if (at === 'under') canvas.closest('.viewport').after(phaseBox);
-    else if (at === 'aside') document.querySelector('aside').prepend(phaseBox);
-    else phaseHome.after(phaseBox);
-  };
-  phone.addEventListener('change', () => { place(); placePhase(true); });
-  for (const query of [upright, narrow]) query.addEventListener('change', () => placePhase());
-  place();
-  placePhase(true);
-}
-try {
+arrangeLayout(canvas, $);
+// Everything that needs WebGL. Its own function, not a block of the try below, so that the functions declared in it are ordinary
+// function declarations (ESLint no-inner-declarations, Issue #50 E1).
+function start() {
+  // Values of the view with no recorded reason (Issue #50 E6). Unless a line says otherwise they date from the first viewer, aecfa52
+  // (2026-11-07), and were set by eye; nothing was measured to choose them.
+  const maxPixelRatio = 2; // a sharper canvas on high-density screens costs more pixels to draw: drawn at most at twice the CSS size
+  const zoomRange = [.48, 1.8]; // nearest and farthest camera, as a share of the fitted distance (buttons, keys, wheel and resize)
+  const zoomInStep = .82, zoomOutStep = 1.22; // one press of "＋"/"−" or of the + and - keys
+  const keyTurn = .15; // radians per press of an arrow key
   const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true, stencil: true });
-  renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+  renderer.setPixelRatio(Math.min(devicePixelRatio, maxPixelRatio));
   renderer.setClearColor(0x000000, 0);
   renderer.localClippingEnabled = true;
   const scene = new THREE.Scene();
@@ -83,7 +41,9 @@ try {
   // On-demand rendering avoids spending battery while the model is still.
   controls.enableDamping = false;
   controls.enablePan = false;
-  controls.autoRotateSpeed = .8;
+  controls.autoRotateSpeed = .8; // one turn in 60 / .8 = 75 seconds (OrbitControls, given the frame time in render(), at most 50 ms a frame)
+  // Key light (warm, front right) 200 and fill light (cool, back left) 65. The key light and the hemisphere light were set in 53bc061
+  // (stage A, the user chose the brighter of the shown plans: key 100 -> 200, hemisphere 2 -> 1); the fill light dates from aecfa52.
   scene.add(new THREE.HemisphereLight(0xddeaff, 0x27131b, 1));
   for (const [color, intensity, pos] of [[0xffd8bd, 200, [4, 5, 6]], [0x8caeff, 65, [-4, 2, -3]]]) {
     const light = new THREE.PointLight(color, intensity);
@@ -219,10 +179,9 @@ diffuseColor.a = min(1.0, diffuseColor.a + rim * 0.55);
   let mode = 'exterior', selected = 'lv', frame = 0, previousTime = 0, failed = false, conductionOverlay = false, flowOverlay = false, pick = null;
   // beatTime is the time within the heartbeat in real milliseconds, as last drawn; it advances only while beating. `playback` is
   // the clock it is read from, and the heart sounds are booked from the same clock (heartsound.mjs).
-  let beating = false, realSpeed = false, beatTime = 0, shownPhase = -1;
+  let beating = false, realSpeed = false, beatTime = 0;
   const playback = createPlayback(() => performance.now() / 1000), scheduler = createSoundScheduler();
   const sound = createHeartSound(globalThis.AudioContext || globalThis.webkitAudioContext);
-  let soundOn = false, pump = 0;
   // With the system setting "reduce motion" the beat plays once per press and stops at rest, instead of looping.
   const reduceMotion = matchMedia('(prefers-reduced-motion: reduce)');
   const setPlayButton = () => { $('beat-play').textContent = beating ? '拍動を止める' : reduceMotion.matches ? '拍動を1回再生' : '拍動を再生'; };
@@ -234,7 +193,7 @@ diffuseColor.a = min(1.0, diffuseColor.a + rim * 0.55);
   const ray = new THREE.Raycaster();
   // Line.raycast divides the threshold by the line's own scale only, not its parents' scale.
   // The overlay is drawn in millimetres under a scaled group, so convert to millimetres here.
-  ray.params.Line.threshold = .08 / exterior.scale.x;
+  ray.params.Line.threshold = .08 / exterior.scale.x; // .08 viewer units (about 2.4 mm) either side of a line counts as a click on it
   const stageOrder = ['sa', 'atria', 'av', 'his', 'bhis', 'rbb', 'lbb', 'purkinje'];
   const labels = new Map();
   for (const [id] of labelAnchors) {
@@ -279,101 +238,13 @@ diffuseColor.a = min(1.0, diffuseColor.a + rim * 0.55);
   function requestRender() {
     if (!frame && !document.hidden && !failed) frame = requestAnimationFrame(render);
   }
-  // The phase box under the model (upright phone) keeps the height of its tallest text, or the model box changed size each time
-  // the impulse line wrapped differently (review of PR #51: 186-201px at 320x520). In the side column (761-999px) the list scrolls
-  // under the box, so the box's height is kept clear when the focus scrolls the list (review of PR #51: Shift+Tab hid the focused
-  // button under it).
-  const phaseBox = $('beat-phase'), phaseLines = [$('beat-phase-name'), $('beat-phase-short'), $('beat-electric')];
-  function fitPhaseBox() {
-    phaseBox.style.minHeight = '';
-    if (!phaseBox.hidden && getComputedStyle(phaseBox).position === 'static') {
-      const saved = phaseLines.map(e => [e.textContent, e.hidden]);
-      let tallest = 0;
-      for (const phase of phases) for (const text of conduction.visible ? Object.values(stretchText) : ['']) {
-        phaseLines[0].textContent = `${phase.name}（${phase.time}）`;
-        phaseLines[1].textContent = phase.short;
-        phaseLines[2].textContent = text;
-        phaseLines[2].hidden = !text;
-        tallest = Math.max(tallest, phaseBox.getBoundingClientRect().height);
-      }
-      saved.forEach(([text, hidden], i) => { phaseLines[i].textContent = text; phaseLines[i].hidden = hidden; });
-      phaseBox.style.minHeight = `${Math.ceil(tallest)}px`;
-    }
-    const aside = document.querySelector('aside');
-    aside.style.scrollPaddingTop = phaseBox.parentElement === aside && !phaseBox.hidden ? `${Math.ceil(phaseBox.getBoundingClientRect().height) + 8}px` : '';
-  }
-  new ResizeObserver(fitPhaseBox).observe(phaseBox);
-  function showPhase() {
-    const index = phaseAt(beatTime);
-    if (phaseBox.hidden) { phaseBox.hidden = false; fitPhaseBox(); }
-    $('beat-note').hidden = false;
-    if (index === shownPhase) return;
-    shownPhase = index;
-    const phase = phases[index];
-    $('beat-phase-name').textContent = `${phase.name}（${phase.time}）`;
-    $('beat-phase-short').textContent = phase.short;
-    // In the flow view the leaflets are drawn, and they are closed together for only part of the two periods in which all four valves
-    // are closed (README, 血流の模式弁尖); the text says so instead of describing the whole period.
-    $('beat-phase-valves').textContent = phase.valves + (mode === 'flow' && index > 0 ? ` この画面の弁尖が4つとも閉じるのは、この時期のうち約${index === 1 ? '0.01' : '0.02'}秒だけです。` : '');
-  }
-  // Heart sounds. The sounds are booked a short time ahead from the playback clock; whenever the clock changes (play, stop,
-  // speed, hidden page, sound on or off) the booked sounds are cancelled and booked again from the current position, so a
-  // sound is never played twice or after a stop, and past sounds are never played back.
+  const phaseView = createPhaseBox($, () => conduction.visible);
+  const fitPhaseBox = () => phaseView.fit();
+  // Kept as a function of main.js: scripts/inspect-motion.mjs calls it from its hook.
+  function showPhase() { phaseView.show(beatTime, mode === 'flow'); }
   // With reduced motion the sounds stop at the end of the beat being played (beatEnd), as the beat does.
-  const soundLimit = () => reduceMotion.matches ? beatEnd(beatTime) : Infinity;
-  function bookSounds() {
-    if (soundOn && playback.running && !failed) sound.schedule(scheduler.take(playback, sound.now(), { latency: sound.latency(), limit: soundLimit() }));
-  }
-  function resyncSounds() {
-    sound.cancel();
-    clearInterval(pump);
-    pump = 0;
-    if (!soundOn || !playback.running) { scheduler.stop(); return; }
-    scheduler.start(playback, sound.now(), sound.latency());
-    bookSounds();
-    // A timer keeps the booking going while frames are late; the audio context plays what is booked on its own clock.
-    pump = setInterval(bookSounds, 50);
-  }
-  function setSoundButton() {
-    $('heart-sound').setAttribute('aria-pressed', String(soundOn));
-  }
-  function say(text) {
-    $('sound-status').hidden = !text;
-    $('sound-status').textContent = text;
-  }
-  // Sound off: the beat goes on from the same position on the page's own clock.
-  // After an interruption the audio clock has stopped, so the position is where it stopped; the page's clock takes over from there.
-  function soundOff(message = '') {
-    const at = playback.position();
-    soundOn = false;
-    playback.useSource(() => performance.now() / 1000, at);
-    resyncSounds();
-    setSoundButton();
-    say(message);
-  }
-  let watching = false;
-  $('heart-sound').onclick = async () => {
-    if (soundOn) { soundOff(); return; }
-    say('');
-    // Sound can start only from a tap: the context is created and resumed here, before anything is awaited.
-    try { await sound.open(); } catch { /* handled by the state check below */ }
-    // The 3D view may have stopped (context lost) while the audio context was starting: the controls are disabled then, and
-    // the sound must stay off.
-    if (failed) { sound.suspend(); return; }
-    if (sound.state !== 'running') { say('音声を開始できませんでした。もう一度押してください。端末が消音になっていないかも確認してください。'); return; }
-    if (!soundOn) {
-      if (!watching) {
-        watching = true;
-        sound.onStateChange(() => { if (soundOn && sound.state !== 'running') soundOff('音声が中断されたため、心音を切りました。もう一度押すと再開します。'); });
-      }
-      // The audio clock takes over at the current position, so the beat does not jump when the sound is turned on.
-      playback.useSource(() => sound.now());
-      soundOn = true;
-      resyncSounds();
-      setSoundButton();
-    }
-  };
-  $('heart-volume').oninput = () => sound.setVolume(Number($('heart-volume').value));
+  const sounds = createSoundControl({ $, sound, scheduler, playback, isFailed: () => failed, limit: () => reduceMotion.matches ? beatEnd(beatTime) : Infinity });
+  const resyncSounds = sounds.resync;
   // Bring the drawn state (the walls, the particles, the phase text) to the state the clock is at. The beat is drawn at the clock's
   // position, so a slow frame never delays it (or the sounds booked from the same clock). It is also done just before the clock
   // stops (stop button, hidden page), so that the clock keeps its position: sounds up to that position have been booked, and a
@@ -407,31 +278,11 @@ diffuseColor.a = min(1.0, diffuseColor.a + rim * 0.55);
   }
   // The impulse and the schematic ECG follow the beat clock. They are drawn while the beat is playing or stopped part-way (not at
   // rest at 0), in the conduction view (and on the cross-section when the overlay is on); at rest the parts keep their plain look.
-  let electricShown = false, electricText = '', ecgKey = '';
-  const ecgTrace = $('ecg-trace'), ecgMarks = [...document.querySelectorAll('#ecg-panel text')];
-  const ecgSpan = 1000, ecgNow = 276, ecgBase = 46, ecgAmp = 34;
-  function drawEcg() {
-    // Same beat time and same size: nothing to redraw (the strip is a function of the beat time only).
-    const key = String(beatTime);
-    if (key === ecgKey) return;
-    ecgKey = key;
-    const scale = ecgNow / ecgSpan;
-    let d = '';
-    for (let x = 0; x <= ecgNow; x += 1.5) d += `${d ? 'L' : 'M'}${x.toFixed(1)} ${(ecgBase - ecgAt(beatTime - (ecgNow - x) / scale) * ecgAmp).toFixed(1)}`;
-    ecgTrace.setAttribute('d', d);
-    // Letters over the waves: P and T, and QRS at the R peak. They are drawn where the wave of a beat in view is.
-    const labels = { P: 'P', R: 'QRS', T: 'T' };
-    for (const text of ecgMarks) {
-      const bump = ecgBumps.find(b => b.name === text.dataset.wave);
-      // The newest occurrence of this wave in view, found from the beat time (which keeps growing while the beat plays).
-      const age = waveAge(beatTime, bump.mean, 6 / scale, (ecgNow - 6) / scale), x = age === null ? -1 : ecgNow - age * scale;
-      text.toggleAttribute('hidden', x < 0);
-      if (x >= 0) { text.setAttribute('x', x.toFixed(1)); text.setAttribute('y', (ecgBase - Math.max(bump.height, 0) * ecgAmp - 5).toFixed(1)); text.textContent = labels[bump.name]; }
-    }
-  }
+  let electricShown = false, electricText = '';
+  const ecg = createEcgStrip($('ecg-trace'), [...document.querySelectorAll('#ecg-panel text')]);
   function updateElectric() {
     const view = conduction.visible, on = view && (beating || beatTime > 0);
-    if (mode === 'conduction') drawEcg();
+    if (mode === 'conduction') ecg.draw(beatTime);
     if (!on && !electricShown) return;
     electricShown = on;
     pulse.group.visible = on;
@@ -487,9 +338,9 @@ diffuseColor.a = min(1.0, diffuseColor.a + rim * 0.55);
     camera.updateProjectionMatrix();
     renderer.setSize(width, height, false);
     fittedDistance = fitDistance(bounds.radius, camera.aspect);
-    controls.minDistance = fittedDistance * .48;
-    controls.maxDistance = fittedDistance * 1.8;
-    camera.position.copy(controls.target).add(offset.normalize().multiplyScalar(fittedDistance * THREE.MathUtils.clamp(zoom, .48, 1.8)));
+    controls.minDistance = fittedDistance * zoomRange[0];
+    controls.maxDistance = fittedDistance * zoomRange[1];
+    camera.position.copy(controls.target).add(offset.normalize().multiplyScalar(fittedDistance * THREE.MathUtils.clamp(zoom, ...zoomRange)));
     controls.update();
     requestRender();
   }
@@ -599,7 +450,7 @@ diffuseColor.a = min(1.0, diffuseColor.a + rim * 0.55);
     $('ecg-panel').hidden = mode !== 'conduction';
     fitPhaseBox(); // the impulse line is shown with the conduction overlay
     $('propagation-note').hidden = mode !== 'conduction';
-    ecgKey = '';
+    ecg.invalidate();
     $('interior-conduction').setAttribute('aria-pressed', String(conductionOverlay));
     updateCutNotice();
   }
@@ -621,8 +472,8 @@ diffuseColor.a = min(1.0, diffuseColor.a + rim * 0.55);
     // The walls are almost transparent where something inside them is shown: the conduction system and the blood.
     const seeThrough = mode === 'conduction' || mode === 'flow';
     showFlowOverlay();
-    shownPhase = -1;
-    if (!$('beat-phase').hidden) showPhase();
+    phaseView.reset();
+    if (phaseView.visible) showPhase();
     for (const { mesh } of leaflets) mesh.visible = mode === 'flow';
     for (const group of parts.values()) {
       if (group.userData.kind !== 'exterior') continue;
@@ -664,7 +515,8 @@ diffuseColor.a = min(1.0, diffuseColor.a + rim * 0.55);
     requestRender();
   }
   $('cut-depth').oninput = applyDepth;
-  // The cut keeps z <= -depth, so a part is left while depth <= -(its smallest z). Go a little inside that.
+  // The cut keeps z <= -depth, so a part is left while depth <= -(its smallest z). Go a little inside that: .1 viewer units (about
+  // 3 mm; 210d10f, no recorded reason).
   $('cut-restore').onclick = () => {
     const slider = $('cut-depth'), step = Number(slider.step);
     const target = Math.floor((-partBox.get(selected).min.z - .1) / step + 1e-9) * step;
@@ -710,18 +562,13 @@ diffuseColor.a = min(1.0, diffuseColor.a + rim * 0.55);
     resyncSounds();
     $('beat-speed').setAttribute('aria-pressed', String(realSpeed));
   };
-  if (!sound.supported) {
-    $('heart-sound').hidden = true;
-    $('heart-volume-label').hidden = true;
-    $('sound-note').textContent = 'このブラウザーは音声の再生（Web Audio API）に対応していないため、心音のボタンを表示していません。拍動の表示はそのまま使えます。';
-  }
   function zoom(factor) {
     const offset = camera.position.clone().sub(controls.target).multiplyScalar(factor).clampLength(controls.minDistance, controls.maxDistance);
     camera.position.copy(controls.target).add(offset);
     controls.update();
   }
-  $('in').onclick = () => zoom(.82);
-  $('out').onclick = () => zoom(1.22);
+  $('in').onclick = () => zoom(zoomInStep);
+  $('out').onclick = () => zoom(zoomOutStep);
   canvas.addEventListener('pointerdown', event => {
     stopRotation();
     gesture.down(event.pointerId, event.clientX, event.clientY);
@@ -759,13 +606,13 @@ diffuseColor.a = min(1.0, diffuseColor.a + rim * 0.55);
     event.preventDefault();
     stopRotation();
     if (event.key === 'Home') return setView('front');
-    if (['+', '=', '-'].includes(event.key)) return zoom(event.key === '-' ? 1.22 : .82);
+    if (['+', '=', '-'].includes(event.key)) return zoom(event.key === '-' ? zoomOutStep : zoomInStep);
     const offset = camera.position.clone().sub(controls.target);
     const spherical = new THREE.Spherical().setFromVector3(offset);
-    if (event.key === 'ArrowLeft') spherical.theta -= .15;
-    if (event.key === 'ArrowRight') spherical.theta += .15;
-    if (event.key === 'ArrowUp') spherical.phi -= .15;
-    if (event.key === 'ArrowDown') spherical.phi += .15;
+    if (event.key === 'ArrowLeft') spherical.theta -= keyTurn;
+    if (event.key === 'ArrowRight') spherical.theta += keyTurn;
+    if (event.key === 'ArrowUp') spherical.phi -= keyTurn;
+    if (event.key === 'ArrowDown') spherical.phi += keyTurn;
     spherical.makeSafe();
     camera.position.copy(controls.target).add(new THREE.Vector3().setFromSpherical(spherical));
     controls.update();
@@ -793,7 +640,7 @@ diffuseColor.a = min(1.0, diffuseColor.a + rim * 0.55);
     // stopped from the page afterwards.
     beating = false;
     playback.pause();
-    if (soundOn) soundOff(); else resyncSounds();
+    if (sounds.on) sounds.off(); else resyncSounds();
     // The audio context would keep running (no sound, but power) with no control left to stop it.
     sound.suspend();
     setPlayButton();
@@ -806,6 +653,9 @@ diffuseColor.a = min(1.0, diffuseColor.a + rim * 0.55);
   document.querySelectorAll('[data-viewer-control]').forEach(control => control.disabled = false);
   setMode('exterior');
   document.documentElement.dataset.ready = 'true';
+}
+try {
+  start();
 } catch (error) {
   showError(error?.name === 'HeartBundleError'
     ? '心臓モデルのデータを読み込めませんでした（データの形式がこの版の表示プログラムと合いません）。説明と参考リンクは引き続き読めます。'
