@@ -62,6 +62,8 @@ for (const width of [1440, 390]) test(`the two bundle branches are selected and 
   await context.close();
 });
 
+// Stage B, the impulse and the schematic ECG on the beat clock (conduction-timing.mjs). The page's clock is the fake one: stopped with
+// pauseAt() once the page has loaded and moved only by runFor(), so each stop falls at the beat time planned (real speed: 1 ms is 1 ms).
 test('conduction view: the impulse and the ECG follow the beat clock', async ({ page }) => {
   const errors = [];
   page.on('pageerror', e => errors.push(e.message));

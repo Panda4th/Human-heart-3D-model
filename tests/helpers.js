@@ -99,8 +99,6 @@ const particlePixels = (page, png) => inPagePixels(page, png, data => {
   }
   return { blue, red };
 });
-// Stage B, the impulse and the schematic ECG on the beat clock (conduction-timing.mjs). The page's clock is the fake one: stopped with
-// pauseAt() once the page has loaded and moved only by runFor(), so each stop falls at the beat time planned (real speed: 1 ms is 1 ms).
 // The white head of the impulse is drawn only while the impulse is in a path that has one (the AV node has none).
 const whitePixels = (page, png) => inPagePixels(page, png, data => {
   let n = 0;
