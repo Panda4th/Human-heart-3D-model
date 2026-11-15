@@ -5,14 +5,14 @@ import { pulseAt } from './conduction-timing.mjs';
 // so scripts/prepare-bodyparts3d.mjs places these points from nearby cavities and valves.
 // Widths are exaggerated; this is not a dissection, tissue segmentation, or a BioDigital mesh derivative.
 export const conductionDefinitions = [
-  ['sa', '洞房結節', 'Sinoatrial node', '右心房の上部、上大静脈の入口付近にある特殊な心筋細胞の集まり。正常な拍動の電気刺激の起点です。ここでは下方へ延びる細長い形に簡略化しています。長さと幅はStephensonら（2017）の1標本を参考にした目安で、分界稜に沿う実際の形状や向きは未再現です。', 0xffd479],
-  ['atria', '心房への広がり', 'Atrial activation', '刺激が左右の心房の心筋へ広がります。破線は伝わる方向の概念図で、独立した一本の神経や血管ではありません。', 0xe6bc86],
-  ['av', '房室結節', 'Atrioventricular node', '右心房の中隔側、コッホの三角（冠静脈洞の入口、三尖弁中隔尖の付け根、トダロ腱に囲まれた範囲）の頂点付近にあり、刺激の伝わりをいったん遅くします。心房から心室へ血液が入る時間を確保します。ここでは中隔尖の付け根のうち大動脈弁に最も近い点に置いています。', 0xffbc64],
-  ['his', 'ヒス束（近位区間）', 'His bundle: proximal interval', '房室結節側から左脚側の目印までを結ぶ模式区間です。貫通部を含む近位側の関係を示しますが、実際の貫通部と分岐部の境界は同定していないため、この区切りとは一致しません。次の分岐区間へ連続します。', 0xffdf91],
-  ['bhis', 'ヒス束（分岐区間）', 'His bundle: branching interval', '左脚側の目印から右脚側の目印へ続く模式区間です。実際には左脚が分岐部から幅広く出て、その先が右脚へ続きます（Kawashima・Sato、2021）。ここでは左脚を手前側の目印につながる面と線で模式表示しています。区間の端は組織の境界を確認した位置ではありません。', 0xe8a55b],
-  ['rbb', '右脚', 'Right bundle branch', 'ヒス束の分岐区間の先から、心室中隔の右心室側を通り、右心室の前乳頭筋の付け根へ向かう通り道。ここでは1本の線に簡略化しています。身体の右側を基準に呼びます（画面の右ではありません）。', 0x7fb2ff],
-  ['lbb', '左脚', 'Left bundle branch', '心室中隔の左心室側へ広がる刺激の通り道。ここでは起始付近を幅のある面、その先を前・中隔・後ろの3方向の線で模式表示しています。Stephensonら（2017）の研究例を参考にしたもので、分かれ方を全員共通の3本と決めた表示ではありません。幅と経路は目安で、後ろの乳頭筋への付着は再現していません。', 0x4fdcc4],
-  ['purkinje', 'プルキンエ線維', 'Purkinje fibers', '心内膜の下に広がる特殊な心筋細胞のネットワーク。刺激を心室の心筋へ伝えます。左心室2本・右心室2本の線に大きく簡略化しており、本数・太さ・位置は実際と異なります。脚（青緑・青）とは別の色（薄紫）で表します。', 0xd6b3ff],
+  ['sa', '洞房結節', 'Sinoatrial node', '右心房の上部、上大静脈の入口付近にある特殊な心筋細胞の集まり。正常な拍動の電気刺激の起点です。', 0xffd479],
+  ['atria', '心房への広がり', 'Atrial activation', '刺激が左右の心房の心筋へ広がります。破線は伝わる方向を示します。', 0xe6bc86],
+  ['av', '房室結節', 'Atrioventricular node', '右心房の中隔側、コッホの三角の頂点付近にあり、刺激の伝わりをいったん遅くします。心房から心室へ血液が入る時間を確保します。', 0xffbc64],
+  ['his', 'ヒス束（近位区間）', 'His bundle: proximal interval', '房室結節から左脚側までを結ぶ区間。貫通部を含む近位側で、次の分岐区間へ続きます。', 0xffdf91],
+  ['bhis', 'ヒス束（分岐区間）', 'His bundle: branching interval', '左脚側から右脚側へ続く区間。左脚が分岐部から幅広く出て、その先が右脚へ続きます。', 0xe8a55b],
+  ['rbb', '右脚', 'Right bundle branch', 'ヒス束の分岐区間の先から、心室中隔の右心室側を通り、右心室の前乳頭筋の付け根へ向かう通り道。身体の右側を基準に呼びます（画面の右ではありません）。', 0x7fb2ff],
+  ['lbb', '左脚', 'Left bundle branch', '心室中隔の左心室側へ広がる刺激の通り道。起始付近は幅のある面、その先は前・中隔・後ろの3方向の線で表します。', 0x4fdcc4],
+  ['purkinje', 'プルキンエ線維', 'Purkinje fibers', '心内膜の下に広がる特殊な心筋細胞のネットワーク。刺激を心室の心筋へ伝えます。脚（青緑・青）とは別の色（薄紫）で表します。', 0xd6b3ff],
 ];
 
 export function createConduction(parent, parts, data) {

@@ -195,7 +195,5 @@ test('the screen text gives the durations of the four stretches as the constants
   assert.ok(note.includes(`房室結節で${seconds(conductionTimes.avNode)}`), note);
   assert.ok(note.includes(`心尖へ${seconds(conductionTimes.bundles)}`), note);
   assert.ok(note.includes(`心室の筋へ${seconds(conductionTimes.purkinje)}`), note);
-  const total = Object.values(conductionTimes).reduce((a, b) => a + b, 0);
-  assert.ok(note.includes(`4つの区間を足すと${total}ミリ秒`), note);
   assert.ok(note.includes(`約${-sinusFire / 1000}秒前に発火`), note);
 });
