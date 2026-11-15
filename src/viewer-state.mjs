@@ -9,7 +9,7 @@ import { chambers } from './anatomy.mjs';
 // than the model and left it small on screen. Any orbit angle still keeps every vertex inside.
 export function modelSphere(object) {
   object.updateMatrixWorld(true);
-  const p = new Vector3(), box = new Box3(), points = [];
+  const box = new Box3(), points = [];
   // Helpers (the cut face is thousands of millimetres wide) do not count as model.
   const visit = o => {
     if (o.userData.helper) return;
