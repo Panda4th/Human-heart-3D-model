@@ -78,7 +78,7 @@ aside{height:calc(100dvh - 56px);min-height:560px;overflow-y:auto}
 canvas{position:absolute;inset:0}
 nav.views{grid-row:4;grid-column:1/-1;position:relative;z-index:2;align-self:start;justify-self:end;flex-direction:column;gap:6px;margin:12px 5% 0 0}
 #orientation{grid-row:4;grid-column:1/-1;position:relative;z-index:2;align-self:end;justify-self:center;margin:0 0 8px;pointer-events:none}
-/* main.js puts the ECG strip at the top of the side column (under the phase box when that is there); it lay over the vessels on the
+/* layout.mjs puts the ECG strip at the top of the side column (under the phase box when that is there); it lay over the vessels on the
    model's bottom left (Issue #50 recheck, C1). */
 aside>#ecg-panel{margin:0 0 20px}
 #cut-notice,#pick-note{grid-row:4;grid-column:1/-1;position:relative;z-index:2;align-self:end;justify-self:start;width:min(320px,40%);margin:0 0 36px 5%;padding:8px 10px;background:#152027;border-radius:0 8px 8px 0}
@@ -102,7 +102,7 @@ nav.tools{grid-row:7;grid-column:1/-1;padding:6px 12px 12px}
 }
 @media(min-width:761px) and (max-width:999px){
 /* Below 1000px the model fills its box and no corner of it is free (model pixels under the box at 761x800: 99 top left, 49 top right and
-   37 bottom left in the conduction view, 170 top left in the interior view), so main.js moves the box to the top of the side column,
+   37 bottom left in the conduction view, 170 top left in the interior view), so layout.mjs moves the box to the top of the side column,
    where it stays in view while the list scrolls. It is opaque there because the part buttons pass under it, and takes the pointer, or a click on it chose the hidden button
    under it (review of PR #51). */
 aside>.beat-phase{position:sticky;top:-28px;left:auto;z-index:2;pointer-events:auto;max-width:none;margin:-28px -24px 16px;border-width:0 0 1px;border-radius:0;padding:10px 24px;background:#121e29}
@@ -116,7 +116,7 @@ aside>.beat-phase{position:sticky;top:-28px;left:auto;z-index:2;pointer-events:a
 #interior-overlay{grid-row:5;justify-self:end;margin:6px 5%}
 }
 @media(max-width:760px){
-/* Phone: the page itself does not scroll. main.js moves the model and the selected part's description into
+/* Phone: the page itself does not scroll. layout.mjs moves the model and the selected part's description into
    #pinned above <main>, and only <main> scrolls, so nothing slides underneath the model.
    The model must not sit inside the scrolling box or under position:fixed: on the user's iPhone the
    model stayed black in that arrangement (7535baf) while the description showed. */
@@ -141,7 +141,7 @@ aside .note,aside .reference{order:9;margin-left:20px;margin-right:20px}main>foo
 .tools button{font-size:12px;padding:10px}.note{margin-top:18px}
 }
 @media(max-width:760px) and (min-height:481px){
-/* An upright phone: main.js puts the phase box under the model, out of it. The model box is about as wide as the model, and the box
+/* An upright phone: layout.mjs puts the phase box under the model, out of it. The model box is about as wide as the model, and the box
    covered the top of the vessels in every corner (model pixels under it at 390x844: 297 top left, 460 bottom left; at 320x640 at least
    600 in every corner). The box keeps the left edge of the description. */
 .beat-phase{position:static;flex:none;margin:6px 20px 0;max-width:none;display:flex;flex-wrap:wrap;align-items:baseline;column-gap:10px;line-height:1.5;padding:4px 10px}
